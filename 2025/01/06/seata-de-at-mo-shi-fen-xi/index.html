@@ -51,7 +51,8 @@
 
     <script src="/libs/jquery/jquery-3.6.0.min.js"></script>
 
-<meta name="generator" content="Hexo 6.3.0"></head>
+<meta name="generator" content="Hexo 6.3.0"><link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
 
 
 <body>
@@ -356,9 +357,6 @@
         <hr class="clearfix">
 
         
-        <!-- 是否加载使用自带的 prismjs. -->
-        <link rel="stylesheet" href="/libs/prism/prism.min.css">
-        
 
         
 
@@ -372,35 +370,37 @@
 </li>
 <li><p>开始<strong>初始化TmNettyRemotingClient，先注册一些ResponseProcessor，用来处理server端回传的respons</strong>e（因为时TM，所以只会注册和全局事务的begin，commit，rolback等相关response的Processor，具体类型如下）</p>
 <ul>
-<li><pre><code class="txt">MessageType.TYPE_SEATA_MERGE_RESULT
+<li><pre class="line-numbers language-txt"><code class="language-txt">MessageType.TYPE_SEATA_MERGE_RESULT
 MessageType.TYPE_GLOBAL_BEGIN_RESULT
 MessageType.TYPE_GLOBAL_COMMIT_RESULT
 MessageType.TYPE_GLOBAL_REPORT_RESULT
 MessageType.TYPE_GLOBAL_ROLLBACK_RESULT
 MessageType.TYPE_GLOBAL_STATUS_RESULT
 MessageType.TYPE_REG_CLT_RESULT
-<pre class="line-numbers language-none"><code class="language-none">
-- 开启一些定时任务，包括与服务端Channel的reconnect任务、**MergedSend任务（处理批量消息发送）**、future的超时检测任务。
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+</ul>
+</li>
+<li><p>开启一些定时任务，包括与服务端Channel的reconnect任务、<strong>MergedSend任务（处理批量消息发送）</strong>、future的超时检测任务。</p>
+</li>
+<li><p>启动和TM相关的netty客户端的Bootstrap，添加对应的ChannelHandler，包括IdleStateHandler（心跳检测，会进行ping-pong操作）、解码和编码器、<strong>ClientHandler（双向handler，开始真正处理数据，同时也处理IdleStateHandler发来的IdleStateEvent事件，判断后是否进行ping-pong，以此维护长连接）</strong></p>
+</li>
+</ul>
+<h5 id="1-1-2-2-RM初始化"><a href="#1-1-2-2-RM初始化" class="headerlink" title="1.1.2.2 RM初始化"></a>1.1.2.2 RM初始化</h5><ul>
+<li><p>实例化RmNettyRemotingClient对象，和上面类似，也会创建好netty客户端的Bootstrap相关配置</p>
+</li>
+<li><p>开始<strong>初始化RmNettyRemotingClient，也会先注册一些ResponseProcessor，用来处理server端回传的response</strong>（因为时RM，所以只会注册资源（可以理解成数据库）相关的操作，具体类型如下）</p>
+<ul>
+<li><pre class="line-numbers language-java"><code class="language-java">MessageType<span class="token punctuation">.</span>TYPE_BRANCH_COMMIT
+MessageType<span class="token punctuation">.</span>TYPE_BRANCH_ROLLBACK
+MessageType<span class="token punctuation">.</span>TYPE_RM_DELETE_UNDOLOG
 
-- 启动和TM相关的netty客户端的Bootstrap，添加对应的ChannelHandler，包括IdleStateHandler（心跳检测，会进行ping-pong操作）、解码和编码器、**ClientHandler（双向handler，开始真正处理数据，同时也处理IdleStateHandler发来的IdleStateEvent事件，判断后是否进行ping-pong，以此维护长连接）**
-
-##### 1.1.2.2 RM初始化
-
-- 实例化RmNettyRemotingClient对象，和上面类似，也会创建好netty客户端的Bootstrap相关配置
-
-- 开始**初始化RmNettyRemotingClient，也会先注册一些ResponseProcessor，用来处理server端回传的response**（因为时RM，所以只会注册资源（可以理解成数据库）相关的操作，具体类型如下）
-
-  - &#96;&#96;&#96;java
-    MessageType.TYPE_BRANCH_COMMIT
-    MessageType.TYPE_BRANCH_ROLLBACK
-    MessageType.TYPE_RM_DELETE_UNDOLOG
-    
-    MessageType.TYPE_SEATA_MERGE_RESUL
-    MessageType.TYPE_BRANCH_REGISTER_RESULT
-    MessageType.TYPE_BRANCH_STATUS_REPORT_RESULT
-    MessageType.TYPE_GLOBAL_LOCK_QUERY_RESULT
-    MessageType.TYPE_REG_RM_RESULT<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-</code></pre>
+MessageType<span class="token punctuation">.</span>TYPE_SEATA_MERGE_RESUL
+MessageType<span class="token punctuation">.</span>TYPE_BRANCH_REGISTER_RESULT
+MessageType<span class="token punctuation">.</span>TYPE_BRANCH_STATUS_REPORT_RESULT
+MessageType<span class="token punctuation">.</span>TYPE_GLOBAL_LOCK_QUERY_RESULT
+MessageType<span class="token punctuation">.</span>TYPE_REG_RM_RESULT
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 </li>
 </ul>
 </li>
@@ -444,40 +444,40 @@ MessageType.TYPE_REG_CLT_RESULT
 <h3 id="2-6-分支事务和全局事务"><a href="#2-6-分支事务和全局事务" class="headerlink" title="2.6 分支事务和全局事务"></a>2.6 分支事务和全局事务</h3><p>全局事务：整个分布式事务，由多个分支事务组成</p>
 <p>分支事务：分布式事务中整个链路里每个服务单独的事务，不可能跨服务存在。运行在spring事务的支持下，一个本地事务就是一个分支事务。没有被本地事务支持但运行在全局事务下，则一个dml sql就会生成一个分支事务</p>
 <h2 id="三、服务端初始化"><a href="#三、服务端初始化" class="headerlink" title="三、服务端初始化"></a>三、服务端初始化</h2><p>服务端就是一个springboot项目，启动类是<strong>ServerApplication，核心启动方法是io.seata.server.Server#start</strong></p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java"><span class="token comment">// io.seata.server.Server#start 方法里的一些主要功能（删除了些不重要的）</span>
-<span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">start</span><span class="token punctuation">(</span><span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// io.seata.server.Server#start 方法里的一些主要功能（删除了些不重要的）</span>
+<span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">start</span><span class="token punctuation">(</span>String<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
 
-    <span class="token comment">// 统计相关功能初始化</span>
-    <span class="token class-name">MetricsManager</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token comment">// 设置数据保存模式（db，file，或redis）</span>
-    <span class="token class-name">System</span><span class="token punctuation">.</span><span class="token function">setProperty</span><span class="token punctuation">(</span><span class="token class-name">ConfigurationKeys</span><span class="token punctuation">.</span><span class="token constant">STORE_MODE</span><span class="token punctuation">,</span> parameterParser<span class="token punctuation">.</span><span class="token function">getStoreMode</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 统计相关功能初始化</span>
+    MetricsManager<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 设置数据保存模式（db，file，或redis）</span>
+    System<span class="token punctuation">.</span><span class="token function">setProperty</span><span class="token punctuation">(</span>ConfigurationKeys<span class="token punctuation">.</span>STORE_MODE<span class="token punctuation">,</span> parameterParser<span class="token punctuation">.</span><span class="token function">getStoreMode</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-    <span class="token class-name">ThreadPoolExecutor</span> workingThreads <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ThreadPoolExecutor</span><span class="token punctuation">(</span><span class="token class-name">NettyServerConfig</span><span class="token punctuation">.</span><span class="token function">getMinServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
-            <span class="token class-name">NettyServerConfig</span><span class="token punctuation">.</span><span class="token function">getMaxServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token class-name">NettyServerConfig</span><span class="token punctuation">.</span><span class="token function">getKeepAliveTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token class-name">TimeUnit</span><span class="token punctuation">.</span><span class="token constant">SECONDS</span><span class="token punctuation">,</span>
-            <span class="token keyword">new</span> <span class="token class-name">LinkedBlockingQueue</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">></span></span><span class="token punctuation">(</span><span class="token class-name">NettyServerConfig</span><span class="token punctuation">.</span><span class="token function">getMaxTaskQueueSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
-            <span class="token keyword">new</span> <span class="token class-name">NamedThreadFactory</span><span class="token punctuation">(</span><span class="token string">"ServerHandlerThread"</span><span class="token punctuation">,</span> <span class="token class-name">NettyServerConfig</span><span class="token punctuation">.</span><span class="token function">getMaxServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">new</span> <span class="token class-name">ThreadPoolExecutor<span class="token punctuation">.</span>CallerRunsPolicy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ThreadPoolExecutor workingThreads <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ThreadPoolExecutor</span><span class="token punctuation">(</span>NettyServerConfig<span class="token punctuation">.</span><span class="token function">getMinServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            NettyServerConfig<span class="token punctuation">.</span><span class="token function">getMaxServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> NettyServerConfig<span class="token punctuation">.</span><span class="token function">getKeepAliveTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> TimeUnit<span class="token punctuation">.</span>SECONDS<span class="token punctuation">,</span>
+            <span class="token keyword">new</span> <span class="token class-name">LinkedBlockingQueue</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>NettyServerConfig<span class="token punctuation">.</span><span class="token function">getMaxTaskQueueSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            <span class="token keyword">new</span> <span class="token class-name">NamedThreadFactory</span><span class="token punctuation">(</span><span class="token string">"ServerHandlerThread"</span><span class="token punctuation">,</span> NettyServerConfig<span class="token punctuation">.</span><span class="token function">getMaxServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">new</span> <span class="token class-name">ThreadPoolExecutor<span class="token punctuation">.</span>CallerRunsPolicy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-    <span class="token comment">// 创建netty相关对象</span>
-    <span class="token class-name">NettyRemotingServer</span> nettyRemotingServer <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">NettyRemotingServer</span><span class="token punctuation">(</span>workingThreads<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 创建netty相关对象</span>
+    NettyRemotingServer nettyRemotingServer <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">NettyRemotingServer</span><span class="token punctuation">(</span>workingThreads<span class="token punctuation">)</span><span class="token punctuation">;</span>
     nettyRemotingServer<span class="token punctuation">.</span><span class="token function">setListenPort</span><span class="token punctuation">(</span>parameterParser<span class="token punctuation">.</span><span class="token function">getPort</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token comment">// 创建TC</span>
-    <span class="token class-name">DefaultCoordinator</span> coordinator <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">DefaultCoordinator</span><span class="token punctuation">(</span>nettyRemotingServer<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token comment">// 启动一些定时任务，包括 异步全局事务commit操作等</span>
+    <span class="token comment" spellcheck="true">// 创建TC</span>
+    DefaultCoordinator coordinator <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">DefaultCoordinator</span><span class="token punctuation">(</span>nettyRemotingServer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 启动一些定时任务，包括 异步全局事务commit操作等</span>
     coordinator<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
     nettyRemotingServer<span class="token punctuation">.</span><span class="token function">setHandler</span><span class="token punctuation">(</span>coordinator<span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token comment">//127.0.0.1 and 0.0.0.0 are not valid here.</span>
-    <span class="token comment">// 设置服务端netty的ip和端口</span>
-    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">NetUtil</span><span class="token punctuation">.</span><span class="token function">isValidIp</span><span class="token punctuation">(</span>parameterParser<span class="token punctuation">.</span><span class="token function">getHost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-        <span class="token constant">XID</span><span class="token punctuation">.</span><span class="token function">setIpAddress</span><span class="token punctuation">(</span>parameterParser<span class="token punctuation">.</span><span class="token function">getHost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
-        <span class="token constant">XID</span><span class="token punctuation">.</span><span class="token function">setIpAddress</span><span class="token punctuation">(</span><span class="token class-name">NetUtil</span><span class="token punctuation">.</span><span class="token function">getLocalIp</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token punctuation">&#125;</span>
-    <span class="token constant">XID</span><span class="token punctuation">.</span><span class="token function">setPort</span><span class="token punctuation">(</span>nettyRemotingServer<span class="token punctuation">.</span><span class="token function">getListenPort</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">//127.0.0.1 and 0.0.0.0 are not valid here.</span>
+    <span class="token comment" spellcheck="true">// 设置服务端netty的ip和端口</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>NetUtil<span class="token punctuation">.</span><span class="token function">isValidIp</span><span class="token punctuation">(</span>parameterParser<span class="token punctuation">.</span><span class="token function">getHost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+        XID<span class="token punctuation">.</span><span class="token function">setIpAddress</span><span class="token punctuation">(</span>parameterParser<span class="token punctuation">.</span><span class="token function">getHost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span> <span class="token keyword">else</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+        XID<span class="token punctuation">.</span><span class="token function">setIpAddress</span><span class="token punctuation">(</span>NetUtil<span class="token punctuation">.</span><span class="token function">getLocalIp</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+    XID<span class="token punctuation">.</span><span class="token function">setPort</span><span class="token punctuation">(</span>nettyRemotingServer<span class="token punctuation">.</span><span class="token function">getListenPort</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-    <span class="token comment">// 注册消息处理器并构建netty的ServerBootstrap，开启端口的监听</span>
+    <span class="token comment" spellcheck="true">// 注册消息处理器并构建netty的ServerBootstrap，开启端口的监听</span>
     nettyRemotingServer<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-
+<span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h2 id="四、客户端初始化"><a href="#四、客户端初始化" class="headerlink" title="四、客户端初始化"></a>四、客户端初始化</h2><p>​		客户端初始化主要是通过两个自动代理bean来实现的</p>
 <ul>
 <li><strong>GlobalTransactionScanner</strong>：代理**@GlobalTransactional和@GlobalLock注解标志的类或方法，统一使用GlobalTransactionalInterceptor进行拦截**</li>
@@ -631,83 +631,81 @@ MessageType.TYPE_REG_CLT_RESULT
 <p>​		但是，当分支事务A本地commit后，但此时全局事务还未commit。如果有另一个事务B读取到了事务A修改的数据结果，就会产生脏读（因为这时全局事务还未commit，甚至可能触发rollback操作），解决脏读的办法就是事务B读取使用select for update语句，并且被@GlobalTransactional和@GlobalLock注解拦截。拦截后seata内部会对select for update的操作进行锁判断，生成一个SelectForUpdateExecutor执行器（核心执行方法doExecute代码如下）。所以直到分支事务A对应的全局事务结束释放了锁资源后，事务B才会读到数据并返回，以此实现读已提交</p>
 </blockquote>
 <p>注意<strong>，@GlobalTransactional + select for update</strong>和**@GlobalLock + select for update都可实现select操作的读已提交隔离级别<strong>，</strong>但GlobalLock 更轻量级，它不会注册分支事务和加锁等操作，只会进行锁检查。所以，如果上述事务B不需要运行在全局事务或本地事务的模式先下而又想实现全局事务的读已提交隔离级别，就可使用@GlobalLock + select for update组合**</p>
-<pre class="line-numbers language-java" data-language="java"><code class="language-java"><span class="token comment">// SelectForUpdateExecutor核心执行方法</span>
-<span class="token keyword">public</span> <span class="token class-name">T</span> <span class="token function">doExecute</span><span class="token punctuation">(</span><span class="token class-name">Object</span><span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> <span class="token class-name">Throwable</span> <span class="token punctuation">&#123;</span>
-    <span class="token class-name">Connection</span> conn <span class="token operator">=</span> statementProxy<span class="token punctuation">.</span><span class="token function">getConnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token class-name">DatabaseMetaData</span> dbmd <span class="token operator">=</span> conn<span class="token punctuation">.</span><span class="token function">getMetaData</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token class-name">T</span> rs<span class="token punctuation">;</span>
-    <span class="token class-name">Savepoint</span> sp <span class="token operator">=</span> <span class="token keyword">null</span><span class="token punctuation">;</span>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// SelectForUpdateExecutor核心执行方法</span>
+<span class="token keyword">public</span> T <span class="token function">doExecute</span><span class="token punctuation">(</span>Object<span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> Throwable <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+    Connection conn <span class="token operator">=</span> statementProxy<span class="token punctuation">.</span><span class="token function">getConnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    DatabaseMetaData dbmd <span class="token operator">=</span> conn<span class="token punctuation">.</span><span class="token function">getMetaData</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    T rs<span class="token punctuation">;</span>
+    Savepoint sp <span class="token operator">=</span> null<span class="token punctuation">;</span>
     <span class="token keyword">boolean</span> originalAutoCommit <span class="token operator">=</span> conn<span class="token punctuation">.</span><span class="token function">getAutoCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-    <span class="token keyword">try</span> <span class="token punctuation">&#123;</span>
-        <span class="token comment">// 在这里单独开启事务。如果没有原事务则直接开启，如果有则新建一个savepoint来开启事务</span>
-        <span class="token keyword">if</span> <span class="token punctuation">(</span>originalAutoCommit<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span> <span class="token comment">// 没有原事务</span>
+    <span class="token keyword">try</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 在这里单独开启事务。如果没有原事务则直接开启，如果有则新建一个savepoint来开启事务</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>originalAutoCommit<span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 没有原事务</span>
             conn<span class="token punctuation">.</span><span class="token function">setAutoCommit</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>dbmd<span class="token punctuation">.</span><span class="token function">supportsSavepoints</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span> <span class="token comment">// 有原事务，新建一个savepoint来开启内嵌事务</span>
+        <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>dbmd<span class="token punctuation">.</span><span class="token function">supportsSavepoints</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 有原事务，新建一个savepoint来开启内嵌事务</span>
             sp <span class="token operator">=</span> conn<span class="token punctuation">.</span><span class="token function">setSavepoint</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
+        <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span> <span class="token keyword">else</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
             <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">SQLException</span><span class="token punctuation">(</span><span class="token string">"not support savepoint. please check your db version"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span>
+        <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
 
-        <span class="token class-name">LockRetryController</span> lockRetryController <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LockRetryController</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token class-name">List</span><span class="token punctuation">&lt;</span><span class="token class-name">Object</span><span class="token punctuation">></span><span class="token punctuation">></span></span> paramAppenderList <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token generics"><span class="token punctuation">&lt;</span><span class="token punctuation">></span></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token class-name">String</span> selectPKSQL <span class="token operator">=</span> <span class="token function">buildSelectSQL</span><span class="token punctuation">(</span>paramAppenderList<span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-            <span class="token keyword">try</span> <span class="token punctuation">&#123;</span>
-                <span class="token comment">// #870</span>
-                <span class="token comment">// execute return</span>
-                <span class="token comment">// executeQuery return ResultSet</span>
-                <span class="token comment">// 执行sql语句，会获取本地锁</span>
+        LockRetryController lockRetryController <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LockRetryController</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ArrayList<span class="token operator">&lt;</span>List<span class="token operator">&lt;</span>Object<span class="token operator">>></span> paramAppenderList <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        String selectPKSQL <span class="token operator">=</span> <span class="token function">buildSelectSQL</span><span class="token punctuation">(</span>paramAppenderList<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// #870</span>
+                <span class="token comment" spellcheck="true">// execute return</span>
+                <span class="token comment" spellcheck="true">// executeQuery return ResultSet</span>
+                <span class="token comment" spellcheck="true">// 执行sql语句，会获取本地锁</span>
                 rs <span class="token operator">=</span> statementCallback<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span>statementProxy<span class="token punctuation">.</span><span class="token function">getTargetStatement</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-                <span class="token comment">// Try to get global lock of those rows selected</span>
-                <span class="token class-name">TableRecords</span> selectPKRows <span class="token operator">=</span> <span class="token function">buildTableRecords</span><span class="token punctuation">(</span><span class="token function">getTableMeta</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> selectPKSQL<span class="token punctuation">,</span> paramAppenderList<span class="token punctuation">)</span><span class="token punctuation">;</span>
-                <span class="token comment">// 构建lock key</span>
-                <span class="token class-name">String</span> lockKeys <span class="token operator">=</span> <span class="token function">buildLockKey</span><span class="token punctuation">(</span>selectPKRows<span class="token punctuation">)</span><span class="token punctuation">;</span>
-                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">StringUtils</span><span class="token punctuation">.</span><span class="token function">isNullOrEmpty</span><span class="token punctuation">(</span>lockKeys<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span> <span class="token comment">// lock key不存在，代表没有锁冲突，直接就break了</span>
+                <span class="token comment" spellcheck="true">// Try to get global lock of those rows selected</span>
+                TableRecords selectPKRows <span class="token operator">=</span> <span class="token function">buildTableRecords</span><span class="token punctuation">(</span><span class="token function">getTableMeta</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> selectPKSQL<span class="token punctuation">,</span> paramAppenderList<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 构建lock key</span>
+                String lockKeys <span class="token operator">=</span> <span class="token function">buildLockKey</span><span class="token punctuation">(</span>selectPKRows<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>StringUtils<span class="token punctuation">.</span><span class="token function">isNullOrEmpty</span><span class="token punctuation">(</span>lockKeys<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// lock key不存在，代表没有锁冲突，直接就break了</span>
                     <span class="token keyword">break</span><span class="token punctuation">;</span>
-                <span class="token punctuation">&#125;</span>
+                <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
 
-                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token class-name">RootContext</span><span class="token punctuation">.</span><span class="token function">inGlobalTransaction</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token class-name">RootContext</span><span class="token punctuation">.</span><span class="token function">requireGlobalLock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span> 
-                    <span class="token comment">// 全局锁的获取和判断必须在@GlobalTransactional or @GlobalLock注解下</span>
-                    <span class="token comment">// 只进行锁检查，不加锁（检查失败内部会抛异常）</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>RootContext<span class="token punctuation">.</span><span class="token function">inGlobalTransaction</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">||</span> RootContext<span class="token punctuation">.</span><span class="token function">requireGlobalLock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span> 
+                    <span class="token comment" spellcheck="true">// 全局锁的获取和判断必须在@GlobalTransactional or @GlobalLock注解下</span>
+                    <span class="token comment" spellcheck="true">// 只进行锁检查，不加锁（检查失败内部会抛异常）</span>
                     statementProxy<span class="token punctuation">.</span><span class="token function">getConnectionProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">checkLock</span><span class="token punctuation">(</span>lockKeys<span class="token punctuation">)</span><span class="token punctuation">;</span>
-                <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
+                <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span> <span class="token keyword">else</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
                     <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">RuntimeException</span><span class="token punctuation">(</span><span class="token string">"Unknown situation!"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-                <span class="token punctuation">&#125;</span>
-                <span class="token comment">// 走到这就代表全局锁没有冲突（要查询的数据没有被多个事务同时处理），可直接返回了</span>
+                <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 走到这就代表全局锁没有冲突（要查询的数据没有被多个事务同时处理），可直接返回了</span>
                 <span class="token keyword">break</span><span class="token punctuation">;</span>
-            <span class="token punctuation">&#125;</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">LockConflictException</span> lce<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-                <span class="token comment">// 全局锁冲突，本地事务先rollback，释放select .. for update获取到的锁</span>
-                <span class="token keyword">if</span> <span class="token punctuation">(</span>sp <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">LockConflictException</span> lce<span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 全局锁冲突，本地事务先rollback，释放select .. for update获取到的锁</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>sp <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
                     conn<span class="token punctuation">.</span><span class="token function">rollback</span><span class="token punctuation">(</span>sp<span class="token punctuation">)</span><span class="token punctuation">;</span>
-                <span class="token punctuation">&#125;</span> <span class="token keyword">else</span> <span class="token punctuation">&#123;</span>
+                <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span> <span class="token keyword">else</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
                     conn<span class="token punctuation">.</span><span class="token function">rollback</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-                <span class="token punctuation">&#125;</span>
-                <span class="token comment">// sleep后会再进行重试</span>
-                <span class="token comment">// trigger retry</span>
+                <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// sleep后会再进行重试</span>
+                <span class="token comment" spellcheck="true">// trigger retry</span>
                 lockRetryController<span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span>lce<span class="token punctuation">)</span><span class="token punctuation">;</span>
-            <span class="token punctuation">&#125;</span>
-        <span class="token punctuation">&#125;</span>
-    <span class="token punctuation">&#125;</span> <span class="token keyword">finally</span> <span class="token punctuation">&#123;</span>
-        <span class="token comment">// 复原现场</span>
-        <span class="token keyword">if</span> <span class="token punctuation">(</span>sp <span class="token operator">!=</span> <span class="token keyword">null</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-            <span class="token keyword">try</span> <span class="token punctuation">&#123;</span>
-                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token class-name">JdbcConstants</span><span class="token punctuation">.</span><span class="token constant">ORACLE</span><span class="token punctuation">.</span><span class="token function">equalsIgnoreCase</span><span class="token punctuation">(</span><span class="token function">getDbType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+            <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+        <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+    <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span> <span class="token keyword">finally</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 复原现场</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>sp <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>JdbcConstants<span class="token punctuation">.</span>ORACLE<span class="token punctuation">.</span><span class="token function">equalsIgnoreCase</span><span class="token punctuation">(</span><span class="token function">getDbType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
                     conn<span class="token punctuation">.</span><span class="token function">releaseSavepoint</span><span class="token punctuation">(</span>sp<span class="token punctuation">)</span><span class="token punctuation">;</span>
-                <span class="token punctuation">&#125;</span>
-            <span class="token punctuation">&#125;</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">SQLException</span> e<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
-                <span class="token constant">LOGGER</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"&#123;&#125; release save point error."</span><span class="token punctuation">,</span> <span class="token function">getDbType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
-            <span class="token punctuation">&#125;</span>
-        <span class="token punctuation">&#125;</span>
-        <span class="token keyword">if</span> <span class="token punctuation">(</span>originalAutoCommit<span class="token punctuation">)</span> <span class="token punctuation">&#123;</span>
+                <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+            <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">SQLException</span> e<span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
+                LOGGER<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"&amp;#123;&amp;#125; release save point error."</span><span class="token punctuation">,</span> <span class="token function">getDbType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+        <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>originalAutoCommit<span class="token punctuation">)</span> <span class="token operator">&amp;</span>#<span class="token number">123</span><span class="token punctuation">;</span>
             conn<span class="token punctuation">.</span><span class="token function">setAutoCommit</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
-        <span class="token punctuation">&#125;</span>
-    <span class="token punctuation">&#125;</span>
+        <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+    <span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
     <span class="token keyword">return</span> rs<span class="token punctuation">;</span>
-<span class="token punctuation">&#125;</span><span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-
-
-
+<span class="token operator">&amp;</span>#<span class="token number">125</span><span class="token punctuation">;</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 
                 
             </div>
@@ -819,7 +817,7 @@ MessageType.TYPE_REG_CLT_RESULT
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2025/01/06/java-yuan-ma/">
+                <a href="/2025/01/06/jvm-chang-yong-can-shu-zheng-li/">
                     <div class="card-image">
                         
                         
@@ -856,13 +854,13 @@ MessageType.TYPE_REG_CLT_RESULT
                 下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2025/01/06/demo/">
+                <a href="/2025/01/06/hello-world/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/19.jpg" class="responsive-img" alt="demo">
+                        <img src="/medias/featureimages/12.jpg" class="responsive-img" alt="Hello World">
                         
-                        <span class="card-title">demo</span>
+                        <span class="card-title">Hello World</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -897,9 +895,6 @@ MessageType.TYPE_REG_CLT_RESULT
 <!-- 代码块功能依赖 -->
 <script type="text/javascript" src="/libs/codeBlock/codeBlockFuction.js"></script>
 
-
-  <!-- 是否加载使用自带的 prismjs. -->
-  <script type="text/javascript" src="/libs/prism/prism.min.js"></script>
 
 
 <!-- 代码语言 -->
@@ -1077,7 +1072,7 @@ MessageType.TYPE_REG_CLT_RESULT
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">23.4k</span>
+                        class="white-color">23.7k</span>
             
             
             
