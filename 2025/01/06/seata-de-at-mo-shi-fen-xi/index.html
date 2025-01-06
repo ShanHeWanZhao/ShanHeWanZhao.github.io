@@ -1,0 +1,1262 @@
+<!DOCTYPE HTML>
+<html lang="zh-CN">
+
+
+<head>
+    <meta charset="utf-8">
+    <meta name="keywords" content="reef&#39;s blog">
+    <meta name="description" content="Seata的AT模式分析(1.5.0版本)1 增强机制SeataAutoConfiguration中的GlobalTransactionScanner，主要用来代理@GlobalTransactional注解和客户端RM和TM的注册
+1.1">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="renderer" content="webkit|ie-stand|ie-comp">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+
+
+    <title>reef&#39;s blog</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    
+
+
+    <!-- bg-cover style     -->
+
+
+
+<link rel="stylesheet" type="text/css" href="/libs/awesome/css/all.min.css">
+<link rel="stylesheet" type="text/css" href="/libs/materialize/materialize.min.css">
+<link rel="stylesheet" type="text/css" href="/libs/aos/aos.css">
+<link rel="stylesheet" type="text/css" href="/libs/animate/animate.min.css">
+<link rel="stylesheet" type="text/css" href="/libs/lightGallery/css/lightgallery.min.css">
+<link rel="stylesheet" type="text/css" href="/css/matery.css">
+<link rel="stylesheet" type="text/css" href="/css/my.css">
+<link rel="stylesheet" type="text/css" href="/css/dark.css" media="none" onload="if(media!='all')media='all'">
+
+
+
+
+    <link rel="stylesheet" href="/libs/tocbot/tocbot.css">
+    <link rel="stylesheet" href="/css/post.css">
+
+
+
+
+    
+
+
+
+    <script src="/libs/jquery/jquery-3.6.0.min.js"></script>
+
+<meta name="generator" content="Hexo 7.3.0"><link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css"></head>
+
+
+<body>
+    <header class="navbar-fixed">
+    <nav id="headNav" class="bg-color nav-transparent">
+        <div id="navContainer" class="nav-wrapper container">
+            <div class="brand-logo">
+                <a href="/" class="waves-effect waves-light">
+                    
+                    <img src="/medias/logo.png" class="logo-img" alt="LOGO">
+                    
+                    <span class="logo-span">reef&#39;s blog</span>
+                </a>
+            </div>
+            
+
+<a href="#" data-target="mobile-nav" class="sidenav-trigger button-collapse"><i class="fas fa-bars"></i></a>
+<ul class="right nav-menu">
+  
+  <li class="hide-on-med-and-down nav-item">
+    
+    <a href="/" class="waves-effect waves-light">
+      
+      <i class="fas fa-home" style="zoom: 0.6;"></i>
+      
+      <span>首页</span>
+    </a>
+    
+  </li>
+  
+  <li class="hide-on-med-and-down nav-item">
+    
+    <a href="/tags" class="waves-effect waves-light">
+      
+      <i class="fas fa-tags" style="zoom: 0.6;"></i>
+      
+      <span>标签</span>
+    </a>
+    
+  </li>
+  
+  <li class="hide-on-med-and-down nav-item">
+    
+    <a href="/categories" class="waves-effect waves-light">
+      
+      <i class="fas fa-bookmark" style="zoom: 0.6;"></i>
+      
+      <span>分类</span>
+    </a>
+    
+  </li>
+  
+  <li class="hide-on-med-and-down nav-item">
+    
+    <a href="/archives" class="waves-effect waves-light">
+      
+      <i class="fas fa-archive" style="zoom: 0.6;"></i>
+      
+      <span>归档</span>
+    </a>
+    
+  </li>
+  
+  <li class="hide-on-med-and-down nav-item">
+    
+    <a href="/about" class="waves-effect waves-light">
+      
+      <i class="fas fa-user-circle" style="zoom: 0.6;"></i>
+      
+      <span>关于</span>
+    </a>
+    
+  </li>
+  
+  <li>
+    <a href="#searchModal" class="modal-trigger waves-effect waves-light">
+      <i id="searchIcon" class="fas fa-search" title="搜索" style="zoom: 0.85;"></i>
+    </a>
+  </li>
+  <li>
+    <a href="javascript:;" class="waves-effect waves-light" onclick="switchNightMode()" title="深色/浅色模式" >
+      <i id="sum-moon-icon" class="fas fa-sun" style="zoom: 0.85;"></i>
+    </a>
+  </li>
+</ul>
+
+
+<div id="mobile-nav" class="side-nav sidenav">
+
+    <div class="mobile-head bg-color">
+        
+        <img src="/medias/logo.png" class="logo-img circle responsive-img">
+        
+        <div class="logo-name">reef&#39;s blog</div>
+        <div class="logo-desc">
+            
+            this is reef site
+            
+        </div>
+    </div>
+
+    <ul class="menu-list mobile-menu-list">
+        
+        <li class="m-nav-item">
+	  
+		<a href="/" class="waves-effect waves-light">
+			
+			    <i class="fa-fw fas fa-home"></i>
+			
+			首页
+		</a>
+          
+        </li>
+        
+        <li class="m-nav-item">
+	  
+		<a href="/tags" class="waves-effect waves-light">
+			
+			    <i class="fa-fw fas fa-tags"></i>
+			
+			标签
+		</a>
+          
+        </li>
+        
+        <li class="m-nav-item">
+	  
+		<a href="/categories" class="waves-effect waves-light">
+			
+			    <i class="fa-fw fas fa-bookmark"></i>
+			
+			分类
+		</a>
+          
+        </li>
+        
+        <li class="m-nav-item">
+	  
+		<a href="/archives" class="waves-effect waves-light">
+			
+			    <i class="fa-fw fas fa-archive"></i>
+			
+			归档
+		</a>
+          
+        </li>
+        
+        <li class="m-nav-item">
+	  
+		<a href="/about" class="waves-effect waves-light">
+			
+			    <i class="fa-fw fas fa-user-circle"></i>
+			
+			关于
+		</a>
+          
+        </li>
+        
+        
+        <li><div class="divider"></div></li>
+        <li>
+            <a href="https://github.com/blinkfox/hexo-theme-matery" class="waves-effect waves-light" target="_blank">
+                <i class="fab fa-github-square fa-fw"></i>Fork Me
+            </a>
+        </li>
+        
+    </ul>
+</div>
+
+
+        </div>
+
+        
+            <style>
+    .nav-transparent .github-corner {
+        display: none !important;
+    }
+
+    .github-corner {
+        position: absolute;
+        z-index: 10;
+        top: 0;
+        right: 0;
+        border: 0;
+        transform: scale(1.1);
+    }
+
+    .github-corner svg {
+        color: #0f9d58;
+        fill: #fff;
+        height: 64px;
+        width: 64px;
+    }
+
+    .github-corner:hover .octo-arm {
+        animation: a 0.56s ease-in-out;
+    }
+
+    .github-corner .octo-arm {
+        animation: none;
+    }
+
+    @keyframes a {
+        0%,
+        to {
+            transform: rotate(0);
+        }
+        20%,
+        60% {
+            transform: rotate(-25deg);
+        }
+        40%,
+        80% {
+            transform: rotate(10deg);
+        }
+    }
+</style>
+
+<a href="https://github.com/blinkfox/hexo-theme-matery" class="github-corner tooltipped hide-on-med-and-down" target="_blank"
+   data-tooltip="Fork Me" data-position="left" data-delay="50">
+    <svg viewBox="0 0 250 250" aria-hidden="true">
+        <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+        <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2"
+              fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+        <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z"
+              fill="currentColor" class="octo-body"></path>
+    </svg>
+</a>
+        
+    </nav>
+
+</header>
+
+    
+
+
+
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/0.jpg')">
+    <div class="container" style="right: 0px;left: 0px;">
+        <div class="row">
+            <div class="col s12 m12 l12">
+                <div class="brand">
+                    <h1 class="description center-align post-title"></h1>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+<main class="post-container content">
+
+    
+    <div class="row">
+    <div id="main-content" class="col s12 m12 l9">
+        <!-- 文章内容详情 -->
+<div id="artDetail">
+    <div class="card">
+        <div class="card-content article-info">
+            <div class="row tag-cate">
+                <div class="col s7">
+                    
+                          <div class="article-tag">
+                            <span class="chip bg-color">无标签</span>
+                          </div>
+                    
+                </div>
+                <div class="col s5 right-align">
+                    
+                </div>
+            </div>
+
+            <div class="post-info">
+                
+                <div class="post-date info-break-policy">
+                    <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
+                    2025-01-06
+                </div>
+                
+
+                
+                <div class="post-date info-break-policy">
+                    <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
+                    2025-01-06
+                </div>
+                
+
+                
+                <div class="info-break-policy">
+                    <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
+                    7.6k
+                </div>
+                
+
+                
+
+                
+            </div>
+        </div>
+        <hr class="clearfix">
+
+        
+
+        
+
+        <div class="card-content article-card-content">
+            <div id="articleContent">
+                <h1 id="Seata的AT模式分析-1-5-0版本"><a href="#Seata的AT模式分析-1-5-0版本" class="headerlink" title="Seata的AT模式分析(1.5.0版本)"></a>Seata的AT模式分析(1.5.0版本)</h1><h2 id="1-增强机制"><a href="#1-增强机制" class="headerlink" title="1 增强机制"></a>1 增强机制</h2><p>SeataAutoConfiguration中的GlobalTransactionScanner，主要用来代理@GlobalTransactional注解和客户端RM和TM的注册</p>
+<h3 id="1-1-GlobalTransactionScanner的实例化"><a href="#1-1-GlobalTransactionScanner的实例化" class="headerlink" title="1.1 GlobalTransactionScanner的实例化"></a>1.1 GlobalTransactionScanner的实例化</h3><h4 id="1-1-1-bean的自动代理"><a href="#1-1-1-bean的自动代理" class="headerlink" title="1.1.1 bean的自动代理"></a>1.1.1 bean的自动代理</h4><p>​		<strong>GlobalTransactionScanner继承了AbstractAutoProxyCreator抽象类，具有了自动代理bean的功能</strong>。作为一个BeanPostProcessor，将在postProcessAfterInitialization方法调用时判断该bean是否应该被代理（对于AT模式，就是当前bean的class或method必须有@GlobalTransactional或@GlobalLock注解），最终被GlobalTransactionalInterceptor拦截。</p>
+<h4 id="1-1-2-初始化"><a href="#1-1-2-初始化" class="headerlink" title="1.1.2 初始化"></a>1.1.2 初始化</h4><p>​		<strong>GlobalTransactionScanner也实现了InitializingBean接口，在afterPropertiesSet方法中，将会对TM和RM进行初始化</strong></p>
+<h5 id="1-1-2-1-TM初始化"><a href="#1-1-2-1-TM初始化" class="headerlink" title="1.1.2.1 TM初始化"></a>1.1.2.1 TM初始化</h5><ul>
+<li><p>实例化TmNettyRemotingClient对象（会创建好netty客户端的Bootstrap相关配置，等待后续init使用）</p>
+</li>
+<li><p>开始<strong>初始化TmNettyRemotingClient，先注册一些ResponseProcessor，用来处理server端回传的respons</strong>e（因为时TM，所以只会注册和全局事务的begin，commit，rolback等相关response的Processor，具体类型如下）</p>
+<ul>
+<li><pre class=" language-language-txt"><code class="language-language-txt">MessageType.TYPE_SEATA_MERGE_RESULT
+MessageType.TYPE_GLOBAL_BEGIN_RESULT
+MessageType.TYPE_GLOBAL_COMMIT_RESULT
+MessageType.TYPE_GLOBAL_REPORT_RESULT
+MessageType.TYPE_GLOBAL_ROLLBACK_RESULT
+MessageType.TYPE_GLOBAL_STATUS_RESULT
+MessageType.TYPE_REG_CLT_RESULT
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">- 开启一些定时任务，包括与服务端Channel的reconnect任务、**MergedSend任务（处理批量消息发送）**、future的超时检测任务。</span><br><span class="line"></span><br><span class="line">- 启动和TM相关的netty客户端的Bootstrap，添加对应的ChannelHandler，包括IdleStateHandler（心跳检测，会进行ping-pong操作）、解码和编码器、**ClientHandler（双向handler，开始真正处理数据，同时也处理IdleStateHandler发来的IdleStateEvent事件，判断后是否进行ping-pong，以此维护长连接）**</span><br><span class="line"></span><br><span class="line">##### 1.1.2.2 RM初始化</span><br><span class="line"></span><br><span class="line">- 实例化RmNettyRemotingClient对象，和上面类似，也会创建好netty客户端的Bootstrap相关配置</span><br><span class="line"></span><br><span class="line">- 开始**初始化RmNettyRemotingClient，也会先注册一些ResponseProcessor，用来处理server端回传的response**（因为时RM，所以只会注册资源（可以理解成数据库）相关的操作，具体类型如下）</span><br><span class="line"></span><br><span class="line">  - ```java</span><br><span class="line">    MessageType.TYPE_BRANCH_COMMIT</span><br><span class="line">    MessageType.TYPE_BRANCH_ROLLBACK</span><br><span class="line">    MessageType.TYPE_RM_DELETE_UNDOLOG</span><br><span class="line">    </span><br><span class="line">    MessageType.TYPE_SEATA_MERGE_RESUL</span><br><span class="line">    MessageType.TYPE_BRANCH_REGISTER_RESULT</span><br><span class="line">    MessageType.TYPE_BRANCH_STATUS_REPORT_RESULT</span><br><span class="line">    MessageType.TYPE_GLOBAL_LOCK_QUERY_RESULT</span><br><span class="line">    MessageType.TYPE_REG_RM_RESULT</span><br></pre></td></tr></table></figure>
+</code></pre>
+</li>
+</ul>
+</li>
+<li><p>和上面一样，开启RM相关的netty bootstrap并注册相同的ChannelHandler</p>
+</li>
+</ul>
+<h3 id="1-2-相关表"><a href="#1-2-相关表" class="headerlink" title="1.2 相关表"></a>1.2 相关表</h3><ul>
+<li><strong>undo_log</strong>：客户端的表，保存修改数据sql操作前后镜像值，主要用于全局事务回滚来构造回滚sql以回滚数据</li>
+<li><strong>global_session</strong>：服务端表，每一条记录都代表一个全局事务</li>
+<li><strong>branch_session</strong>：服务端表，每一条记录都代表一个从客户端注册的分支事务</li>
+<li><strong>lock_table</strong>：服务端表，客户端在全局事务期间修改的数据，每一条记录了某个数据库每个表的具体某个行的主键值，用在多个全局事务期间解决写冲突。</li>
+</ul>
+<h2 id="2-重要术语"><a href="#2-重要术语" class="headerlink" title="2 重要术语"></a>2 重要术语</h2><h3 id="2-1-RM（Resource-Manager）"><a href="#2-1-RM（Resource-Manager）" class="headerlink" title="2.1 RM（Resource Manager）"></a>2.1 RM（Resource Manager）</h3><p>​		资源管理器，管理分支事务处理的资源，与TC交谈以注册分支事务和报告分支事务的状态，并驱动分支事务提交或回滚。</p>
+<p>​		<strong>作用在seata客户端，代码实现中和DatsSource的代理绑定，负责和数据库相关的操作打交道，默认实现为DefaultResourceManager（仅是一个适配器，针对不同的模式适配了不同的ResourceManager实现。比如AT模式的默认实现是DataSourceManager）</strong>。在Connection的commit中，负责向server端注册当前分支事务；在Connection的rollback中，负责向server端报告当前分支事务的错误状态。同时也处理服务端发送过来的分支事务commit（删除undo_log）或rollback（生成补偿sql并执行）操作。</p>
+<h3 id="2-2-TM（Transaction-Manager）"><a href="#2-2-TM（Transaction-Manager）" class="headerlink" title="2.2 TM（Transaction Manager）"></a>2.2 TM（Transaction Manager）</h3><p>​		 事务管理器，开始全局事务、提交或回滚全局事务。</p>
+<p>​		<strong>作用在seata客户端，代码实现中和@GlobalTransactional的拦截打交道，，默认实现为DefaultTransactionManager。负责开启、commit或rollback全局事务（commit和rollback操作只是向server发起这个请求了，具体的还需要TC和RM来执行真正的数据处理）</strong>。三个核心方法如下</p>
+<ul>
+<li><strong>begin</strong>：向server发送开启全局事务的请求。<strong>server端会创建一条global_session数据来表示这个全局事务</strong>，并回传给TM对应的xid</li>
+<li><strong>commit</strong>：向server端发起全局事务的commit。server端具体做法如下（<strong>从第二个操作开始，就会异步处理了，因为这之后的操作基本就是删除些用来支持全局事务的数据，不会再对分支事务修改的数据有影响了</strong>）。<strong>所以，commit操作是很快的，TM只需等待TC删除掉锁信息即可</strong><ul>
+<li>修改global_session状态，<strong>释放锁资源（即删除lock_table对应的记录）</strong></li>
+<li>拿到这个global_session关联的branch_session，依次<strong>触发branch_session的commit（即发送请求到RM，RM会删除掉branch_session对应的undo_log数据）</strong></li>
+<li><strong>server端删除对应的branch_session记录</strong></li>
+<li>全部branch_session操作完成后，TC开始修改global_session状态为完毕然后<strong>删除这个global_session</strong></li>
+<li>返回对应的GlobalStatus状态给TM。至此，全局事务commit完毕</li>
+</ul>
+</li>
+<li><strong>rollback</strong>：向server端发起全局事务的rollback。server端具体做法如下<ul>
+<li>设置对应的global_session状态为关闭，避免新分支的注册</li>
+<li>拿到这个global_session关联的branch_session，依次<strong>触发branch_session的rollback（即发送请求到RM，RM会拿出这个branch_session对应的undo_log数据，并进行undo操作，复原数据）</strong></li>
+<li><strong>server端删除对应的branch_session记录</strong></li>
+<li><strong>全部branch_session操作rollback成功后，TC再释放锁资源（即删除lock_table对应的记录），并删除对应的global_session数据</strong></li>
+<li>返回对应的GlobalStatus状态给TM。至此，全局事务rollback完毕</li>
+</ul>
+</li>
+</ul>
+<h3 id="2-3-TC（Transaction-Coordinator）"><a href="#2-3-TC（Transaction-Coordinator）" class="headerlink" title="2.3 TC（Transaction Coordinator）"></a>2.3 TC（Transaction Coordinator）</h3><p>​	事务协调者，作用在seata服务端，维护全局和分支事务的状态，驱动全局事务提交或回滚，<strong>默认实现为DefaultCoordinator</strong>。</p>
+<p>​	与RM打交道，实现分支事务的注册等，并在TM发起全局事务的commit和rollback后再驱动分支事务的commit和rollback。</p>
+<p>​	和TM打交道，实现全局事务的开启、commit和rollback等操作</p>
+<h3 id="2-4-全局事务的发起者"><a href="#2-4-全局事务的发起者" class="headerlink" title="2.4 全局事务的发起者"></a>2.4 全局事务的发起者</h3><p>​		<strong>全局事务的起点，微服务调用链走到@GlobalTransactional时，线程上线文不存在xid（有可能是第一次发起，也有可能时事务传播策略导致新建的全局事务等）。类比spring提供的事务传播策略中的新建事务。只有全局事务的发起者才能开启一个全局事务，并根据是否产生回滚异常来决定是否全局事务的提交或全局事务的回滚</strong></p>
+<h3 id="2-5-全局事务的参与者"><a href="#2-5-全局事务的参与者" class="headerlink" title="2.5 全局事务的参与者"></a>2.5 全局事务的参与者</h3><p>​		<strong>处于微服务调用链中全局事务内部，参与到了其他上游服务发起的全局事务（这时线程上下文存在xid）。类比spring提供的事务传播策略中的加入了已存在的事务，所以，全局事务的参与者不能触发全局事务的回滚或提交。只能由RM来报告当前分支事务的状态（触发rollback后，分支事务状态变为PhaseOne_Failed）</strong></p>
+<h3 id="2-6-分支事务和全局事务"><a href="#2-6-分支事务和全局事务" class="headerlink" title="2.6 分支事务和全局事务"></a>2.6 分支事务和全局事务</h3><p>全局事务：整个分布式事务，由多个分支事务组成</p>
+<p>分支事务：分布式事务中整个链路里每个服务单独的事务，不可能跨服务存在。运行在spring事务的支持下，一个本地事务就是一个分支事务。没有被本地事务支持但运行在全局事务下，则一个dml sql就会生成一个分支事务</p>
+<h2 id="三、服务端初始化"><a href="#三、服务端初始化" class="headerlink" title="三、服务端初始化"></a>三、服务端初始化</h2><p>服务端就是一个springboot项目，启动类是<strong>ServerApplication，核心启动方法是io.seata.server.Server#start</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// io.seata.server.Server#start 方法里的一些主要功能（删除了些不重要的）</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">start</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 统计相关功能初始化</span></span><br><span class="line">    MetricsManager.get().init();</span><br><span class="line">    <span class="comment">// 设置数据保存模式（db，file，或redis）</span></span><br><span class="line">    System.setProperty(ConfigurationKeys.STORE_MODE, parameterParser.getStoreMode());</span><br><span class="line"></span><br><span class="line">    <span class="type">ThreadPoolExecutor</span> <span class="variable">workingThreads</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ThreadPoolExecutor</span>(NettyServerConfig.getMinServerPoolSize(),</span><br><span class="line">            NettyServerConfig.getMaxServerPoolSize(), NettyServerConfig.getKeepAliveTime(), TimeUnit.SECONDS,</span><br><span class="line">            <span class="keyword">new</span> <span class="title class_">LinkedBlockingQueue</span>&lt;&gt;(NettyServerConfig.getMaxTaskQueueSize()),</span><br><span class="line">            <span class="keyword">new</span> <span class="title class_">NamedThreadFactory</span>(<span class="string">&quot;ServerHandlerThread&quot;</span>, NettyServerConfig.getMaxServerPoolSize()), <span class="keyword">new</span> <span class="title class_">ThreadPoolExecutor</span>.CallerRunsPolicy());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 创建netty相关对象</span></span><br><span class="line">    <span class="type">NettyRemotingServer</span> <span class="variable">nettyRemotingServer</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">NettyRemotingServer</span>(workingThreads);</span><br><span class="line">    nettyRemotingServer.setListenPort(parameterParser.getPort());</span><br><span class="line">    <span class="comment">// 创建TC</span></span><br><span class="line">    <span class="type">DefaultCoordinator</span> <span class="variable">coordinator</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">DefaultCoordinator</span>(nettyRemotingServer);</span><br><span class="line">    <span class="comment">// 启动一些定时任务，包括 异步全局事务commit操作等</span></span><br><span class="line">    coordinator.init();</span><br><span class="line">    nettyRemotingServer.setHandler(coordinator);</span><br><span class="line">    <span class="comment">//127.0.0.1 and 0.0.0.0 are not valid here.</span></span><br><span class="line">    <span class="comment">// 设置服务端netty的ip和端口</span></span><br><span class="line">    <span class="keyword">if</span> (NetUtil.isValidIp(parameterParser.getHost(), <span class="literal">false</span>)) &#123;</span><br><span class="line">        XID.setIpAddress(parameterParser.getHost());</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        XID.setIpAddress(NetUtil.getLocalIp());</span><br><span class="line">    &#125;</span><br><span class="line">    XID.setPort(nettyRemotingServer.getListenPort());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 注册消息处理器并构建netty的ServerBootstrap，开启端口的监听</span></span><br><span class="line">    nettyRemotingServer.init();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="四、客户端初始化"><a href="#四、客户端初始化" class="headerlink" title="四、客户端初始化"></a>四、客户端初始化</h2><p>​		客户端初始化主要是通过两个自动代理bean来实现的</p>
+<ul>
+<li><strong>GlobalTransactionScanner</strong>：代理**@GlobalTransactional和@GlobalLock注解标志的类或方法，统一使用GlobalTransactionalInterceptor进行拦截**</li>
+<li><strong>SeataAutoDataSourceProxyCreator</strong>：代理DataSource类。<strong>原来执行sql的流程 DataSource -&gt; Connection -&gt; Statement -&gt; 开始执行sql，变为了DataSourceProxy -&gt; ConnectionProxy -&gt; StatementProxy</strong>（<strong>DataSourceProxy里代理commit相关操作，和server通信。StatementProxy则代理执行sql的逻辑，处理执行前后镜像数据并生成undo数据，以便后续的rollback操作</strong>）</li>
+</ul>
+<h2 id="五、一个完整的全局事务流程（db模式）"><a href="#五、一个完整的全局事务流程（db模式）" class="headerlink" title="五、一个完整的全局事务流程（db模式）"></a>五、一个完整的全局事务流程（db模式）</h2><h3 id="5-1-GlobalTransactional注解拦截"><a href="#5-1-GlobalTransactional注解拦截" class="headerlink" title="5.1 @GlobalTransactional注解拦截"></a>5.1 @GlobalTransactional注解拦截</h3><p>拦截器：GlobalTransactionalInterceptor</p>
+<blockquote>
+<p>​	这里有个参数：<strong>client.tm.degradeCheck</strong>（是否开启降级检查，默认为false）。</p>
+<p>​	当启用该参数时，会开启一个定时任务，间隔时间受参数<strong>client.tm.degradeCheckPeriod</strong>控制（默认为2000毫秒），向服务端发送全局事务的开启和提交测试，以此来判断服务端的全局事务当前是否支持。</p>
+<p>​	如果出现<strong>client.tm.degradeCheckAllowTimes</strong>次连续检查失败，则禁用当前全局事务支持，不走GlobalTransactionalInterceptor的代理逻辑。</p>
+<p>​	而当降级后，又需要连续检查成功<strong>client.tm.degradeCheckAllowTimes</strong>次才会再次开启全局事务的支持</p>
+</blockquote>
+<ol>
+<li><p>通过上面的参数检查，判断当前请求是否支持全局事务，当支持全局事务时，优先走@GlobalTransactional逻辑，因为全局事务也包括了数据库锁，其次再走@GlobalLock逻辑。</p>
+</li>
+<li><p>解析@GlobalTransactional注解，获取当前环境的xid（如果存在xid则代表当前全局事务是参与者，发起者为上游服务，创建DefaultGlobalTransaction为参与者角色。不存在则代表当前全局事务是发起者）</p>
+</li>
+<li><p>传播策略的检查和支持，类似spring，锁重试设置，开启全局事务</p>
+</li>
+</ol>
+<h3 id="5-2-全局事务开启"><a href="#5-2-全局事务开启" class="headerlink" title="5.2 全局事务开启"></a>5.2 全局事务开启</h3><p><strong>io.seata.tm.api.GlobalTransaction#begin</strong> 方法</p>
+<ol>
+<li>判断当前全局事务的角色，全局事务的发起者才需要真正的开启全局事务，而全局事务的参与者不需要开启全局事务，只需要等待分支事务提交时加入到当前xid的全局事务就行</li>
+<li>全局事务的发起者此时还未向服务端发起的，所以xid肯定为空，先校验一下</li>
+<li>向服务端发送全局事务开启的请求</li>
+<li>服务端收到这个全局事务的开启请求后，创建GlobalSession（根据ID生成器生成唯一的transactionId和xid），并将GlobalSession转换为GlobalTransactionDO在保存到数据库的global_table表中，至此，全局事务开启，信息保存成功，最后再将xid返回给客户端</li>
+<li>客户端收到服务端传来的xid，将其保存到当前线程的上下文中。并应该在后续的调用其他业务服务时传递该xid，串联起来这个全局事务</li>
+</ol>
+<h3 id="5-3-执行业务代码"><a href="#5-3-执行业务代码" class="headerlink" title="5.3 执行业务代码"></a>5.3 执行业务代码</h3><p>​		任何一个SQL的执行操作，无非就是先获取DataSource，在通过DataSource获取Connection，通过Connection获取Statement，Statement准备sql和参数，再执行Statement并处理结果集，返回结果</p>
+<p>​		所以，追根溯源，要支持分布式事务，就需要控制DataSource的一系列的行为，<strong>SeataAutoDataSourceProxyCreator</strong>就在这里发挥了作用</p>
+<h4 id="1、数据源的自动代理，SeataAutoDataSourceProxyCreator类，wrapIfNecessary方法"><a href="#1、数据源的自动代理，SeataAutoDataSourceProxyCreator类，wrapIfNecessary方法" class="headerlink" title="1、数据源的自动代理，SeataAutoDataSourceProxyCreator类，wrapIfNecessary方法"></a>1、数据源的自动代理，SeataAutoDataSourceProxyCreator类，wrapIfNecessary方法</h4><p>逻辑：只对DataSource代理，且会进行重复代理的判断，构造切面：SeataAutoDataSourceProxyAdvice。最终将原DataSource和SeataDataSourceProxy的关系放入DataSourceProxyHolder类中，方便后续的取出</p>
+<h4 id="2、数据源方法的切入"><a href="#2、数据源方法的切入" class="headerlink" title="2、数据源方法的切入"></a>2、数据源方法的切入</h4><p><strong>SeataAutoDataSourceProxyAdvice</strong>代理了DataSource类的任何操作，其代理逻辑：</p>
+<pre><code>	1. 先判断是否需要走切面逻辑（全局锁需要，且存在AT模式的全局事务），不需要走切面逻辑的直接走原逻辑，通过原DataSource完成一系列操作。
+		2. 需要走代理逻辑的流程：通过当前**DataSource**拿到对应的**SeataDataSourceProxy**（**DataSourceProxyHolder**发挥作用），走对应代理类的相同方法，获取代理的**Connection（ConnectionProxy）**，创建当前Connection的**ConnectionContext**，用来保存当前Connection的全局事务信息。创建**StatementProxy**， 拦截Statement的execute方法，根据druid或其他工具解析sql。最终会走到**io.seata.rm.datasource.exec.AbstractDMLBaseExecutor#doExecute**这个方法执行
+</code></pre>
+<h4 id="3、Statement的执行"><a href="#3、Statement的执行" class="headerlink" title="3、Statement的执行"></a>3、Statement的执行</h4><ol>
+<li><p>普通的select语句因为不会涉及到数据修改，就不会申请锁资源。所以直接走原Statement直接执行。</p>
+</li>
+<li><p>而其他会修改数据的sql（比如 insert，update，delete，select_for_update等），走代理。具体逻辑：在执行原SQL之前，通过原sql构造出select语句，来查询更新字段的执行前镜像值，封装成TableRecords。之后再执行原SQL，执行后再查询更新字段的执行后镜像值，封装成TableRecords，最后再将两次的TableRecords封装成SQLUndoLog，暂放内存中，等待分支事务commit再写入库</p>
+</li>
+</ol>
+<p><strong>io.seata.rm.datasource.exec.AbstractDMLBaseExecutor#doExecute会对当前Connection是否自动提交做判断，为什么呢？</strong></p>
+<blockquote>
+<p>​	假如在一个分布式事务中，我们只使用了seata的@GlobalTransactional注解而没有用spring的@Transactional注解控制本地事务，其实也是支持的。</p>
+<p>​	当不存在本地事务时，事务都是走的autoCommit的。seata在这里先判断了一下，如果没开启本地事务，单个语句就为一个事务，seata其实还是设置当前事务为手动提交，设置autoCommit为false（因为还有undo_log的写入），然后走seata流程的分支事务提交。所以，当不存在本地事务，任何一个语句就是一个分支事务。</p>
+<p>​	在一个服务中，开启了本地事务的地方算一个分支事务，有相同的xid，而未开启本地事务的代码里，每一个update,delete,insert等语句都算一个分支事务，由seata来控制全局事务的一致性。所以，未开启本地事务但只用seata的全局事务也是可以的，但是性能影响会比较大，因为这里由一个分支事务变成多个分支事务了，每一个分支事务都会涉及到与服务端的通信，数据库锁检查，undo_log的写库等操作。</p>
+</blockquote>
+<h4 id="4、分支事务的提交（rpc通过Netty发送commit到服务端）"><a href="#4、分支事务的提交（rpc通过Netty发送commit到服务端）" class="headerlink" title="4、分支事务的提交（rpc通过Netty发送commit到服务端）"></a>4、分支事务的提交（rpc通过Netty发送commit到服务端）</h4><ol>
+<li><p>锁检查（lock_table表），将变化的数据构造为row_key，一个row_key能唯一确定某一行数据</p>
+</li>
+<li><p>已经被其他全局事务占用了数据锁，则所失败，抛出LockConflictException异常并开始重试，默认重试30次，重试间隔为10ms</p>
+</li>
+<li><p>数据未被其他全局事务上锁，则当前全局事务对数据上锁（写入到lock_table表），创建BranchSession，关联xid，再转换为BranchTransactionDO并保存到branch_table表，在返回给客户端branchId。</p>
+</li>
+<li><p>刷新当前分支事务内存中所有的undo_log到数据库的undo_log表，分支事务commit，清除当前Connection的ConnectionContext里全局事务相关信息。到这里，分支事务就已经commit成功了，且进行了写隔离</p>
+</li>
+</ol>
+<h4 id="5、调用其他业务服务的接口"><a href="#5、调用其他业务服务的接口" class="headerlink" title="5、调用其他业务服务的接口"></a>5、调用其他业务服务的接口</h4><ol>
+<li><p>调用其他服务，需要将xid在服务间传递（当前版本好像还没支持feign的，自己实现也简单，请求头加个TX_XID，把xid传过去就行），其他服务设置了spring的拦截器，获取TX_XID，并绑定到当前线程，等待后续判断</p>
+</li>
+<li><p>其他业务服务的流程和上面一样：解析sql，构造镜像，保存undo_log，锁检查，注册分支事务，commit</p>
+</li>
+</ol>
+<h3 id="5-4-业务代码执行完毕，全局事务的回滚或提交流程"><a href="#5-4-业务代码执行完毕，全局事务的回滚或提交流程" class="headerlink" title="5.4 业务代码执行完毕，全局事务的回滚或提交流程"></a>5.4 业务代码执行完毕，全局事务的回滚或提交流程</h3><h4 id="1、全局事务回滚"><a href="#1、全局事务回滚" class="headerlink" title="1、全局事务回滚"></a>1、全局事务回滚</h4><ol>
+<li><p>业务代码抛出异常，且命中回滚异常，触发全局回滚（io.seata.tm.api.DefaultGlobalTransaction#rollback），但这里<strong>只支持全局事务的发起者调用回滚，全局事务的参与者是不能全局事务回滚的</strong>。所以，只有全局事务的发起者出现了异常并命中回滚策略才会触发全局回滚，全局事务的参与者则不能，所以可能导致参与者回滚了，但不抛异常，发起者没有命中回滚，导致发起者全局事务正常commit了，但部分参与者却回滚了，导致没有全部保证一致性。</p>
+</li>
+<li><p>发送全局事务回滚请求到服务端，回滚逻辑</p>
+</li>
+</ol>
+<blockquote>
+<ol>
+<li>GlobalSession的状态校验</li>
+<li>获取这个GlobalSession的所有BranchSession，遍历触发每一个分支事务的回滚</li>
+<li>分支事务回滚，发送请求给客户端，找到当前分支事务的undo_log，对镜像前后进行比较，不同的需要补偿（update就用update，insert用delete，delete用insert等），还原事务前的数据</li>
+<li>分支事务的undo_log删除，返回状态给服务端</li>
+<li>服务端对状态的判断和处理，删除分支事务（branch_session）</li>
+</ol>
+</blockquote>
+<h4 id="2、全局事务提交"><a href="#2、全局事务提交" class="headerlink" title="2、全局事务提交"></a>2、全局事务提交</h4><ol>
+<li><p>类似全局事务回滚，也只有全局事务的发起者才能真正的提交</p>
+</li>
+<li><p>发送全局事务提交请求到服务端，提交逻辑</p>
+</li>
+</ol>
+<blockquote>
+<ol>
+<li>释放相关的锁资源：遍历当前全局事务的所有分支事务，逐个将每个分支事务关联的锁资源删除（lock_table表相关的记录）</li>
+<li>判断是否支持异步提交（AT模式是支持的，因为现在锁资源已经释放了，不用在担心会影响到其他全局事务，剩下的只需要把相关的undo_log删除即可），将globalSession状态更新为异步提交中，并更新到数据库中（global_table表）去，在直接返回给客户端已提交</li>
+<li>异步提交：由定时任务线程池触发（Server启动时创建的DefaultCoordinator初始化异步提交定时任务下线程池，默认定时任务时间间隔为1秒），查询所有的异步提交状态的global_session，并将其关联的branch_session全部查出来，遍历每个global_session并开始全局事务的提交</li>
+<li>全局事务的真正提交：遍历global_session中关联的每一个branch_session，发送提交任务到对应的客户端（根据resourceId和clientId查找对应客户端的Channel），客户端收到全局事务的commit请求，将请求封装成Phase2Context对象并扔进待提交队列，等待客户端的定时任务线程池提交，然后直接返回给服务端分支事务已提交的状态</li>
+<li>客户端定时任务线程池提交全局事务逻辑：将所有的Phase2Context按资源分组（在seata的AT模式下，一个资源就可以代表一个数据库），具有相同资源的待提交任务处于同一个数据库里，可以用相同的Connection。通过资源管理器获取获取数据源代理，再通过这个数据源代理拿到原Connection（以免这些更新语句又走了代理，创建了undo_log），在批量删除对应的undo_log。</li>
+<li>当所有分支事务提交完成后（undo_log删除完成），最后再server端删除对应的GlobalSession记录</li>
+</ol>
+</blockquote>
+<h3 id="5-5-全局事务结束"><a href="#5-5-全局事务结束" class="headerlink" title="5.5 全局事务结束"></a>5.5 全局事务结束</h3><ol>
+<li><p>如果当前全局事务是嵌套的，需要恢复上一个全局事务的状态（包括全局锁配置：锁失败的重试次数和时间间隔，恢复上一个全局事务的xid）</p>
+</li>
+<li><p>触发回调函数，和清除当前全局事务的钩子函数</p>
+</li>
+</ol>
+<p>至此，全局事务的流程已全部结束</p>
+<h2 id="六、全局事务锁冲突和重试的实现"><a href="#六、全局事务锁冲突和重试的实现" class="headerlink" title="六、全局事务锁冲突和重试的实现"></a>六、全局事务锁冲突和重试的实现</h2><h3 id="6-1-写隔离和锁重试的实现"><a href="#6-1-写隔离和锁重试的实现" class="headerlink" title="6.1 写隔离和锁重试的实现"></a>6.1 写隔离和锁重试的实现</h3><p>​		seata在客户端执行更新数据相关的sql时，会记录sql操作前后的镜像值到undo_log中，同时据此准备lockKeys暂存起来，lockKeys就是变化的数据唯一标识（比如表明，主键列的值等）。在客户端的本地事务提交时，先注册当前分支事务（<strong>利用RM的branchRegister接口</strong>）。seata服务端的TC开始尝试注册分支事务，尝试步骤：</p>
+<ul>
+<li><p>先对全局事务进行状态检查</p>
+</li>
+<li><p>利用客户端传来的信息构造BranchSession</p>
+</li>
+<li><p><strong>对BranchSession尝试加锁（AT模式才会）</strong></p>
+</li>
+<li><p><strong>通过对锁信息的一系列检查和转化，到达LockStoreDataBaseDAO#acquireLock(java.util.List&lt;io.seata.core.store.LockDO&gt;)接口</strong></p>
+</li>
+<li><p>查询lock_table中对应row_key存在的数据（这个row_key就是行锁，能唯一标识客户端某个数据库里某个表的某行数据）</p>
+<ul>
+<li><p>如果没查询出来，代表写锁不冲突，将这些锁资源保存在lock_table中，直接返回加锁成功</p>
+</li>
+<li><p>如果查询出来了，且这些数据还是当前全局事务（xid一致），代表重复枷锁而已，只需要将原本不存在的所数据保存到lock_table中，就可返回枷锁成功</p>
+</li>
+<li><p>查询出来，且有其他全局事务占用当前资源，直接返回加锁失败。由io.seata.server.transaction.at.ATCore#branchSessionLock直接抛出异常码为LockKeyConflict的异常，代表写锁冲突</p>
+</li>
+</ul>
+</li>
+<li><p>加锁成功就不说了，直接向下走。<strong>而加锁失败，由服务端的AbstractCallback捕获异常，并转化为对应消息，发送给客户端</strong></p>
+</li>
+<li><p><strong>客户端的ConnectionProxy#recognizeLockKeyConflictException方法检测到是锁冲突异常，又抛出LockConflictException异常</strong></p>
+</li>
+<li><p><strong>客户端的LockRetryPolicy#doRetryOnLockConflict捕获到LockConflictException异常，开始重试（默认重试30次，间隔时间为10毫秒）</strong></p>
+</li>
+<li><p><strong>如果30次还是重试失败，转为LockWaitTimeoutException异常，触发客户端本地事务的回滚</strong></p>
+</li>
+</ul>
+<h2 id="7-思考"><a href="#7-思考" class="headerlink" title="7 思考"></a>7 思考</h2><h3 id="7-1-必须保证全局事务范围大于等于分支事务（spring提供的事务注解等）"><a href="#7-1-必须保证全局事务范围大于等于分支事务（spring提供的事务注解等）" class="headerlink" title="7.1 必须保证全局事务范围大于等于分支事务（spring提供的事务注解等）"></a>7.1 必须保证全局事务范围大于等于分支事务（spring提供的事务注解等）</h3><p>​		假如全局事务的范围小于分支事务：全局事务的发起者先是进行全局事务的提交，再进行本地事务的提交。在全局事务提交时，本地事务都还没提交（本地事务提交时才会注册当前分支事务到server端），所以在server端不会有任何当前全局事务发起者客户端的分支事务，在server端触发分支事务提交时也不会发送给当前客户端，所以，对于当前客户端来说全局事务的提交就是个空提交（但对其他全局事务的参与者不是）。而全局事务在server端的提交又是个异步的过程，所以当客户端提交本地事务时，可能会出现以下错误</p>
+<ul>
+<li>全局事务提交完毕**：server的全局事务操作完毕后会删掉GlobalSessiob，所以，当客户端的本地事务提交，向server端注册分支事务时，会导致xid不存在异常（这个xid已经随着全局事务的终结给删掉了）**</li>
+<li>全局事务正在提交：<strong>虽然在server端全局事务是异步提交的，但在这之前全局事务的状态会先设为AsyncCommitting（这一步和客户端提交全局事务是同步的）。所以，在客户端向server注册分支事务时，server端会先校验全局事务xid的状态，发现全局事务状态不为Begin，抛出全局事务异常</strong></li>
+</ul>
+<p>​		为什么范围可以等于，因为全局事务拦截器的<strong>io.seata.spring.annotation.GlobalTransactionalInterceptor#getPosition接口默认将@GlobalTransactional拦截放在了@Transactional的前面，拦截器也类似栈结构（先进后出）</strong>。先进入@GlobalTransactional拦截方法，再进入@Transactional拦截方法，先从@Transactional拦截方法出，之后再从@GlobalTransactional方法出来。保证了在全局事务提交前，本地事务已经注册了。</p>
+<p><strong>综上，@GlobalTransactional和spring的@Transactional的正确搭配：</strong></p>
+<p>​	@GlobalTransactional范围要大于等于@Transactional，最好是两个作用域一样（即可保证事务正常进行，又可减少客户端的分支事务，减少与server端的通信等）</p>
+<h3 id="7-2-全局事务的参与者回滚异常一定让全局事务的发起者感知到"><a href="#7-2-全局事务的参与者回滚异常一定让全局事务的发起者感知到" class="headerlink" title="7.2 全局事务的参与者回滚异常一定让全局事务的发起者感知到"></a>7.2 全局事务的参与者回滚异常一定让全局事务的发起者感知到</h3><p>​		由于全局事务的参与者本地rollback时，只会通过RM向服务端报告当前分支是的状态为PhaseOne_Failed。如果参与者本地回滚后，全局事务的发起者不能感知到参与者的回滚，而触发了全局事务发起者的commit，这时在服务端的io.seata.server.coordinator.DefaultCore#doGlobalCommit方法中（全局事务发起者向server端发送全局事务提交），TC获取到全局事务的所有分支事务时，如果某个分支事务状态为PhaseOne_Failed（即这个分支事务本地rollback了），TC也仅仅是删除这个分支事务，不会触发全局回滚，全局事务从整体上来说还是提交，就造成了参发起者commit，这个参与者rollback，分布式事务逻辑上就失败了。</p>
+<p>​		所以，参与者的回滚一定要让发起者感知到，并让发起者触发全局事务的回滚，这样，全局事务才是原子性的操作。</p>
+<h3 id="7-3-seata做的一系列程序健壮性支持"><a href="#7-3-seata做的一系列程序健壮性支持" class="headerlink" title="7.3 seata做的一系列程序健壮性支持"></a>7.3 seata做的一系列程序健壮性支持</h3><h4 id="7-3-1-降级检查"><a href="#7-3-1-降级检查" class="headerlink" title="7.3.1 降级检查"></a>7.3.1 降级检查</h4><p>​	降级检查是否开启由配置参数client.tm.degradeCheck管理，应用到GlobalTransactionalInterceptor#degradeCheck字段上，且支持热修改（比如consul上修改了这个参数，可以同步到客户端，实现不重启就可以开启或关闭降级检查），默认为false，表示不开启降级检查</p>
+<p>​		当开启降级检查时，在GlobalTransactionalInterceptor的构造器里会读取配置参数degradeCheckPeriod和degradeCheckAllowTimes，分别表示降级检查一次的时间间隔和连续超过指定次数后，将关闭或开启全局事务代理模式。再提交一个定时任务，去执行降级检查（代码实现GlobalTransactionalInterceptor#startDegradeCheck里）</p>
+<p>GlobalTransactionalInterceptor#startDegradeCheck逻辑：</p>
+<p>​		按指定的degradeCheckPeriod毫秒时间间隔执行这个任务，里面开启一个空的全局事务，并马上提交（测试全局事务是否正常），根据是否通过来利用事件发布和通知机制（DegradeCheckEvent事件），通知对应得事件监听器处理对应得逻辑。监听代码在io.seata.spring.annotation.GlobalTransactionalInterceptor#onDegradeCheck里实现，连续失败degradeCheckAllowTimes次会开启降级，而在降级期间内，若连续成功degradeCheckAllowTimes则会取消降级。降级具体应用在io.seata.spring.annotation.GlobalTransactionalInterceptor#invoke，如果降级开启，则会禁用全局事务</p>
+<h4 id="7-3-2-写锁冲突重试机制"><a href="#7-3-2-写锁冲突重试机制" class="headerlink" title="7.3.2 写锁冲突重试机制"></a>7.3.2 写锁冲突重试机制</h4><p>​	参考6.1</p>
+<h4 id="7-3-3-全局事务commit和rollback失败重试机制"><a href="#7-3-3-全局事务commit和rollback失败重试机制" class="headerlink" title="7.3.3 全局事务commit和rollback失败重试机制"></a>7.3.3 全局事务commit和rollback失败重试机制</h4><p>​	全局事务提交和回滚的重试机制在io.seata.tm.api.DefaultGlobalTransaction里的commot和rollback里实现。受client.tm.commitRetryCount配置参数控制，默认重试5次。</p>
+<h3 id="7-4-seata的分布式事务隔离级别"><a href="#7-4-seata的分布式事务隔离级别" class="headerlink" title="7.4 seata的分布式事务隔离级别"></a>7.4 seata的分布式事务隔离级别</h3><p>​		传统数据库如oracle默认读已提交，mysql则通过mvcc和undo log实现了可重复读隔离级别，而<strong>seata实现的分布式事务也可工作在读已提交的隔离级别下</strong></p>
+<p>如何实现的：</p>
+<blockquote>
+<p>​		seata的分支事务进行本地commit操作时，会将改动的的数据构造成lockKeys，在分支事务注册到server时带上这些lockKeys，server端会对这些lockKey进行解析构建，并对其进行上锁，上锁成功的标志是成功将全部lockKeys保存到server短的lock_table表（可上锁的前提是lock_table表没有对应的lockKey数据）。在之后的分支事务的数据修改都会先对这些数据在server端上锁判断，以此实现类似数据库的互斥锁。</p>
+<p>​		但是，当分支事务A本地commit后，但此时全局事务还未commit。如果有另一个事务B读取到了事务A修改的数据结果，就会产生脏读（因为这时全局事务还未commit，甚至可能触发rollback操作），解决脏读的办法就是事务B读取使用select for update语句，并且被@GlobalTransactional和@GlobalLock注解拦截。拦截后seata内部会对select for update的操作进行锁判断，生成一个SelectForUpdateExecutor执行器（核心执行方法doExecute代码如下）。所以直到分支事务A对应的全局事务结束释放了锁资源后，事务B才会读到数据并返回，以此实现读已提交</p>
+</blockquote>
+<p>注意**，@GlobalTransactional + select for update<strong>和</strong>@GlobalLock + select for update都可实现select操作的读已提交隔离级别**，<strong>但GlobalLock 更轻量级，它不会注册分支事务和加锁等操作，只会进行锁检查。所以，如果上述事务B不需要运行在全局事务或本地事务的模式先下而又想实现全局事务的读已提交隔离级别，就可使用@GlobalLock + select for update组合</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// SelectForUpdateExecutor核心执行方法</span></span><br><span class="line"><span class="keyword">public</span> T <span class="title function_">doExecute</span><span class="params">(Object... args)</span> <span class="keyword">throws</span> Throwable &#123;</span><br><span class="line">    <span class="type">Connection</span> <span class="variable">conn</span> <span class="operator">=</span> statementProxy.getConnection();</span><br><span class="line">    <span class="type">DatabaseMetaData</span> <span class="variable">dbmd</span> <span class="operator">=</span> conn.getMetaData();</span><br><span class="line">    T rs;</span><br><span class="line">    <span class="type">Savepoint</span> <span class="variable">sp</span> <span class="operator">=</span> <span class="literal">null</span>;</span><br><span class="line">    <span class="type">boolean</span> <span class="variable">originalAutoCommit</span> <span class="operator">=</span> conn.getAutoCommit();</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// 在这里单独开启事务。如果没有原事务则直接开启，如果有则新建一个savepoint来开启事务</span></span><br><span class="line">        <span class="keyword">if</span> (originalAutoCommit) &#123; <span class="comment">// 没有原事务</span></span><br><span class="line">            conn.setAutoCommit(<span class="literal">false</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (dbmd.supportsSavepoints()) &#123; <span class="comment">// 有原事务，新建一个savepoint来开启内嵌事务</span></span><br><span class="line">            sp = conn.setSavepoint();</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">SQLException</span>(<span class="string">&quot;not support savepoint. please check your db version&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="type">LockRetryController</span> <span class="variable">lockRetryController</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">LockRetryController</span>();</span><br><span class="line">        ArrayList&lt;List&lt;Object&gt;&gt; paramAppenderList = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="type">String</span> <span class="variable">selectPKSQL</span> <span class="operator">=</span> buildSelectSQL(paramAppenderList);</span><br><span class="line">        <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="comment">// #870</span></span><br><span class="line">                <span class="comment">// execute return</span></span><br><span class="line">                <span class="comment">// executeQuery return ResultSet</span></span><br><span class="line">                <span class="comment">// 执行sql语句，会获取本地锁</span></span><br><span class="line">                rs = statementCallback.execute(statementProxy.getTargetStatement(), args);</span><br><span class="line"></span><br><span class="line">                <span class="comment">// Try to get global lock of those rows selected</span></span><br><span class="line">                <span class="type">TableRecords</span> <span class="variable">selectPKRows</span> <span class="operator">=</span> buildTableRecords(getTableMeta(), selectPKSQL, paramAppenderList);</span><br><span class="line">                <span class="comment">// 构建lock key</span></span><br><span class="line">                <span class="type">String</span> <span class="variable">lockKeys</span> <span class="operator">=</span> buildLockKey(selectPKRows);</span><br><span class="line">                <span class="keyword">if</span> (StringUtils.isNullOrEmpty(lockKeys)) &#123; <span class="comment">// lock key不存在，代表没有锁冲突，直接就break了</span></span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (RootContext.inGlobalTransaction() || RootContext.requireGlobalLock()) &#123; </span><br><span class="line">                    <span class="comment">// 全局锁的获取和判断必须在@GlobalTransactional or @GlobalLock注解下</span></span><br><span class="line">                    <span class="comment">// 只进行锁检查，不加锁（检查失败内部会抛异常）</span></span><br><span class="line">                    statementProxy.getConnectionProxy().checkLock(lockKeys);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;Unknown situation!&quot;</span>);</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="comment">// 走到这就代表全局锁没有冲突（要查询的数据没有被多个事务同时处理），可直接返回了</span></span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125; <span class="keyword">catch</span> (LockConflictException lce) &#123;</span><br><span class="line">                <span class="comment">// 全局锁冲突，本地事务先rollback，释放select .. for update获取到的锁</span></span><br><span class="line">                <span class="keyword">if</span> (sp != <span class="literal">null</span>) &#123;</span><br><span class="line">                    conn.rollback(sp);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    conn.rollback();</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="comment">// sleep后会再进行重试</span></span><br><span class="line">                <span class="comment">// trigger retry</span></span><br><span class="line">                lockRetryController.sleep(lce);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">        <span class="comment">// 复原现场</span></span><br><span class="line">        <span class="keyword">if</span> (sp != <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">if</span> (!JdbcConstants.ORACLE.equalsIgnoreCase(getDbType())) &#123;</span><br><span class="line">                    conn.releaseSavepoint(sp);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">catch</span> (SQLException e) &#123;</span><br><span class="line">                LOGGER.error(<span class="string">&quot;&#123;&#125; release save point error.&quot;</span>, getDbType(), e);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (originalAutoCommit) &#123;</span><br><span class="line">            conn.setAutoCommit(<span class="literal">true</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> rs;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+                
+            </div>
+            <hr/>
+
+            
+
+    <div class="reprint" id="reprint-statement">
+        
+            <div class="reprint__author">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-user">
+                        文章作者:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="/about" rel="external nofollow noreferrer">reef</a>
+                </span>
+            </div>
+            <div class="reprint__type">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-link">
+                        文章链接:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="https://blog.shanzhao.site/2025/01/06/seata-de-at-mo-shi-fen-xi/">https://blog.shanzhao.site/2025/01/06/seata-de-at-mo-shi-fen-xi/</a>
+                </span>
+            </div>
+            <div class="reprint__notice">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-copyright">
+                        版权声明:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    本博客所有文章除特別声明外，均采用
+                    <a href="https://creativecommons.org/licenses/by/4.0/deed.zh" rel="external nofollow noreferrer" target="_blank">CC BY 4.0</a>
+                    许可协议。转载请注明来源
+                    <a href="/about" target="_blank">reef</a>
+                    !
+                </span>
+            </div>
+        
+    </div>
+
+    <script async defer>
+      document.addEventListener("copy", function (e) {
+        let toastHTML = '<span>复制成功，请遵循本文的转载规则</span><button class="btn-flat toast-action" onclick="navToReprintStatement()" style="font-size: smaller">查看</a>';
+        M.toast({html: toastHTML})
+      });
+
+      function navToReprintStatement() {
+        $("html, body").animate({scrollTop: $("#reprint-statement").offset().top - 80}, 800);
+      }
+    </script>
+
+
+
+            <div class="tag_share" style="display: block;">
+                <div class="post-meta__tag-list" style="display: inline-block;">
+                    
+                        <div class="article-tag">
+                            <span class="chip bg-color">无标签</span>
+                        </div>
+                    
+                </div>
+                <div class="post_share" style="zoom: 80%; width: fit-content; display: inline-block; float: right; margin: -0.15rem 0;">
+                    <link rel="stylesheet" type="text/css" href="/libs/share/css/share.min.css">
+<div id="article-share">
+
+    
+    <div class="social-share" data-sites="twitter,facebook,google,qq,qzone,wechat,weibo,douban,linkedin" data-wechat-qrcode-helper="<p>微信扫一扫即可分享！</p>"></div>
+    <script src="/libs/share/js/social-share.min.js"></script>
+    
+
+    
+
+</div>
+
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+<article id="prenext-posts" class="prev-next articles">
+    <div class="row article-row">
+        
+        <div class="article col s12 m6" data-aos="fade-up">
+            <div class="article-badge left-badge text-color">
+                <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
+            <div class="card">
+                <a href="/2025/01/06/java-yuan-ma/">
+                    <div class="card-image">
+                        
+                        
+                        <img src="/medias/featureimages/0.jpg" class="responsive-img" alt="">
+                        
+                        <span class="card-title"></span>
+                    </div>
+                </a>
+                <div class="card-content article-content">
+                    <div class="summary block-with-text">
+                        
+                            
+                        
+                    </div>
+                    <div class="publish-info">
+                        <span class="publish-date">
+                            <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
+                        </span>
+                        <span class="publish-author">
+                            
+                            <i class="fas fa-user fa-fw"></i>
+                            reef
+                            
+                        </span>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+        
+        <div class="article col s12 m6" data-aos="fade-up">
+            <div class="article-badge right-badge text-color">
+                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
+            </div>
+            <div class="card">
+                <a href="/2025/01/06/jvm-chang-yong-can-shu-zheng-li/">
+                    <div class="card-image">
+                        
+                        
+                        <img src="/medias/featureimages/0.jpg" class="responsive-img" alt="">
+                        
+                        <span class="card-title"></span>
+                    </div>
+                </a>
+                <div class="card-content article-content">
+                    <div class="summary block-with-text">
+                        
+                            
+                        
+                    </div>
+                    <div class="publish-info">
+                            <span class="publish-date">
+                                <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
+                            </span>
+                        <span class="publish-author">
+                            
+                            <i class="fas fa-user fa-fw"></i>
+                            reef
+                            
+                        </span>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+    </div>
+</article>
+
+</div>
+
+
+
+<!-- 代码块功能依赖 -->
+<script type="text/javascript" src="/libs/codeBlock/codeBlockFuction.js"></script>
+
+
+
+<!-- 代码语言 -->
+
+<script type="text/javascript" src="/libs/codeBlock/codeLang.js"></script>
+
+
+<!-- 代码块复制 -->
+
+<script type="text/javascript" src="/libs/codeBlock/codeCopy.js"></script>
+
+
+<!-- 代码块收缩 -->
+
+<script type="text/javascript" src="/libs/codeBlock/codeShrink.js"></script>
+
+
+
+    </div>
+    <div id="toc-aside" class="expanded col l3 hide-on-med-and-down">
+        <div class="toc-widget card" style="background-color: white;">
+            <div class="toc-title"><i class="far fa-list-alt"></i>&nbsp;&nbsp;目录</div>
+            <div id="toc-content"></div>
+        </div>
+    </div>
+</div>
+
+<!-- TOC 悬浮按钮. -->
+
+<div id="floating-toc-btn" class="hide-on-med-and-down">
+    <a class="btn-floating btn-large bg-color">
+        <i class="fas fa-list-ul"></i>
+    </a>
+</div>
+
+
+<script src="/libs/tocbot/tocbot.min.js"></script>
+<script>
+    $(function () {
+        tocbot.init({
+            tocSelector: '#toc-content',
+            contentSelector: '#articleContent',
+            headingsOffset: -($(window).height() * 0.4 - 45),
+            collapseDepth: Number('0'),
+            headingSelector: 'h2, h3, h4'
+        });
+
+        // Set scroll toc fixed.
+        let tocHeight = parseInt($(window).height() * 0.4 - 64);
+        let $tocWidget = $('.toc-widget');
+        $(window).scroll(function () {
+            let scroll = $(window).scrollTop();
+            /* add post toc fixed. */
+            if (scroll > tocHeight) {
+                $tocWidget.addClass('toc-fixed');
+            } else {
+                $tocWidget.removeClass('toc-fixed');
+            }
+        });
+
+        
+        /* 修复文章卡片 div 的宽度. */
+        let fixPostCardWidth = function (srcId, targetId) {
+            let srcDiv = $('#' + srcId);
+            if (srcDiv.length === 0) {
+                return;
+            }
+
+            let w = srcDiv.width();
+            if (w >= 450) {
+                w = w + 21;
+            } else if (w >= 350 && w < 450) {
+                w = w + 18;
+            } else if (w >= 300 && w < 350) {
+                w = w + 16;
+            } else {
+                w = w + 14;
+            }
+            $('#' + targetId).width(w);
+        };
+
+        // 切换TOC目录展开收缩的相关操作.
+        const expandedClass = 'expanded';
+        let $tocAside = $('#toc-aside');
+        let $mainContent = $('#main-content');
+        $('#floating-toc-btn .btn-floating').click(function () {
+            if ($tocAside.hasClass(expandedClass)) {
+                $tocAside.removeClass(expandedClass).hide();
+                $mainContent.removeClass('l9');
+            } else {
+                $tocAside.addClass(expandedClass).show();
+                $mainContent.addClass('l9');
+            }
+            fixPostCardWidth('artDetail', 'prenext-posts');
+        });
+        
+    });
+</script>
+
+    
+
+</main>
+
+
+
+
+    <footer class="page-footer bg-color">
+    
+        <link rel="stylesheet" href="/libs/aplayer/APlayer.min.css">
+<style>
+    .aplayer .aplayer-lrc p {
+        
+        display: none;
+        
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 16px !important;
+    }
+
+    .aplayer .aplayer-lrc p.aplayer-lrc-current {
+        
+        display: none;
+        
+        font-size: 15px;
+        color: #42b983;
+    }
+
+    
+    .aplayer.aplayer-fixed.aplayer-narrow .aplayer-body {
+        left: -66px !important;
+    }
+
+    .aplayer.aplayer-fixed.aplayer-narrow .aplayer-body:hover {
+        left: 0px !important;
+    }
+
+    
+</style>
+<div class="">
+    
+    <div class="row">
+        <meting-js class="col l8 offset-l2 m10 offset-m1 s12"
+                   server="netease"
+                   type="playlist"
+                   id="503838841"
+                   fixed='true'
+                   autoplay='false'
+                   theme='#42b983'
+                   loop='all'
+                   order='random'
+                   preload='auto'
+                   volume='0.7'
+                   list-folded='true'
+        >
+        </meting-js>
+    </div>
+</div>
+
+<script src="/libs/aplayer/APlayer.min.js"></script>
+<script src="/libs/aplayer/Meting.min.js"></script>
+
+    
+
+    <div class="container row center-align"
+         style="margin-bottom: 15px !important;">
+        <div class="col s12 m8 l8 copy-right">
+            Copyright&nbsp;&copy;
+            
+                <span id="year">2020-2025</span>
+            
+            <a href="/about" target="_blank">reef</a>
+            |&nbsp;Powered by&nbsp;<a href="https://hexo.io/" target="_blank">Hexo</a>
+            |&nbsp;Theme&nbsp;<a href="https://github.com/blinkfox/hexo-theme-matery" target="_blank">Matery</a>
+            
+            <br>
+            
+                &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
+                        class="white-color">23.5k</span>
+            
+            
+            
+                
+            
+            
+                <span id="busuanzi_container_site_pv">
+                &nbsp;|&nbsp;<i class="far fa-eye"></i>&nbsp;总访问量:&nbsp;
+                    <span id="busuanzi_value_site_pv" class="white-color"></span>
+            </span>
+            
+            
+                <span id="busuanzi_container_site_uv">
+                &nbsp;|&nbsp;<i class="fas fa-users"></i>&nbsp;总访问人数:&nbsp;
+                    <span id="busuanzi_value_site_uv" class="white-color"></span>
+            </span>
+            
+            <br>
+
+            <!-- 运行天数提醒. -->
+            
+                <span id="sitetime"> Loading ...</span>
+                <script>
+                    var calcSiteTime = function () {
+                        var seconds = 1000;
+                        var minutes = seconds * 60;
+                        var hours = minutes * 60;
+                        var days = hours * 24;
+                        var years = days * 365;
+                        var today = new Date();
+                        var startYear = "2020";
+                        var startMonth = "6";
+                        var startDate = "30";
+                        var startHour = "0";
+                        var startMinute = "0";
+                        var startSecond = "0";
+                        var todayYear = today.getFullYear();
+                        var todayMonth = today.getMonth() + 1;
+                        var todayDate = today.getDate();
+                        var todayHour = today.getHours();
+                        var todayMinute = today.getMinutes();
+                        var todaySecond = today.getSeconds();
+                        var t1 = Date.UTC(startYear, startMonth, startDate, startHour, startMinute, startSecond);
+                        var t2 = Date.UTC(todayYear, todayMonth, todayDate, todayHour, todayMinute, todaySecond);
+                        var diff = t2 - t1;
+                        var diffYears = Math.floor(diff / years);
+                        var diffDays = Math.floor((diff / days) - diffYears * 365);
+
+                        // 区分是否有年份.
+                        var language = 'zh-CN';
+                        if (startYear === String(todayYear)) {
+                            document.getElementById("year").innerHTML = todayYear;
+                            var daysTip = 'This site has been running for ' + diffDays + ' days';
+                            if (language === 'zh-CN') {
+                                daysTip = '本站已运行 ' + diffDays + ' 天';
+                            } else if (language === 'zh-HK') {
+                                daysTip = '本站已運行 ' + diffDays + ' 天';
+                            }
+                            document.getElementById("sitetime").innerHTML = daysTip;
+                        } else {
+                            document.getElementById("year").innerHTML = startYear + " - " + todayYear;
+                            var yearsAndDaysTip = 'This site has been running for ' + diffYears + ' years and '
+                                + diffDays + ' days';
+                            if (language === 'zh-CN') {
+                                yearsAndDaysTip = '本站已运行 ' + diffYears + ' 年 ' + diffDays + ' 天';
+                            } else if (language === 'zh-HK') {
+                                yearsAndDaysTip = '本站已運行 ' + diffYears + ' 年 ' + diffDays + ' 天';
+                            }
+                            document.getElementById("sitetime").innerHTML = yearsAndDaysTip;
+                        }
+                    }
+
+                    calcSiteTime();
+                </script>
+            
+            <br>
+            
+        </div>
+        <div class="col s12 m4 l4 social-link social-statis">
+    <a href="https://github.com/ShanHeWanZhao" class="tooltipped" target="_blank" data-tooltip="访问我的GitHub" data-position="top" data-delay="50">
+        <i class="fab fa-github"></i>
+    </a>
+
+
+
+    <a href="mailto:shanzhao.rd@gmail.com" class="tooltipped" target="_blank" data-tooltip="邮件联系我" data-position="top" data-delay="50">
+        <i class="fas fa-envelope-open"></i>
+    </a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+</div>
+    </div>
+</footer>
+
+<div class="progress-bar"></div>
+
+
+    <!-- 搜索遮罩框 -->
+<div id="searchModal" class="modal">
+    <div class="modal-content">
+        <div class="search-header">
+            <span class="title"><i class="fas fa-search"></i>&nbsp;&nbsp;搜索</span>
+            <input type="search" id="searchInput" name="s" placeholder="请输入搜索的关键字"
+                   class="search-input">
+        </div>
+        <div id="searchResult"></div>
+    </div>
+</div>
+
+<script type="text/javascript">
+$(function () {
+    var searchFunc = function (path, search_id, content_id) {
+        'use strict';
+        $.ajax({
+            url: path,
+            dataType: "xml",
+            success: function (xmlResponse) {
+                // get the contents from search data
+                var datas = $("entry", xmlResponse).map(function () {
+                    return {
+                        title: $("title", this).text(),
+                        content: $("content", this).text(),
+                        url: $("url", this).text()
+                    };
+                }).get();
+                var $input = document.getElementById(search_id);
+                var $resultContent = document.getElementById(content_id);
+                $input.addEventListener('input', function () {
+                    var str = '<ul class=\"search-result-list\">';
+                    var keywords = this.value.trim().toLowerCase().split(/[\s\-]+/);
+                    $resultContent.innerHTML = "";
+                    if (this.value.trim().length <= 0) {
+                        return;
+                    }
+                    // perform local searching
+                    datas.forEach(function (data) {
+                        var isMatch = true;
+                        var data_title = data.title.trim().toLowerCase();
+                        var data_content = data.content.trim().replace(/<[^>]+>/g, "").toLowerCase();
+                        var data_url = data.url;
+                        data_url = data_url.indexOf('/') === 0 ? data.url : '/' + data_url;
+                        var index_title = -1;
+                        var index_content = -1;
+                        var first_occur = -1;
+                        // only match artiles with not empty titles and contents
+                        if (data_title !== '' && data_content !== '') {
+                            keywords.forEach(function (keyword, i) {
+                                index_title = data_title.indexOf(keyword);
+                                index_content = data_content.indexOf(keyword);
+                                if (index_title < 0 && index_content < 0) {
+                                    isMatch = false;
+                                } else {
+                                    if (index_content < 0) {
+                                        index_content = 0;
+                                    }
+                                    if (i === 0) {
+                                        first_occur = index_content;
+                                    }
+                                }
+                            });
+                        }
+                        // show search results
+                        if (isMatch) {
+                            str += "<li><a href='" + data_url + "' class='search-result-title'>" + data_title + "</a>";
+                            var content = data.content.trim().replace(/<[^>]+>/g, "");
+                            if (first_occur >= 0) {
+                                // cut out 100 characters
+                                var start = first_occur - 20;
+                                var end = first_occur + 80;
+                                if (start < 0) {
+                                    start = 0;
+                                }
+                                if (start === 0) {
+                                    end = 100;
+                                }
+                                if (end > content.length) {
+                                    end = content.length;
+                                }
+                                var match_content = content.substr(start, end);
+                                // highlight all keywords
+                                keywords.forEach(function (keyword) {
+                                    var regS = new RegExp(keyword, "gi");
+                                    match_content = match_content.replace(regS, "<em class=\"search-keyword\">" + keyword + "</em>");
+                                });
+
+                                str += "<p class=\"search-result\">" + match_content + "...</p>"
+                            }
+                            str += "</li>";
+                        }
+                    });
+                    str += "</ul>";
+                    $resultContent.innerHTML = str;
+                });
+            }
+        });
+    };
+
+    searchFunc('/search.xml', 'searchInput', 'searchResult');
+});
+</script>
+
+    <!-- 白天和黑夜主题 -->
+<div class="stars-con">
+    <div id="stars"></div>
+    <div id="stars2"></div>
+    <div id="stars3"></div>  
+</div>
+
+<script>
+    function switchNightMode() {
+        $('<div class="Cuteen_DarkSky"><div class="Cuteen_DarkPlanet"></div></div>').appendTo($('body')),
+        setTimeout(function () {
+            $('body').hasClass('DarkMode') 
+            ? ($('body').removeClass('DarkMode'), localStorage.setItem('isDark', '0'), $('#sum-moon-icon').removeClass("fa-sun").addClass('fa-moon')) 
+            : ($('body').addClass('DarkMode'), localStorage.setItem('isDark', '1'), $('#sum-moon-icon').addClass("fa-sun").removeClass('fa-moon')),
+            
+            setTimeout(function () {
+            $('.Cuteen_DarkSky').fadeOut(1e3, function () {
+                $(this).remove()
+            })
+            }, 2e3)
+        })
+    }
+</script>
+
+    <!-- 回到顶部按钮 -->
+<div id="backTop" class="top-scroll">
+    <a class="btn-floating btn-large waves-effect waves-light" href="#!">
+        <i class="fas fa-arrow-up"></i>
+    </a>
+</div>
+
+
+    <script src="/libs/materialize/materialize.min.js"></script>
+    <script src="/libs/masonry/masonry.pkgd.min.js"></script>
+    <script src="/libs/aos/aos.js"></script>
+    <script src="/libs/scrollprogress/scrollProgress.min.js"></script>
+    <script src="/libs/lightGallery/js/lightgallery-all.min.js"></script>
+    <script src="/js/matery.js"></script>
+
+    
+
+    
+    
+    
+
+    <!-- 雪花特效 -->
+    
+
+    <!-- 鼠标星星特效 -->
+    
+
+     
+        <script src="https://ssl.captcha.qq.com/TCaptcha.js"></script>
+        <script src="/libs/others/TencentCaptcha.js"></script>
+        <button id="TencentCaptcha" data-appid="xxxxxxxxxx" data-cbfn="callback" type="button" hidden></button>
+    
+
+    <!-- Baidu Analytics -->
+
+    <!-- Baidu Push -->
+
+<script>
+    (function () {
+        var bp = document.createElement('script');
+        var curProtocol = window.location.protocol.split(':')[0];
+        if (curProtocol === 'https') {
+            bp.src = 'https://zz.bdstatic.com/linksubmit/push.js';
+        } else {
+            bp.src = 'http://push.zhanzhang.baidu.com/push.js';
+        }
+        var s = document.getElementsByTagName("script")[0];
+        s.parentNode.insertBefore(bp, s);
+    })();
+</script>
+
+    
+    <script src="/libs/others/clicklove.js" async="async"></script>
+    
+    
+    <script async src="/libs/others/busuanzi.pure.mini.js"></script>
+    
+
+    
+
+    
+
+    <!--腾讯兔小巢-->
+    
+    
+
+    
+
+    
+
+    
+    <script src="/libs/instantpage/instantpage.js" type="module"></script>
+    
+
+</body>
+
+</html>
