@@ -55,8 +55,7 @@
 
     <script src="/libs/jquery/jquery-3.6.0.min.js"></script>
 
-<meta name="generator" content="Hexo 6.3.0"><link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
-<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+<meta name="generator" content="Hexo 6.3.0"></head>
 
 
 <body>
@@ -361,6 +360,9 @@
         <hr class="clearfix">
 
         
+        <!-- 是否加载使用自带的 prismjs. -->
+        <link rel="stylesheet" href="/libs/prism/prism.min.css">
+        
 
         
 
@@ -373,36 +375,36 @@
 <li><strong>-XX:G1HeapRegionSize&#x3D;2M</strong>：一个Region的大小</li>
 <li><strong>-XX:MaxGCPauseMillis&#x3D;80</strong>：允许收集停顿的最大时常（毫秒）</li>
 </ul>
-<pre class="line-numbers language-log"><code class="language-log">2020-11-23T11:40:46.167+0800: 1.503: [GC pause (G1 Evacuation Pause) (young), 0.0048336 secs]
-   // 下面的Min,Avg,Max,Diff,Sum分别表示GC线程最小启动或耗时时间（后面的也是），平均，最大，最大差值，和总耗时，单位都为ms
-   [Parallel Time: 3.1 ms, GC Workers: 6] // 本次YGC共6个GC线程，总耗时3.1ms
-      [GC Worker Start (ms): Min: 1503.0, Avg: 1504.5, Max: 1506.1, Diff: 3.0] // 本次GC线程启动（相对于JVM的启动）
-      [Ext Root Scanning (ms): Min: 0.0, Avg: 0.2, Max: 0.7, Diff: 0.7, Sum: 1.1] // 本次GC线程的Root集合扫描时间
-      [Update RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0] // 更新Remember Sets 的耗时统计信息（记忆集一般使用来解决跨Region的引用）
-         [Processed Buffers: Min: 0, Avg: 0.0, Max: 0, Diff: 0, Sum: 0]
-      [Scan RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0] // 每个Region都会有一个RSet，RSet又包含指向这个Region的Cards引用，这个阶段就是扫描RSet中的Cards，从而分辨出Eden哪些对象被老年代引用，从而这些不会被GC
-      [Code Root Scanning (ms): Min: 0.0, Avg: 0.0, Max: 0.2, Diff: 0.2, Sum: 0.2] // 扫描代码中的root节点（局部变量）
-      [Object Copy (ms): Min: 0.0, Avg: 1.3, Max: 2.7, Diff: 2.7, Sum: 7.6] // 对象copy，将存活的对象copy到目标Region中
-      [Termination (ms): Min: 0.0, Avg: 0.0, Max: 0.1, Diff: 0.1, Sum: 0.3]
-         [Termination Attempts: Min: 1, Avg: 1.2, Max: 2, Diff: 1, Sum: 7]
-      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.2] // GC线程完成其他任务的时间
-      [GC Worker Total (ms): Min: 0.0, Avg: 1.6, Max: 3.1, Diff: 3.1, Sum: 9.4] // GC线程整个生命周期总计消耗时间
-      [GC Worker End (ms): Min: 1506.1, Avg: 1506.1, Max: 1506.1, Diff: 0.0] // GC线程完成任务的停止时间（相对于JVM）
-   [Code Root Fixup: 0.0 ms]
-   [Code Root Purge: 0.0 ms]
-   [Clear CT: 0.1 ms] // 清理Card Table（卡表）
-   [Other: 1.6 ms]
-      [Choose CSet: 0.0 ms] // 选择要回收的Region放入CSet（会根据停顿时间来决定）
-      [Ref Proc: 1.4 ms] // 处理引用对象耗时时间（Weak、Soft、Phantom、JNI等等）
-      [Ref Enq: 0.0 ms] // 遍历所有引用，将不能回收的放入pending列表
-      [Redirty Cards: 0.0 ms] // 重置card为dirty
-      // 大型对象的回收
-      [Humongous Register: 0.0 ms] 
-      [Humongous Reclaim: 0.0 ms]
-      [Free CSet: 0.0 ms] // 释放CSet中Region占用的内存空间所耗时间
-   [Eden: 51.0M(51.0M)->0.0B(46.0M) Survivors: 0.0B->5120.0K Heap: 51.0M(1024.0M)->4815.7K(1024.0M)]
- [Times: user=0.05 sys=0.00, real=0.01 secs] 
-<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<pre class="line-numbers language-log" data-language="log"><code class="language-log"><span class="token date number">2020-11-23T</span><span class="token time number">11:40:46.167+0800</span><span class="token operator">:</span> <span class="token number">1.503</span><span class="token operator">:</span> <span class="token punctuation">[</span>GC pause <span class="token operator">(</span>G1 Evacuation Pause<span class="token operator">)</span> <span class="token operator">(</span>young<span class="token operator">)</span><span class="token punctuation">,</span> <span class="token number">0.0048336</span> secs<span class="token punctuation">]</span>
+   <span class="token operator">/</span><span class="token operator">/</span> 下面的Min<span class="token punctuation">,</span>Avg<span class="token punctuation">,</span>Max<span class="token punctuation">,</span>Diff<span class="token punctuation">,</span>Sum分别表示GC线程最小启动或耗时时间（后面的也是），平均，最大，最大差值，和总耗时，单位都为ms
+   <span class="token punctuation">[</span>Parallel Time<span class="token operator">:</span> <span class="token number">3.1</span> ms<span class="token punctuation">,</span> GC Workers<span class="token operator">:</span> <span class="token number">6</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 本次YGC共<span class="token number">6</span>个GC线程，总耗时<span class="token number">3.1ms</span>
+      <span class="token punctuation">[</span>GC Worker Start <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">1503.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">1504.5</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">1506.1</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">3.0</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 本次GC线程启动（相对于JVM的启动）
+      <span class="token punctuation">[</span>Ext Root Scanning <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">0.2</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">0.7</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">0.7</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">1.1</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 本次GC线程的Root集合扫描时间
+      <span class="token punctuation">[</span>Update RS <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 更新Remember Sets 的耗时统计信息（记忆集一般使用来解决跨Region的引用）
+         <span class="token punctuation">[</span>Processed Buffers<span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">0</span><span class="token punctuation">]</span>
+      <span class="token punctuation">[</span>Scan RS <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 每个Region都会有一个RSet，RSet又包含指向这个Region的Cards引用，这个阶段就是扫描RSet中的Cards，从而分辨出Eden哪些对象被老年代引用，从而这些不会被GC
+      <span class="token punctuation">[</span>Code Root Scanning <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">0.2</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">0.2</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">0.2</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 扫描代码中的root节点（局部变量）
+      <span class="token punctuation">[</span>Object Copy <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">1.3</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">2.7</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">2.7</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">7.6</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 对象copy，将存活的对象copy到目标Region中
+      <span class="token punctuation">[</span>Termination <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">0.1</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">0.1</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">0.3</span><span class="token punctuation">]</span>
+         <span class="token punctuation">[</span>Termination Attempts<span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">1.2</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">2</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">1</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">7</span><span class="token punctuation">]</span>
+      <span class="token punctuation">[</span>GC Worker Other <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">0.2</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> GC线程完成其他任务的时间
+      <span class="token punctuation">[</span>GC Worker Total <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">1.6</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">3.1</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">3.1</span><span class="token punctuation">,</span> Sum<span class="token operator">:</span> <span class="token number">9.4</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> GC线程整个生命周期总计消耗时间
+      <span class="token punctuation">[</span>GC Worker End <span class="token operator">(</span>ms<span class="token operator">)</span><span class="token operator">:</span> Min<span class="token operator">:</span> <span class="token number">1506.1</span><span class="token punctuation">,</span> Avg<span class="token operator">:</span> <span class="token number">1506.1</span><span class="token punctuation">,</span> Max<span class="token operator">:</span> <span class="token number">1506.1</span><span class="token punctuation">,</span> Diff<span class="token operator">:</span> <span class="token number">0.0</span><span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> GC线程完成任务的停止时间（相对于JVM）
+   <span class="token punctuation">[</span>Code Root Fixup<span class="token operator">:</span> <span class="token number">0.0</span> ms<span class="token punctuation">]</span>
+   <span class="token punctuation">[</span>Code Root Purge<span class="token operator">:</span> <span class="token number">0.0</span> ms<span class="token punctuation">]</span>
+   <span class="token punctuation">[</span>Clear CT<span class="token operator">:</span> <span class="token number">0.1</span> ms<span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 清理Card Table（卡表）
+   <span class="token punctuation">[</span>Other<span class="token operator">:</span> <span class="token number">1.6</span> ms<span class="token punctuation">]</span>
+      <span class="token punctuation">[</span>Choose CSet<span class="token operator">:</span> <span class="token number">0.0</span> ms<span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 选择要回收的Region放入CSet（会根据停顿时间来决定）
+      <span class="token punctuation">[</span>Ref Proc<span class="token operator">:</span> <span class="token number">1.4</span> ms<span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 处理引用对象耗时时间（Weak、Soft、Phantom、JNI等等）
+      <span class="token punctuation">[</span>Ref Enq<span class="token operator">:</span> <span class="token number">0.0</span> ms<span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 遍历所有引用，将不能回收的放入pending列表
+      <span class="token punctuation">[</span>Redirty Cards<span class="token operator">:</span> <span class="token number">0.0</span> ms<span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 重置card为dirty
+      <span class="token operator">/</span><span class="token operator">/</span> 大型对象的回收
+      <span class="token punctuation">[</span>Humongous Register<span class="token operator">:</span> <span class="token number">0.0</span> ms<span class="token punctuation">]</span> 
+      <span class="token punctuation">[</span>Humongous Reclaim<span class="token operator">:</span> <span class="token number">0.0</span> ms<span class="token punctuation">]</span>
+      <span class="token punctuation">[</span>Free CSet<span class="token operator">:</span> <span class="token number">0.0</span> ms<span class="token punctuation">]</span> <span class="token operator">/</span><span class="token operator">/</span> 释放CSet中Region占用的内存空间所耗时间
+   <span class="token punctuation">[</span>Eden<span class="token operator">:</span> <span class="token number">51.0M</span><span class="token operator">(</span><span class="token number">51.0M</span><span class="token operator">)</span><span class="token operator">-</span><span class="token operator">></span><span class="token number">0.0B</span><span class="token operator">(</span><span class="token number">46.0M</span><span class="token operator">)</span> Survivors<span class="token operator">:</span> <span class="token number">0.0B</span><span class="token operator">-</span><span class="token operator">></span><span class="token number">5120.0K</span> Heap<span class="token operator">:</span> <span class="token number">51.0M</span><span class="token operator">(</span><span class="token number">1024.0M</span><span class="token operator">)</span><span class="token operator">-</span><span class="token operator">></span><span class="token number">4815.7K</span><span class="token operator">(</span><span class="token number">1024.0M</span><span class="token operator">)</span><span class="token punctuation">]</span>
+ <span class="token punctuation">[</span>Times<span class="token operator">:</span> user<span class="token operator">=</span><span class="token number">0.05</span> sys<span class="token operator">=</span><span class="token number">0.00</span><span class="token punctuation">,</span> real<span class="token operator">=</span><span class="token number">0.01</span> secs<span class="token punctuation">]</span> <span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+
 
                 
             </div>
@@ -510,11 +512,12 @@
 <article id="prenext-posts" class="prev-next articles">
     <div class="row article-row">
         
-        <div class="article col s12 m6" data-aos="fade-up">
+        <div class="article col s12 m6" data-aos="fade-up" data-aos="fade-up">
             <div class="article-badge left-badge text-color">
-                <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
+                <i class="far fa-dot-circle"></i>&nbsp;本篇
+            </div>
             <div class="card">
-                <a href="/2025/01/06/cms/">
+                <a href="/2025/01/06/g1/">
                     <div class="card-image">
                         
                         
@@ -530,9 +533,9 @@
                         
                     </div>
                     <div class="publish-info">
-                        <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
-                        </span>
+                            <span class="publish-date">
+                                <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
+                            </span>
                         <span class="publish-author">
                             
                             <i class="fas fa-user fa-fw"></i>
@@ -541,6 +544,7 @@
                         </span>
                     </div>
                 </div>
+
                 
             </div>
         </div>
@@ -551,13 +555,13 @@
                 下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2025/01/06/java-yuan-ma/">
+                <a href="/2025/01/06/hello-world/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/0.jpg" class="responsive-img" alt="">
+                        <img src="/medias/featureimages/12.jpg" class="responsive-img" alt="Hello World">
                         
-                        <span class="card-title"></span>
+                        <span class="card-title">Hello World</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -592,6 +596,9 @@
 <!-- 代码块功能依赖 -->
 <script type="text/javascript" src="/libs/codeBlock/codeBlockFuction.js"></script>
 
+
+  <!-- 是否加载使用自带的 prismjs. -->
+  <script type="text/javascript" src="/libs/prism/prism.min.js"></script>
 
 
 <!-- 代码语言 -->
@@ -769,7 +776,7 @@
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">23.7k</span>
+                        class="white-color">23.4k</span>
             
             
             
