@@ -4,9 +4,8 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="reef&#39;s blog">
-    <meta name="description" content="Seata的AT模式分析(1.5.0版本)1 增强机制SeataAutoConfiguration中的GlobalTransactionScanner，主要用来代理@GlobalTransactional注解和客户端RM和TM的注册
-1.1">
+    <meta name="keywords" content="Seata的AT模式分析, reef&#39;s blog">
+    <meta name="description" content="基于Seata 1.5.0版本的源码分析">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -18,7 +17,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>reef&#39;s blog</title>
+    <title>Seata的AT模式分析 | reef&#39;s blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
 
@@ -290,12 +289,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/0.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/11.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title"></h1>
+                    <h1 class="description center-align post-title">Seata的AT模式分析</h1>
                 </div>
             </div>
         </div>
@@ -317,12 +316,29 @@
             <div class="row tag-cate">
                 <div class="col s7">
                     
-                          <div class="article-tag">
-                            <span class="chip bg-color">无标签</span>
-                          </div>
+                    <div class="article-tag">
+                        
+                            <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">
+                                <span class="chip bg-color">分布式事务</span>
+                            </a>
+                        
+                            <a href="/tags/seata/">
+                                <span class="chip bg-color">seata</span>
+                            </a>
+                        
+                    </div>
                     
                 </div>
                 <div class="col s5 right-align">
+                    
+                    <div class="post-cate">
+                        <i class="fas fa-bookmark fa-fw icon-category"></i>
+                        
+                            <a href="/categories/java/" class="post-category">
+                                java
+                            </a>
+                        
+                    </div>
                     
                 </div>
             </div>
@@ -331,7 +347,7 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2025-01-06
+                    2022-03-04
                 </div>
                 
 
@@ -510,9 +526,9 @@ MessageType.TYPE_REG_RM_RESULT
 <p>​		所以，追根溯源，要支持分布式事务，就需要控制DataSource的一系列的行为，<strong>SeataAutoDataSourceProxyCreator</strong>就在这里发挥了作用</p>
 <h4 id="1、数据源的自动代理，SeataAutoDataSourceProxyCreator类，wrapIfNecessary方法"><a href="#1、数据源的自动代理，SeataAutoDataSourceProxyCreator类，wrapIfNecessary方法" class="headerlink" title="1、数据源的自动代理，SeataAutoDataSourceProxyCreator类，wrapIfNecessary方法"></a>1、数据源的自动代理，SeataAutoDataSourceProxyCreator类，wrapIfNecessary方法</h4><p>逻辑：只对DataSource代理，且会进行重复代理的判断，构造切面：SeataAutoDataSourceProxyAdvice。最终将原DataSource和SeataDataSourceProxy的关系放入DataSourceProxyHolder类中，方便后续的取出</p>
 <h4 id="2、数据源方法的切入"><a href="#2、数据源方法的切入" class="headerlink" title="2、数据源方法的切入"></a>2、数据源方法的切入</h4><p><strong>SeataAutoDataSourceProxyAdvice</strong>代理了DataSource类的任何操作，其代理逻辑：</p>
-<pre><code>    1. 先判断是否需要走切面逻辑（全局锁需要，且存在AT模式的全局事务），不需要走切面逻辑的直接走原逻辑，通过原DataSource完成一系列操作。
+<pre class="line-numbers language-txt"><code class="language-txt">    1. 先判断是否需要走切面逻辑（全局锁需要，且存在AT模式的全局事务），不需要走切面逻辑的直接走原逻辑，通过原DataSource完成一系列操作。
     2. 需要走代理逻辑的流程：通过当前**DataSource**拿到对应的**SeataDataSourceProxy**（**DataSourceProxyHolder**发挥作用），走对应代理类的相同方法，获取代理的**Connection（ConnectionProxy）**，创建当前Connection的**ConnectionContext**，用来保存当前Connection的全局事务信息。创建**StatementProxy**， 拦截Statement的execute方法，根据druid或其他工具解析sql。最终会走到**io.seata.rm.datasource.exec.AbstractDMLBaseExecutor#doExecute**这个方法执行
-</code></pre>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
 <h4 id="3、Statement的执行"><a href="#3、Statement的执行" class="headerlink" title="3、Statement的执行"></a>3、Statement的执行</h4><ol>
 <li><p>普通的select语句因为不会涉及到数据修改，就不会申请锁资源。所以直接走原Statement直接执行。</p>
 </li>
@@ -732,7 +748,7 @@ MessageType.TYPE_REG_RM_RESULT
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://blog.shanzhao.site/2025/01/06/seata-de-at-mo-shi-fen-xi/">https://blog.shanzhao.site/2025/01/06/seata-de-at-mo-shi-fen-xi/</a>
+                    <a href="https://blog.shanzhao.site/2022/03/04/seata-de-at-mo-shi-fen-xi/">https://blog.shanzhao.site/2022/03/04/seata-de-at-mo-shi-fen-xi/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -769,7 +785,15 @@ MessageType.TYPE_REG_RM_RESULT
                 <div class="post-meta__tag-list" style="display: inline-block;">
                     
                         <div class="article-tag">
-                            <span class="chip bg-color">无标签</span>
+                            
+                                <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">
+                                    <span class="chip bg-color">分布式事务</span>
+                                </a>
+                            
+                                <a href="/tags/seata/">
+                                    <span class="chip bg-color">seata</span>
+                                </a>
+                            
                         </div>
                     
                 </div>
@@ -817,32 +841,44 @@ MessageType.TYPE_REG_RM_RESULT
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2025/01/06/java-yuan-ma/">
+                <a href="/2022/03/04/java-yuan-ma/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/0.jpg" class="responsive-img" alt="">
+                        <img src="/medias/featureimages/10.jpg" class="responsive-img" alt="java">
                         
-                        <span class="card-title"></span>
+                        <span class="card-title">java</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
                     <div class="summary block-with-text">
                         
-                            
+                            java相关源码分析
                         
                     </div>
                     <div class="publish-info">
                         <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
+                            <i class="far fa-clock fa-fw icon-date"></i>2022-03-04
                         </span>
                         <span class="publish-author">
                             
-                            <i class="fas fa-user fa-fw"></i>
-                            reef
+                            <i class="fas fa-bookmark fa-fw icon-category"></i>
+                            
+                            <a href="/categories/java/" class="post-category">
+                                    java
+                                </a>
+                            
                             
                         </span>
                     </div>
+                </div>
+                
+                <div class="card-action article-tags">
+                    
+                    <a href="/tags/java%E6%BA%90%E7%A0%81/">
+                        <span class="chip bg-color">java源码</span>
+                    </a>
+                    
                 </div>
                 
             </div>
@@ -851,35 +887,52 @@ MessageType.TYPE_REG_RM_RESULT
         
         <div class="article col s12 m6" data-aos="fade-up">
             <div class="article-badge right-badge text-color">
-                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
+                本篇&nbsp;<i class="far fa-dot-circle"></i>
             </div>
             <div class="card">
-                <a href="/2025/01/06/demo/">
+                <a href="/2022/03/04/seata-de-at-mo-shi-fen-xi/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/19.jpg" class="responsive-img" alt="demo">
+                        <img src="/medias/featureimages/11.jpg" class="responsive-img" alt="Seata的AT模式分析">
                         
-                        <span class="card-title">demo</span>
+                        <span class="card-title">Seata的AT模式分析</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
                     <div class="summary block-with-text">
                         
-                            
+                            基于Seata 1.5.0版本的源码分析
                         
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
+                                <i class="far fa-clock fa-fw icon-date"></i>2022-03-04
                             </span>
                         <span class="publish-author">
                             
-                            <i class="fas fa-user fa-fw"></i>
-                            reef
+                            <i class="fas fa-bookmark fa-fw icon-category"></i>
+                            
+                            <a href="/categories/java/" class="post-category">
+                                    java
+                                </a>
+                            
                             
                         </span>
                     </div>
+                </div>
+
+                
+                <div class="card-action article-tags">
+                    
+                    <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">
+                        <span class="chip bg-color">分布式事务</span>
+                    </a>
+                    
+                    <a href="/tags/seata/">
+                        <span class="chip bg-color">seata</span>
+                    </a>
+                    
                 </div>
                 
             </div>

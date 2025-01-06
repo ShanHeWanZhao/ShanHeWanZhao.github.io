@@ -4,8 +4,8 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="demo, reef&#39;s blog">
-    <meta name="description" content="">
+    <meta name="keywords" content="jvm常用参数, reef&#39;s blog">
+    <meta name="description" content="jvm常用参数整理">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -17,7 +17,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>demo | reef&#39;s blog</title>
+    <title>jvm常用参数 | reef&#39;s blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
 
@@ -289,12 +289,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/19.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/9.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">demo</h1>
+                    <h1 class="description center-align post-title">jvm常用参数</h1>
                 </div>
             </div>
         </div>
@@ -316,12 +316,25 @@
             <div class="row tag-cate">
                 <div class="col s7">
                     
-                          <div class="article-tag">
-                            <span class="chip bg-color">无标签</span>
-                          </div>
+                    <div class="article-tag">
+                        
+                            <a href="/tags/jvm/">
+                                <span class="chip bg-color">jvm</span>
+                            </a>
+                        
+                    </div>
                     
                 </div>
                 <div class="col s5 right-align">
+                    
+                    <div class="post-cate">
+                        <i class="fas fa-bookmark fa-fw icon-category"></i>
+                        
+                            <a href="/categories/java/" class="post-category">
+                                java
+                            </a>
+                        
+                    </div>
                     
                 </div>
             </div>
@@ -330,7 +343,7 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2025-01-06
+                    2022-03-04
                 </div>
                 
 
@@ -344,7 +357,7 @@
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    0
+                    1.6k
                 </div>
                 
 
@@ -361,7 +374,79 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                
+                <h1 id="JVM"><a href="#JVM" class="headerlink" title="JVM"></a>JVM</h1><h2 id="1-jvm参数整理"><a href="#1-jvm参数整理" class="headerlink" title="1.jvm参数整理"></a>1.jvm参数整理</h2><ul>
+<li><strong>-Xms64m</strong> ：初始堆大小</li>
+<li><strong>-Xmx128m</strong> ：最大堆大小</li>
+<li><strong>-Xmn32m</strong> ：年轻代大小</li>
+<li><strong>-XX:MaxNewSize&#x3D;256m</strong> : 最大新生代大小</li>
+<li><strong>-Xss512k</strong>：栈大小</li>
+<li><strong>-XX:MetaspaceSize&#x3D;256M</strong> ：Metaspace扩容时触发FullGC的初始化阈值(并不是元空间的初始化大小，元空间是不断扩容的，当达到这个值时，就会触发full gc，<a target="_blank" rel="noopener" href="https://www.jianshu.com/p/b448c21d2e71">链接</a>）</li>
+<li><strong>-XX:MaxMetaspaceSize&#x3D;512M</strong>：Metaspace最大大小</li>
+<li><strong>-XX:NewRatio&#x3D;2</strong>：老年代和新生代的比例</li>
+<li><strong>-XX:SurvivorRatio&#x3D;8</strong> ：Eden区与一个Survivor区的大小比值（所以<strong>s0:s1:eden&#x3D;1:1:8</strong>）</li>
+<li><strong>-XX:MinHeapFreeRatio&#x3D;40</strong>：空闲堆空间的最小百分比。如果空闲堆空间的比例小于它，则会进行堆扩容</li>
+<li><strong>-XX:MaxHeapFreeRatio&#x3D;70</strong>：空闲堆空间的最大百分比。如果空闲堆空间的比例大于它，则会进行堆缩容</li>
+<li><strong>-XX:-DisableExplicitGC</strong>：禁止显式GC，即禁止程序中System.gc()。个人感觉没必要</li>
+<li><strong>-XX:+HeapDumpOnOutOfMemoryError</strong>：OOM时导出堆快照到文件</li>
+<li><strong>-XX:HeapDumpPath&#x3D;&#x2F;home&#x2F;huskie&#x2F;gc&#x2F;oom.hprof</strong>：OOM时导出文件路径</li>
+<li><strong>-Xloggc:</strong>&#x2F;home&#x2F;ruidong&#x2F;gc.log   gc存储日志</li>
+<li><strong>-XX:OnOutOfMemoryError</strong>：OOM时操作，比如如执行脚本发送邮件</li>
+<li><strong>-XX:+TraceClassLoading</strong>：打印加载类的详细信息</li>
+<li><strong>-XX:+PrintGCDetails</strong>：打印GC详细信息</li>
+<li><strong>-XX:+PrintGCTimeStamps</strong>：打印CG发生的时间戳（相对于项目启动时间）</li>
+<li><strong>-XX:+PrintGCDateStamps</strong>：打印GC发生的时间</li>
+<li><strong>-XX:+PrintHeapAtGC</strong>：每一次GC前和GC后，都打印堆信息</li>
+<li><strong>-XX:+PrintClassHistogram</strong>：按下Ctrl+Break后，打印类的信息</li>
+<li><strong>-XX:+PrintGCApplicationConcurrentTime</strong> ：打印应用程序的运行时间（许多事情会导致JVM暂停所有线程，停在安全点。gc也只是其中的一种，当暂停之后在重启应用线程，则会刷新这个时间（归0），在重新计数）<a target="_blank" rel="noopener" href="http://ifeve.com/logging-stop-the-world-pauses-in-jvm/">链接</a></li>
+<li><strong>-XX:+PrintGCApplicationStoppedTime</strong> ：打印应用线程暂停的时间，显示应用线程被暂停了多久和应用线程暂停到安全点花费的时间</li>
+<li><strong>-XX:TargetSurvivorRatio&#x3D;50</strong> ：survivor空间的晋升大小空间百分比（默认为50）</li>
+<li><strong>-XX:MaxTenuringThreshold&#x3D;15</strong>  ：年轻代晋升到老年代的最大年龄阈值(tenuring threshold)。默认值为 15[每次GC，增加1岁，到15岁如果还要存活，放入Old区]。<strong>jvm还会动态的计算晋升阈值，方法：依次从年龄为1的对象大小加起来，一直加到大小超过了 [（TargetSurvivorRatio * survivor_capacity）&#x2F; 100 ]值，这时加起来的最大年龄大小即为这次晋升的临界阈值</strong>（具体算法在：hotspot\src\share\vm\gc_implementation\shared\ageTable.cpp文件里，方法为compute_tenuring_threshold）</li>
+<li><strong>-XX:+PrintTenuringDistribution</strong> ：ygc 时打印当前晋升年龄信息</li>
+</ul>
+<h2 id="2-垃圾收集器"><a href="#2-垃圾收集器" class="headerlink" title="2.垃圾收集器"></a>2.垃圾收集器</h2><h3 id="2-1-新生代"><a href="#2-1-新生代" class="headerlink" title="2.1 新生代"></a>2.1 新生代</h3><h4 id="2-1-1-Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）"><a href="#2-1-1-Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）" class="headerlink" title="2.1.1 Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）"></a>2.1.1 Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）</h4><p>单线程新生代收集器，复制算法，整个过程STW</p>
+<p>优势：内存消耗最小</p>
+<p>缺点：不适合大内存多处理器工作，慢</p>
+<h4 id="2-1-2-ParNew"><a href="#2-1-2-ParNew" class="headerlink" title="2.1.2 ParNew"></a>2.1.2 ParNew</h4><p>多线程并行的新生代收集器，复制算法，整个过程STW</p>
+<ul>
+<li><strong>-XX:ParallelGCThreads&#x3D;4</strong> ：并行收集的线程数</li>
+</ul>
+<h4 id="2-1-3-Parallel-Scavenge"><a href="#2-1-3-Parallel-Scavenge" class="headerlink" title="2.1.3  Parallel Scavenge"></a>2.1.3  Parallel Scavenge</h4><ul>
+<li>吞吐量 &#x3D; 运行用户代码时间 &#x2F; ( 运行用户代码时间 + 垃圾收集时间 )</li>
+</ul>
+<p>吞吐量优先的新生代并行多线程收集器，复制算法（<strong>标记-复制</strong>算法）</p>
+<p>三个重要参数：</p>
+<ul>
+<li><strong>XX:MaxGCPauseMillis</strong> ：垃圾收集最大停顿时间，大于0的毫秒数</li>
+<li><strong>-XX:GCTimeRatio</strong>: 大于0小于100的整数（运行用户代码时间比上垃圾回收的时间），默认为99，即允许最大1%的垃圾回收时间</li>
+<li><strong>-XX:+UseAdaptiveSizePolicy</strong>：开启垃圾收集器的自适应调节策略。虚拟机动态调整新生代，Eden区，Survivor区的比例和晋升大小</li>
+</ul>
+<h3 id="2-2-老年代"><a href="#2-2-老年代" class="headerlink" title="2.2 老年代"></a>2.2 老年代</h3><h4 id="2-2-1-CMS"><a href="#2-2-1-CMS" class="headerlink" title="2.2.1 CMS"></a>2.2.1 CMS</h4><p><strong>标记-清除</strong>算法的老年代收集器</p>
+<h4 id="2-2-2-Serial-Old"><a href="#2-2-2-Serial-Old" class="headerlink" title="2.2.2 Serial Old"></a>2.2.2 Serial Old</h4><p>Serial的老年代会收集，<strong>标记-整理</strong>算法</p>
+<h4 id="2-2-3-Parallel-Scavenge-Old"><a href="#2-2-3-Parallel-Scavenge-Old" class="headerlink" title="2.2.3 Parallel Scavenge Old"></a>2.2.3 Parallel Scavenge Old</h4><p>Parallel Scavenge收集器的老年代版本，标记-整理算法</p>
+<h3 id="2-3-整堆"><a href="#2-3-整堆" class="headerlink" title="2.3 整堆"></a>2.3 整堆</h3><h4 id="2-3-1-G1"><a href="#2-3-1-G1" class="headerlink" title="2.3.1 G1"></a>2.3.1 G1</h4><p>garbage-frist收集器</p>
+<h3 id="2-4-垃圾收集器组合"><a href="#2-4-垃圾收集器组合" class="headerlink" title="2.4  垃圾收集器组合"></a>2.4  垃圾收集器组合</h3><h4 id="2-4-1-Serial-SerialOld"><a href="#2-4-1-Serial-SerialOld" class="headerlink" title="2.4.1 Serial + SerialOld"></a>2.4.1 Serial + SerialOld</h4><h4 id="2-4-2-Serial-CMS-jdk8声明废弃，jdk9已被取消"><a href="#2-4-2-Serial-CMS-jdk8声明废弃，jdk9已被取消" class="headerlink" title="2.4.2 Serial + CMS (jdk8声明废弃，jdk9已被取消)"></a>2.4.2 Serial + CMS (jdk8声明废弃，jdk9已被取消)</h4><h4 id="2-4-3-ParNew-CMS-（使用CMS收集器的默认组合"><a href="#2-4-3-ParNew-CMS-（使用CMS收集器的默认组合" class="headerlink" title="2.4.3 ParNew +CMS （使用CMS收集器的默认组合)"></a>2.4.3 ParNew +CMS （使用CMS收集器的默认组合)</h4><h4 id="2-4-4-ParNew-SerialOld-jdk8声明废弃，jdk9已被取消"><a href="#2-4-4-ParNew-SerialOld-jdk8声明废弃，jdk9已被取消" class="headerlink" title="2.4.4 ParNew + SerialOld (jdk8声明废弃，jdk9已被取消)"></a>2.4.4 ParNew + SerialOld (jdk8声明废弃，jdk9已被取消)</h4><h4 id="2-4-5-Parallel-Scavenge-SerialOld"><a href="#2-4-5-Parallel-Scavenge-SerialOld" class="headerlink" title="2.4.5 Parallel Scavenge +  SerialOld"></a>2.4.5 Parallel Scavenge +  SerialOld</h4><h4 id="2-4-6-Parallel-Scavenge-Parallel-Scavenge-Old（jdk8的默认组合）"><a href="#2-4-6-Parallel-Scavenge-Parallel-Scavenge-Old（jdk8的默认组合）" class="headerlink" title="2.4.6 Parallel Scavenge + Parallel Scavenge Old（jdk8的默认组合）"></a>2.4.6 Parallel Scavenge + Parallel Scavenge Old（jdk8的默认组合）</h4><h4 id="2-4-7-G1（jdk9的默认收集器，且CMS被标记为废弃了）"><a href="#2-4-7-G1（jdk9的默认收集器，且CMS被标记为废弃了）" class="headerlink" title="2.4.7 G1（jdk9的默认收集器，且CMS被标记为废弃了）"></a>2.4.7 G1（jdk9的默认收集器，且CMS被标记为废弃了）</h4><h2 id="3-tips"><a href="#3-tips" class="headerlink" title="3.tips"></a>3.tips</h2><ul>
+<li><strong>java -XX:+PrintFlagsFinal -version</strong>  ：查看jvm默认参数。数据太多可配合grep使用</li>
+</ul>
+<h2 id="4-标记对象时-并发的可达性分析"><a href="#4-标记对象时-并发的可达性分析" class="headerlink" title="4. 标记对象时-并发的可达性分析"></a>4. 标记对象时-并发的可达性分析</h2><p>黑色对象：存活对象，且这个对象的全部引用都扫描过（代表不需要再次扫描了）</p>
+<p>灰色对象：存活对象，但这个对象至少存在一个引用未被扫描（它持有的引用没扫描完）</p>
+<p>白色对象：不可达对象，不会被扫描到</p>
+<h4 id="1-问题：对象消失产生的原因（二者缺一不可）"><a href="#1-问题：对象消失产生的原因（二者缺一不可）" class="headerlink" title="1.问题：对象消失产生的原因（二者缺一不可）"></a>1.问题：对象消失产生的原因（二者缺一不可）</h4><blockquote>
+<ol>
+<li>黑色对象重新引用了白色对象</li>
+<li>灰色对象删除了持有的该白色对象的全部引用</li>
+</ol>
+<p>为什么二者缺一不可：首先第一条，既然是重新引用了白色对象，那么代表这个白色对象一定是被引用在灰色对象上的，且这个灰色对象还没扫描到这个白色对象。第二，考虑到扫描灰色对象的工作还没做完，必须在做完前删除掉引用的这个白色对象</p>
+</blockquote>
+<h4 id="2-解决方式（二选一）"><a href="#2-解决方式（二选一）" class="headerlink" title="2.解决方式（二选一）"></a>2.解决方式（二选一）</h4><h5 id="1-增量更新（CMS收集器使用）"><a href="#1-增量更新（CMS收集器使用）" class="headerlink" title="1.增量更新（CMS收集器使用）"></a>1.增量更新（CMS收集器使用）</h5><p>gc线程如果已经扫描完成A对象（黑色），用户线程在这期间又将A对象持有了一个应该被回收的B对象引用（白色）。此时需要记录A对象，将其从黑变为灰，在gc线程扫描完成后再扫描一次A对象</p>
+<h5 id="2-原始快照"><a href="#2-原始快照" class="headerlink" title="2.原始快照"></a>2.原始快照</h5><p>记录删除了白色对象引用的灰色对象，gc线程第一次扫描结束后在扫描这个灰色对象</p>
+<h2 id="5-GCRoots对象"><a href="#5-GCRoots对象" class="headerlink" title="5 GCRoots对象"></a>5 GCRoots对象</h2><ul>
+<li>虚拟机栈(栈帧中的本地变量表)中引用的对象</li>
+<li>本地方法栈(Native 方法)中引用的对象</li>
+<li>方法区中类静态属性引用的对象</li>
+<li>方法区中常量引用的对象</li>
+<li>所有被同步锁持有的对象</li>
+</ul>
+
                 
             </div>
             <hr/>
@@ -387,7 +472,7 @@
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://blog.shanzhao.site/2025/01/06/demo/">https://blog.shanzhao.site/2025/01/06/demo/</a>
+                    <a href="https://blog.shanzhao.site/2022/03/04/jvm-chang-yong-can-shu-zheng-li/">https://blog.shanzhao.site/2022/03/04/jvm-chang-yong-can-shu-zheng-li/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -424,7 +509,11 @@
                 <div class="post-meta__tag-list" style="display: inline-block;">
                     
                         <div class="article-tag">
-                            <span class="chip bg-color">无标签</span>
+                            
+                                <a href="/tags/jvm/">
+                                    <span class="chip bg-color">jvm</span>
+                                </a>
+                            
                         </div>
                     
                 </div>
@@ -472,7 +561,7 @@
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2025/01/06/seata-de-at-mo-shi-fen-xi/">
+                <a href="/2025/01/06/g1/">
                     <div class="card-image">
                         
                         
@@ -506,37 +595,48 @@
         
         <div class="article col s12 m6" data-aos="fade-up">
             <div class="article-badge right-badge text-color">
-                本篇&nbsp;<i class="far fa-dot-circle"></i>
+                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2025/01/06/demo/">
+                <a href="/2022/03/04/java-yuan-ma/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/19.jpg" class="responsive-img" alt="demo">
+                        <img src="/medias/featureimages/10.jpg" class="responsive-img" alt="java">
                         
-                        <span class="card-title">demo</span>
+                        <span class="card-title">java</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
                     <div class="summary block-with-text">
                         
-                            
+                            java相关源码分析
                         
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
+                                <i class="far fa-clock fa-fw icon-date"></i>2022-03-04
                             </span>
                         <span class="publish-author">
                             
-                            <i class="fas fa-user fa-fw"></i>
-                            reef
+                            <i class="fas fa-bookmark fa-fw icon-category"></i>
+                            
+                            <a href="/categories/java/" class="post-category">
+                                    java
+                                </a>
+                            
                             
                         </span>
                     </div>
                 </div>
-
+                
+                <div class="card-action article-tags">
+                    
+                    <a href="/tags/java%E6%BA%90%E7%A0%81/">
+                        <span class="chip bg-color">java源码</span>
+                    </a>
+                    
+                </div>
                 
             </div>
         </div>
