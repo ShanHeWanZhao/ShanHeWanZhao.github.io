@@ -51,7 +51,8 @@
 
     <script src="/libs/jquery/jquery-3.6.0.min.js"></script>
 
-<meta name="generator" content="Hexo 7.3.0"><link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css"></head>
+<meta name="generator" content="Hexo 7.3.0"><link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
 
 
 <body>
@@ -359,6 +360,31 @@
 
         
 
+        <!-- 代码块功能依赖 -->
+        <script type="text/javascript" src="/libs/codeBlock/codeBlockFuction.js"></script>
+
+        <!-- 代码语言 -->
+        
+            <script type="text/javascript" src="/libs/codeBlock/codeLang.js"></script>
+        
+
+        <!-- 代码块复制 -->
+        
+            <script type="text/javascript" src="/libs/codeBlock/codeCopy.js"></script>
+        
+
+        <!-- 代码块收缩 -->
+        
+            <script type="text/javascript" src="/libs/codeBlock/codeShrink.js"></script>
+        
+
+        <!-- 代码块折行 -->
+        
+            <style type="text/css">
+                code[class*="language-"], pre[class*="language-"] { white-space: pre !important; }
+            </style>
+        
+
         <div class="card-content article-card-content">
             <div id="articleContent">
                 <h1 id="Seata的AT模式分析-1-5-0版本"><a href="#Seata的AT模式分析-1-5-0版本" class="headerlink" title="Seata的AT模式分析(1.5.0版本)"></a>Seata的AT模式分析(1.5.0版本)</h1><h2 id="1-增强机制"><a href="#1-增强机制" class="headerlink" title="1 增强机制"></a>1 增强机制</h2><p>SeataAutoConfiguration中的GlobalTransactionScanner，主要用来代理@GlobalTransactional注解和客户端RM和TM的注册</p>
@@ -369,7 +395,7 @@
 </li>
 <li><p>开始<strong>初始化TmNettyRemotingClient，先注册一些ResponseProcessor，用来处理server端回传的respons</strong>e（因为时TM，所以只会注册和全局事务的begin，commit，rolback等相关response的Processor，具体类型如下）</p>
 <ul>
-<li><pre class=" language-language-txt"><code class="language-language-txt">MessageType.TYPE_SEATA_MERGE_RESULT
+<li><pre class="line-numbers language-language-txt"><code class="language-language-txt">MessageType.TYPE_SEATA_MERGE_RESULT
 MessageType.TYPE_GLOBAL_BEGIN_RESULT
 MessageType.TYPE_GLOBAL_COMMIT_RESULT
 MessageType.TYPE_GLOBAL_REPORT_RESULT
@@ -377,7 +403,7 @@ MessageType.TYPE_GLOBAL_ROLLBACK_RESULT
 MessageType.TYPE_GLOBAL_STATUS_RESULT
 MessageType.TYPE_REG_CLT_RESULT
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">- 开启一些定时任务，包括与服务端Channel的reconnect任务、**MergedSend任务（处理批量消息发送）**、future的超时检测任务。</span><br><span class="line"></span><br><span class="line">- 启动和TM相关的netty客户端的Bootstrap，添加对应的ChannelHandler，包括IdleStateHandler（心跳检测，会进行ping-pong操作）、解码和编码器、**ClientHandler（双向handler，开始真正处理数据，同时也处理IdleStateHandler发来的IdleStateEvent事件，判断后是否进行ping-pong，以此维护长连接）**</span><br><span class="line"></span><br><span class="line">##### 1.1.2.2 RM初始化</span><br><span class="line"></span><br><span class="line">- 实例化RmNettyRemotingClient对象，和上面类似，也会创建好netty客户端的Bootstrap相关配置</span><br><span class="line"></span><br><span class="line">- 开始**初始化RmNettyRemotingClient，也会先注册一些ResponseProcessor，用来处理server端回传的response**（因为时RM，所以只会注册资源（可以理解成数据库）相关的操作，具体类型如下）</span><br><span class="line"></span><br><span class="line">  - ```java</span><br><span class="line">    MessageType.TYPE_BRANCH_COMMIT</span><br><span class="line">    MessageType.TYPE_BRANCH_ROLLBACK</span><br><span class="line">    MessageType.TYPE_RM_DELETE_UNDOLOG</span><br><span class="line">    </span><br><span class="line">    MessageType.TYPE_SEATA_MERGE_RESUL</span><br><span class="line">    MessageType.TYPE_BRANCH_REGISTER_RESULT</span><br><span class="line">    MessageType.TYPE_BRANCH_STATUS_REPORT_RESULT</span><br><span class="line">    MessageType.TYPE_GLOBAL_LOCK_QUERY_RESULT</span><br><span class="line">    MessageType.TYPE_REG_RM_RESULT</span><br></pre></td></tr></table></figure>
-</code></pre>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 </li>
 </ul>
 </li>
