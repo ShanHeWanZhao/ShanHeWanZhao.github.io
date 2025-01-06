@@ -507,7 +507,7 @@
             <article class="cd-timeline-content" data-aos="fade-up">
                 <div class="article col s12 m6">
                     <div class="card">
-                        <a href="/2025/01/06/g1/">
+                        <a href="/2025/01/06/java-yuan-ma/">
                             <div class="card-image">
                                 
                                 
@@ -519,12 +519,10 @@
                         <div class="card-content article-content">
                             <div class="summary block-with-text">
                                 
-                                    G1用了G1，就不需要在指定新生代和老年代的的大小或比例关系了
-大对象：对象大小超过一个Region容量一半的对象
+                                    1.HashMap重点字段：
 
--XX:+UseG1GC
--XX:G1HeapRegionSize&#x3D;2M：一个Region的大小
--XX:Max
+DEFAULT_LOAD_FACTOR&#x3D;0.75
+123456789默认加载因子 loadFactor加载因子是控制数组存放数据的疏密程度，loadFactor越趋近于1，那么 数组中存放的数据(e
                                 
                             </div>
                             <div class="publish-info">
@@ -610,7 +608,7 @@
             <article class="cd-timeline-content" data-aos="fade-up">
                 <div class="article col s12 m6">
                     <div class="card">
-                        <a href="/2025/01/06/java-yuan-ma/">
+                        <a href="/2025/01/06/g1/">
                             <div class="card-image">
                                 
                                 
@@ -622,60 +620,12 @@
                         <div class="card-content article-content">
                             <div class="summary block-with-text">
                                 
-                                    1.HashMap重点字段：
+                                    G1用了G1，就不需要在指定新生代和老年代的的大小或比例关系了
+大对象：对象大小超过一个Region容量一半的对象
 
-DEFAULT_LOAD_FACTOR&#x3D;0.75
-123456789默认加载因子 loadFactor加载因子是控制数组存放数据的疏密程度，loadFactor越趋近于1，那么 数组中存放的数据(e
-                                
-                            </div>
-                            <div class="publish-info">
-                                <span class="publish-date">
-                                    <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
-                                </span>
-                                <span class="publish-author">
-                                    
-                                    <i class="fas fa-user fa-fw"></i>
-                                    reef
-                                    
-                                </span>
-                            </div>
-                        </div>
-
-                        
-                    </div>
-                </div>
-            </article>
-        </div>
-        
-        <div class="cd-timeline-block">
-
-            
-            
-
-            
-            
-
-            
-            <div class="cd-timeline-img day" data-aos="zoom-in-up">
-                <span>06</span>
-            </div>
-            <article class="cd-timeline-content" data-aos="fade-up">
-                <div class="article col s12 m6">
-                    <div class="card">
-                        <a href="/2025/01/06/seata-de-at-mo-shi-fen-xi/">
-                            <div class="card-image">
-                                
-                                
-                                <img src="/medias/featureimages/0.jpg" class="responsive-img" alt="">
-                                
-                                <span class="card-title"></span>
-                            </div>
-                        </a>
-                        <div class="card-content article-content">
-                            <div class="summary block-with-text">
-                                
-                                    Seata的AT模式分析(1.5.0版本)1 增强机制SeataAutoConfiguration中的GlobalTransactionScanner，主要用来代理@GlobalTransactional注解和客户端RM和TM的注册
-1.1
+-XX:+UseG1GC
+-XX:G1HeapRegionSize&#x3D;2M：一个Region的大小
+-XX:Max
                                 
                             </div>
                             <div class="publish-info">
@@ -731,6 +681,56 @@ DEFAULT_LOAD_FACTOR&#x3D;0.75
 -XX:MaxNewSize&#x3D;256m : 最大新生代大小
 -Xss512k：栈大小
 -XX:Metaspace
+                                
+                            </div>
+                            <div class="publish-info">
+                                <span class="publish-date">
+                                    <i class="far fa-clock fa-fw icon-date"></i>2025-01-06
+                                </span>
+                                <span class="publish-author">
+                                    
+                                    <i class="fas fa-user fa-fw"></i>
+                                    reef
+                                    
+                                </span>
+                            </div>
+                        </div>
+
+                        
+                    </div>
+                </div>
+            </article>
+        </div>
+        
+        <div class="cd-timeline-block">
+
+            
+            
+
+            
+            
+
+            
+            <div class="cd-timeline-img day" data-aos="zoom-in-up">
+                <span>06</span>
+            </div>
+            <article class="cd-timeline-content" data-aos="fade-up">
+                <div class="article col s12 m6">
+                    <div class="card">
+                        <a href="/2025/01/06/seata-de-at-mo-shi-fen-xi/">
+                            <div class="card-image">
+                                
+                                
+                                <img src="/medias/featureimages/0.jpg" class="responsive-img" alt="">
+                                
+                                <span class="card-title"></span>
+                            </div>
+                        </a>
+                        <div class="card-content article-content">
+                            <div class="summary block-with-text">
+                                
+                                    Seata的AT模式分析(1.5.0版本)1 增强机制SeataAutoConfiguration中的GlobalTransactionScanner，主要用来代理@GlobalTransactional注解和客户端RM和TM的注册
+1.1
                                 
                             </div>
                             <div class="publish-info">
