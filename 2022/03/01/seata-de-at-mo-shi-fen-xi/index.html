@@ -235,7 +235,7 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/3.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/2.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
@@ -293,14 +293,14 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2022-03-04
+                    2022-03-01
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2025-01-07
+                    2025-01-08
                 </div>
                 
 
@@ -331,17 +331,15 @@
 <li><p>实例化TmNettyRemotingClient对象（会创建好netty客户端的Bootstrap相关配置，等待后续init使用）</p>
 </li>
 <li><p>开始<strong>初始化TmNettyRemotingClient，先注册一些ResponseProcessor，用来处理server端回传的respons</strong>e（因为时TM，所以只会注册和全局事务的begin，commit，rolback等相关response的Processor，具体类型如下）</p>
-<ul>
-<li><pre class="line-numbers language-txt"><code class="language-txt">MessageType.TYPE_SEATA_MERGE_RESULT
-MessageType.TYPE_GLOBAL_BEGIN_RESULT
-MessageType.TYPE_GLOBAL_COMMIT_RESULT
-MessageType.TYPE_GLOBAL_REPORT_RESULT
-MessageType.TYPE_GLOBAL_ROLLBACK_RESULT
-MessageType.TYPE_GLOBAL_STATUS_RESULT
-MessageType.TYPE_REG_CLT_RESULT
-<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-</li>
-</ul>
+<blockquote>
+<p> MessageType.TYPE_SEATA_MERGE_RESULT</p>
+<p> MessageType.TYPE_GLOBAL_BEGIN_RESULT</p>
+<p> MessageType.TYPE_GLOBAL_COMMIT_RESULT</p>
+<p> MessageType.TYPE_GLOBAL_REPORT_RESULT</p>
+<p> MessageType.TYPE_GLOBAL_ROLLBACK_RESULT</p>
+<p> MessageType.TYPE_GLOBAL_STATUS_RESULT</p>
+<p> MessageType.TYPE_REG_CLT_RESULT</p>
+</blockquote>
 </li>
 <li><p>开启一些定时任务，包括与服务端Channel的reconnect任务、<strong>MergedSend任务（处理批量消息发送）</strong>、future的超时检测任务。</p>
 </li>
@@ -353,16 +351,16 @@ MessageType.TYPE_REG_CLT_RESULT
 </li>
 <li><p>开始<strong>初始化RmNettyRemotingClient，也会先注册一些ResponseProcessor，用来处理server端回传的response</strong>（因为时RM，所以只会注册资源（可以理解成数据库）相关的操作，具体类型如下）</p>
 <ul>
-<li><pre class="line-numbers language-txt"><code class="language-txt">MessageType.TYPE_BRANCH_COMMIT
-MessageType.TYPE_BRANCH_ROLLBACK
-MessageType.TYPE_RM_DELETE_UNDOLOG
-
-MessageType.TYPE_SEATA_MERGE_RESUL
-MessageType.TYPE_BRANCH_REGISTER_RESULT
-MessageType.TYPE_BRANCH_STATUS_REPORT_RESULT
-MessageType.TYPE_GLOBAL_LOCK_QUERY_RESULT
-MessageType.TYPE_REG_RM_RESULT
-<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<li><blockquote>
+<p>MessageType.TYPE_BRANCH_COMMIT</p>
+<p>MessageType.TYPE_BRANCH_ROLLBACK</p>
+<p>MessageType.TYPE_RM_DELETE_UNDOLOG</p>
+<p>MessageType.TYPE_SEATA_MERGE_RESUL</p>
+<p>MessageType.TYPE_BRANCH_REGISTER_RESULT</p>
+<p>MessageType.TYPE_BRANCH_STATUS_REPORT_RESULT</p>
+<p>MessageType.TYPE_GLOBAL_LOCK_QUERY_RESULT</p>
+<p>MessageType.TYPE_REG_RM_RESULT</p>
+</blockquote>
 </li>
 </ul>
 </li>
@@ -697,7 +695,7 @@ MessageType.TYPE_REG_RM_RESULT
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://blog.shanzhao.site/2022/03/04/seata-de-at-mo-shi-fen-xi/">https://blog.shanzhao.site/2022/03/04/seata-de-at-mo-shi-fen-xi/</a>
+                    <a href="https://blog.shanzhao.site/2022/03/01/seata-de-at-mo-shi-fen-xi/">https://blog.shanzhao.site/2022/03/01/seata-de-at-mo-shi-fen-xi/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -790,11 +788,56 @@ MessageType.TYPE_REG_RM_RESULT
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2022/03/04/jvm-chang-yong-can-shu-zheng-li/">
+                <a href="/2025/01/05/cms/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/1.jpg" class="responsive-img" alt="jvm常用参数">
+                        <img src="/medias/featureimages/3.jpg" class="responsive-img" alt="cms">
+                        
+                        <span class="card-title">cms</span>
+                    </div>
+                </a>
+                <div class="card-content article-content">
+                    <div class="summary block-with-text">
+                        
+                            cms
+                        
+                    </div>
+                    <div class="publish-info">
+                        <span class="publish-date">
+                            <i class="far fa-clock fa-fw icon-date"></i>2025-01-05
+                        </span>
+                        <span class="publish-author">
+                            
+                            <i class="fas fa-user fa-fw"></i>
+                            reef
+                            
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="card-action article-tags">
+                    
+                    <a href="/tags/GC/">
+                        <span class="chip bg-color">GC</span>
+                    </a>
+                    
+                </div>
+                
+            </div>
+        </div>
+        
+        
+        <div class="article col s12 m6" data-aos="fade-up">
+            <div class="article-badge right-badge text-color">
+                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
+            </div>
+            <div class="card">
+                <a href="/2022/02/04/jvm-chang-yong-can-shu-zheng-li/">
+                    <div class="card-image">
+                        
+                        
+                        <img src="/medias/featureimages/3.jpg" class="responsive-img" alt="jvm常用参数">
                         
                         <span class="card-title">jvm常用参数</span>
                     </div>
@@ -806,9 +849,9 @@ MessageType.TYPE_REG_RM_RESULT
                         
                     </div>
                     <div class="publish-info">
-                        <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2022-03-04
-                        </span>
+                            <span class="publish-date">
+                                <i class="far fa-clock fa-fw icon-date"></i>2022-02-04
+                            </span>
                         <span class="publish-author">
                             
                             <i class="fas fa-bookmark fa-fw icon-category"></i>
@@ -826,60 +869,6 @@ MessageType.TYPE_REG_RM_RESULT
                     
                     <a href="/tags/jvm/">
                         <span class="chip bg-color">jvm</span>
-                    </a>
-                    
-                </div>
-                
-            </div>
-        </div>
-        
-        
-        <div class="article col s12 m6" data-aos="fade-up">
-            <div class="article-badge right-badge text-color">
-                本篇&nbsp;<i class="far fa-dot-circle"></i>
-            </div>
-            <div class="card">
-                <a href="/2022/03/04/seata-de-at-mo-shi-fen-xi/">
-                    <div class="card-image">
-                        
-                        
-                        <img src="/medias/featureimages/3.jpg" class="responsive-img" alt="Seata的AT模式分析">
-                        
-                        <span class="card-title">Seata的AT模式分析</span>
-                    </div>
-                </a>
-                <div class="card-content article-content">
-                    <div class="summary block-with-text">
-                        
-                            基于Seata 1.5.0版本的源码分析
-                        
-                    </div>
-                    <div class="publish-info">
-                            <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2022-03-04
-                            </span>
-                        <span class="publish-author">
-                            
-                            <i class="fas fa-bookmark fa-fw icon-category"></i>
-                            
-                            <a href="/categories/java/" class="post-category">
-                                    java
-                                </a>
-                            
-                            
-                        </span>
-                    </div>
-                </div>
-
-                
-                <div class="card-action article-tags">
-                    
-                    <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">
-                        <span class="chip bg-color">分布式事务</span>
-                    </a>
-                    
-                    <a href="/tags/seata/">
-                        <span class="chip bg-color">seata</span>
                     </a>
                     
                 </div>
