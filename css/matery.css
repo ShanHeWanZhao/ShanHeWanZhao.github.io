@@ -241,11 +241,12 @@ mark {
 }
 
 .bg-color {
-    background-image: linear-gradient(to right, #4cbf30 0%, #0f9d58 100%);
+    /*background-image: linear-gradient(135deg, #001f3f, #0088a9, #00c9a7, #92d5c6, #ebf5ee);*/
+    background-image: linear-gradient( 135deg, #81FFEF 10%, #F067B4 100%);
 }
 
 .text-color {
-    color: #0f9d58 !important;
+    color: #b19629 !important;
 }
 
 .white-color {
@@ -257,7 +258,8 @@ mark {
     position: fixed;
     bottom: 0;
     z-index: 300;
-    background: linear-gradient(to right, #4cbf30 0%, #0f9d58 100%);
+    /*background: linear-gradient(to right, #4cbf30 0%, #0f9d58 100%);*/
+    background-image: linear-gradient( 135deg, #81FFEF 10%, #F067B4 100%);
     opacity: 0.8;
 }
 
@@ -551,8 +553,8 @@ header .go-back i {
 }
 
 .bg-cover:after {
-    -webkit-animation: rainbow 60s infinite;
-    animation: rainbow 60s infinite;
+    /*-webkit-animation: rainbow 60s infinite;*/
+    /*animation: rainbow 60s infinite;*/
 }
 
 .bg-cover:before,
@@ -1843,7 +1845,7 @@ footer a {
 }
 
 footer .copy-right {
-    color: #dbdbdb;
+    color: #fff;
 }
 
 /*搜索层样式*/
