@@ -20,15 +20,6 @@
     <title>java源码 | reef&#39;s blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
-    <style>
-        body{
-            background-image: url(https://cdn.jsdelivr.net/gh/Tokisaki-Galaxy/res/site/medias/background.jpg);
-            background-repeat:no-repeat;
-            background-size: 100% 100%;
-            background-attachment:fixed;
-        }
-    </style>
-
 
 
     <!-- bg-cover style     -->
@@ -235,7 +226,7 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/3.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('https://img.shanzhao.site/file/1736395339749_mountains-4435423.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
@@ -296,7 +287,7 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2025-01-08
+                    2025-01-09
                 </div>
                 
 
@@ -323,36 +314,36 @@
                 <h1 id="1-HashMap"><a href="#1-HashMap" class="headerlink" title="1.HashMap"></a>1.HashMap</h1><p>重点字段：</p>
 <ul>
 <li><p>DEFAULT_LOAD_FACTOR&#x3D;0.75</p>
-<pre class="line-numbers language-txt"><code class="language-txt">默认加载因子 
-loadFactor加载因子是控制数组存放数据的疏密程度，
-loadFactor越趋近于1，那么 数组中存放的数据(entry)也就越多，
-也就越密，也就是会让链表的长度增加，loadFactor越小，也就是趋近于0，
-数组中存放的数据(entry)也就越少，也就越稀疏。
-
-loadFactor太大可能导致链表过长，查找元素效率低。
-而太小导致数组的空闲空间太多，利用率低，存放的数据会很分散。
-loadFactor的默认值为0.75f是官方给出的一个比较好的临界值。
-<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<blockquote>
+<p>​	默认加载因子。loadFactor加载因子是控制数组存放数据的疏密程度，loadFactor越趋近于1，那么 数组中存放的数据(entry)也就越多，也就越密，也就是会让链表的长度增加，loadFactor越小，也就是趋近于0，数组中存放的数据(entry)也就越少，也就越稀疏。</p>
+<p>​	loadFactor太大可能导致链表过长，查找元素效率低。而太小导致数组的空闲空间太多，利用率低，存放的数据会很分散。</p>
+<p>​	loadFactor的默认值为0.75f是官方给出的一个比较好的临界值。</p>
+</blockquote>
 </li>
 <li><p>TREEIFY_THRESHOLD&#x3D;8</p>
-<pre><code>树化阈值。当桶(bucket)上的结点数大于这个值时会转成红黑树
-</code></pre>
+<blockquote>
+<p>树化阈值。当桶(bucket)上的结点数大于这个值时会转成红黑树</p>
+</blockquote>
 </li>
 <li><p>UNTREEIFY_THRESHOLD&#x3D;6</p>
-<pre><code>链表化阈值（当桶(bucket)上的结点数小于这个值时树转链表）
-</code></pre>
+<blockquote>
+<p>链表化阈值（当桶(bucket)上的结点数小于这个值时树转链表）</p>
+</blockquote>
 </li>
 <li><p>MIN_TREEIFY_CAPACITY&#x3D;64</p>
-<pre><code>桶中结构树化对应的table的最小长度
-</code></pre>
+<blockquote>
+<p>桶中结构树化对应的table的最小长度</p>
+</blockquote>
 </li>
 <li><p>loadFactor&#x3D;0.75</p>
-<pre><code>计算阈值使用，必须大于0
-</code></pre>
+<blockquote>
+<p>计算阈值使用，必须大于0</p>
+</blockquote>
 </li>
 <li><p>threshold &#x3D; loaloadFactor * 数组长度</p>
-<pre><code>扩容阈值，当HashMap拥有的元素数量大于了threshold，就会触发数组的扩容
-</code></pre>
+<blockquote>
+<p>扩容阈值，当HashMap拥有的元素数量大于了threshold，就会触发数组的扩容</p>
+</blockquote>
 </li>
 </ul>
 <h2 id="1-1-put方法："><a href="#1-1-put方法：" class="headerlink" title="1.1 put方法："></a>1.1 put方法：</h2><ul>
@@ -1546,7 +1537,7 @@ loadFactor的默认值为0.75f是官方给出的一个比较好的临界值。
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/3.jpg" class="responsive-img" alt="java源码">
+                        <img src="https://img.shanzhao.site/file/1736395339749_mountains-4435423.jpg" class="responsive-img" alt="java源码">
                         
                         <span class="card-title">java源码</span>
                     </div>
@@ -1596,7 +1587,7 @@ loadFactor的默认值为0.75f是官方给出的一个比较好的临界值。
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/2.jpg" class="responsive-img" alt="g1">
+                        <img src="https://img.shanzhao.site/file/1736395262894_field-3123271.jpg" class="responsive-img" alt="g1">
                         
                         <span class="card-title">g1</span>
                     </div>
