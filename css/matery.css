@@ -242,7 +242,8 @@ mark {
 
 .bg-color {
     /*background-image: linear-gradient(135deg, #001f3f, #0088a9, #00c9a7, #92d5c6, #ebf5ee);*/
-    background-image: linear-gradient( 135deg, #81FFEF 10%, #F067B4 100%);
+    /*background-image: linear-gradient( 135deg, #81FFEF 10%, #F067B4 100%);*/
+    background-image: linear-gradient( 135deg, #C2FFD8 10%, #465EFB 100%);
 }
 
 .text-color {
@@ -259,7 +260,8 @@ mark {
     bottom: 0;
     z-index: 300;
     /*background: linear-gradient(to right, #4cbf30 0%, #0f9d58 100%);*/
-    background-image: linear-gradient( 135deg, #81FFEF 10%, #F067B4 100%);
+    /*background-image: linear-gradient( 135deg, #81FFEF 10%, #F067B4 100%);*/
+    background-image: linear-gradient( 135deg, #C2FFD8 10%, #465EFB 100%);
     opacity: 0.8;
 }
 
