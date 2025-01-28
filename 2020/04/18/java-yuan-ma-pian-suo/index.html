@@ -298,14 +298,14 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2025-01-19
+                    2025-01-28
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    3.4k
+                    3.8k
                 </div>
                 
 
@@ -547,6 +547,29 @@
 <p>也分为公平锁和分公平锁，其判断方式完全和ReentrantLock一致。</p>
 <p>​		<strong>非公平锁允许准备进入同步块的线程（还未加入同步队列）和同步队列中的第二个节点竞争获取锁。而公平锁则只允许同步队列中第二个节点里的线程能尝试获取锁。</strong></p>
 <p>​		<strong>其实现方式就是将state设为我们允许并发运行的线程数量，每当一个线程获取到锁后，将state - 1，如果state为0则阻塞所有准备进入同步块的线程，并将其构造为共享节点加入同步队列。每当有线程从同步块退出时，将state + 1，并根据是否非公平来唤醒同步队列的第二个节点来尝试获取锁</strong></p>
+<h2 id="5-ReentrantReadWriteLock"><a href="#5-ReentrantReadWriteLock" class="headerlink" title="5 ReentrantReadWriteLock"></a>5 ReentrantReadWriteLock</h2><p>​		读写锁，<strong>支持并发的读或互斥的写</strong>。读写锁分别各自实现，读锁使用共享锁，写锁使用互斥锁。ReentrantReadWriteLock内部的ReadLock和WriteLock都使用了内部同一个Sync对象来实现读写加锁的功能，在Sync内，他将AQS的state转换为二进制，高十六位表示读状态位，低十六位表示写状态位。由于读是共享的，所以state的高十六位表示了当前有多少个线程在读，在此期间写锁是禁用的。而低十六位是写锁，所以只可能有一个线程，但可能数字大于1（这是就表示写锁重入了）。当写锁被占用是，读是不允许的</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> SHARED_SHIFT<span class="token operator">=</span> <span class="token number">16</span><span class="token punctuation">;</span>                     <span class="token comment" spellcheck="true">//   读状态位            写状态位</span>
+<span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> SHARED_UNIT  <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">1</span> <span class="token operator">&lt;&lt;</span> SHARED_SHIFT<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 0000000000000001 0000000000000000</span>
+<span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> MAX_COUNT <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">1</span> <span class="token operator">&lt;&lt;</span> SHARED_SHIFT<span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token number">1</span><span class="token punctuation">;</span><span class="token comment" spellcheck="true">//0000000000000000 1111111111111111</span>
+<span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> EXCLUSIVE_MASK <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token number">1</span> <span class="token operator">&lt;&lt;</span> SHARED_SHIFT<span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token number">1</span><span class="token punctuation">;</span><span class="token comment" spellcheck="true">//0000000000000000 1111111111111111</span>
+<span class="token comment" spellcheck="true">// 获取共享锁冲入次数（读锁专用）</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">sharedCount</span><span class="token punctuation">(</span><span class="token keyword">int</span> c<span class="token punctuation">)</span>    <span class="token punctuation">{</span> <span class="token keyword">return</span> c <span class="token operator">>>></span> SHARED_SHIFT<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span class="token comment" spellcheck="true">// 获取排他锁冲入次数（写锁专用）</span>
+<span class="token keyword">static</span> <span class="token keyword">int</span> <span class="token function">exclusiveCount</span><span class="token punctuation">(</span><span class="token keyword">int</span> c<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token keyword">return</span> c <span class="token operator">&amp;</span> EXCLUSIVE_MASK<span class="token punctuation">;</span> <span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<ul>
+<li><p><strong>读写锁都支持重入，但写锁只能让当前线程重入，并且要解锁时需要unlock重入的次数。</strong></p>
+</li>
+<li><p><strong>支持锁降级但不支持锁升级</strong></p>
+<blockquote>
+<p> 锁降级：即一个线程在持有写锁的情况下，可以继续获取读锁，然后释放写锁，从而将写锁降级为读锁。在某些场景下很有用，比如</p>
+<ul>
+<li>在写操作完成后，仍然需要保持对数据的读访问权限</li>
+<li>避免其他线程在写锁释放后立即获取写锁，导致数据不一致</li>
+</ul>
+</blockquote>
+</li>
+</ul>
 
                 
             </div>
@@ -662,31 +685,31 @@
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2022/02/04/jvm-chang-yong-can-shu-zheng-li/">
+                <a href="/2020/05/12/java-yuan-ma-pian-xian-cheng-chi/">
                     <div class="card-image">
                         
                         
-                        <img src="https://img.shanzhao.site/file/1736395324226_beach-4852830.jpg" class="responsive-img" alt="jvm常用参数">
+                        <img src="https://img.shanzhao.site/file/1736395332706_hut-3488519.jpg" class="responsive-img" alt="Java源码篇-线程池">
                         
-                        <span class="card-title">jvm常用参数</span>
+                        <span class="card-title">Java源码篇-线程池</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
                     <div class="summary block-with-text">
                         
-                            jvm常用参数整理
+                            jdk中线程池实现类相关
                         
                     </div>
                     <div class="publish-info">
                         <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2022-02-04
+                            <i class="far fa-clock fa-fw icon-date"></i>2020-05-12
                         </span>
                         <span class="publish-author">
                             
                             <i class="fas fa-bookmark fa-fw icon-category"></i>
                             
-                            <a href="/categories/java/" class="post-category">
-                                    java
+                            <a href="/categories/jdk/" class="post-category">
+                                    jdk
                                 </a>
                             
                             
@@ -696,8 +719,8 @@
                 
                 <div class="card-action article-tags">
                     
-                    <a href="/tags/jvm/">
-                        <span class="chip bg-color">jvm</span>
+                    <a href="/tags/%E7%BA%BF%E7%A8%8B%E6%B1%A0/">
+                        <span class="chip bg-color">线程池</span>
                     </a>
                     
                 </div>
@@ -892,7 +915,7 @@
 <!--            <br>-->
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">34.1k</span>
+                        class="white-color">34.5k</span>
             
             &nbsp;|&nbsp;
             
