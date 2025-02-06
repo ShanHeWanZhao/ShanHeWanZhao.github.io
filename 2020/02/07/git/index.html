@@ -278,8 +278,8 @@
                     <div class="post-cate">
                         <i class="fas fa-bookmark fa-fw icon-category"></i>
                         
-                            <a href="/categories/jdk/" class="post-category">
-                                jdk
+                            <a href="/categories/Git/" class="post-category">
+                                Git
                             </a>
                         
                     </div>
@@ -305,7 +305,7 @@
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    1.7k
+                    1.9k
                 </div>
                 
 
@@ -323,12 +323,24 @@
         <div class="card-content article-card-content">
             <div id="articleContent">
                 <hr>
-<h1 id="Git"><a href="#Git" class="headerlink" title="Git"></a>Git</h1><h2 id="1-git-config"><a href="#1-git-config" class="headerlink" title="1 git config"></a>1 git config</h2><pre class="line-numbers language-bash"><code class="language-bash"><span class="token comment" spellcheck="true"># git查看全局配置，即用户目录下的 .gitconfig内容</span>
+<h1 id="Git"><a href="#Git" class="headerlink" title="Git"></a>Git</h1><h2 id="1-git-config"><a href="#1-git-config" class="headerlink" title="1 git config"></a>1 git config</h2><pre class="line-numbers language-bash"><code class="language-bash"><span class="token comment" spellcheck="true"># git查看配置</span>
 <span class="token function">git</span> config --list
-<span class="token comment" spellcheck="true"># 配置用户名和邮箱分别为reef和shanzhao.rd@gmail，会在git commit时记录</span>
+<span class="token comment" spellcheck="true"># ================= 全局配置（保存在用户目录下的 ～/.gitconfig 文件中）======================</span>
+<span class="token comment" spellcheck="true"># 设置全局用户名和邮箱（在 git commit 时记录为提交者信息））</span>
 <span class="token function">git</span> config --global user.name  <span class="token string">"reef"</span>
-<span class="token function">git</span> config --global user.email <span class="token string">"shanzhao.rd@gmail"</span>
-<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<span class="token function">git</span> config --global user.email <span class="token string">"shanzhao.rd@gmail.com"</span>
+<span class="token comment" spellcheck="true"># 设置全局代理（socks5 协议，端口号为 7890）</span>
+<span class="token function">git</span> config --global http.proxy<span class="token operator">=</span>socks5://127.0.0.1:7890
+<span class="token function">git</span> config --global https.proxy<span class="token operator">=</span>socks5://127.0.0.1:7890
+
+<span class="token comment" spellcheck="true"># ================= 当前仓库单独配置（保存在当前仓库中 .git/config 文件中）======================</span>
+<span class="token comment" spellcheck="true"># 设置仓库专属用户名和邮箱（覆盖全局设置）</span>
+<span class="token function">git</span> config  user.name  <span class="token string">"reef"</span>
+<span class="token function">git</span> config  user.email <span class="token string">"shanzhao.rd@gmail.com"</span>
+<span class="token comment" spellcheck="true"># 设置当前仓库的代理（仅对该仓库生效）</span>
+<span class="token function">git</span> config  http.proxy<span class="token operator">=</span>socks5://127.0.0.1:7890
+<span class="token function">git</span> config  https.proxy<span class="token operator">=</span>socks5://127.0.0.1:7890
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 <h2 id="2-初始化仓库"><a href="#2-初始化仓库" class="headerlink" title="2 初始化仓库"></a>2 初始化仓库</h2><pre class="line-numbers language-bash"><code class="language-bash"><span class="token comment" spellcheck="true"># 将当前文件夹初始化为一个 Git 本地仓库</span>
 <span class="token function">git</span> init
 <span class="token comment" spellcheck="true"># 将指定文件夹初始化为一个 Git 本地仓库</span>
@@ -652,8 +664,8 @@ ssh-keygen -t rsa
                             
                             <i class="fas fa-bookmark fa-fw icon-category"></i>
                             
-                            <a href="/categories/jdk/" class="post-category">
-                                    jdk
+                            <a href="/categories/Git/" class="post-category">
+                                    Git
                                 </a>
                             
                             
@@ -807,7 +819,7 @@ ssh-keygen -t rsa
 <!--            <br>-->
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">36.2k</span>
+                        class="white-color">36.4k</span>
             
             &nbsp;|&nbsp;
             
