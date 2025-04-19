@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>reef&#39;s blog</title>
+  
+  <subtitle>hello world</subtitle>
+  <link href="https://blog.shanzhao.site/atom.xml" rel="self"/>
+  
+  <link href="https://blog.shanzhao.site/"/>
+  <updated>2025-04-19T10:21:00.832Z</updated>
+  <id>https://blog.shanzhao.site/</id>
+  
+  <author>
+    <name>reef</name>
+    
+  </author>
+  
+  <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>CloudFlare-CDN缓存清除</title>
+    <link href="https://blog.shanzhao.site/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/"/>
+    <id>https://blog.shanzhao.site/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/</id>
+    <published>2024-06-14T02:33:50.000Z</published>
+    <updated>2025-04-19T10:21:00.832Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	给出了一些api用于清除Cloudflare的CDN缓存方式&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="cloudflare" scheme="https://blog.shanzhao.site/categories/cloudflare/"/>
+    
+    
+    <category term="cdn缓存清除" scheme="https://blog.shanzhao.site/tags/cdn%E7%BC%93%E5%AD%98%E6%B8%85%E9%99%A4/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>谈谈ThreadLocal为什么被设计为弱引用</title>
+    <link href="https://blog.shanzhao.site/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/"/>
+    <id>https://blog.shanzhao.site/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</id>
+    <published>2020-11-21T06:23:19.000Z</published>
+    <updated>2020-11-24T08:21:22.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;分析了ThreadLocal为什么要被设计为弱引用，并给出了ThreadLocal的建议使用方法&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
+    
+    
+    <category term="ThreadLocal" scheme="https://blog.shanzhao.site/tags/ThreadLocal/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Java源码篇-线程池</title>
+    <link href="https://blog.shanzhao.site/2020/05/12/java-yuan-ma-pian-xian-cheng-chi/"/>
+    <id>https://blog.shanzhao.site/2020/05/12/java-yuan-ma-pian-xian-cheng-chi/</id>
+    <published>2020-05-12T07:45:13.000Z</published>
+    <updated>2020-06-03T10:22:12.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	对jdk的ThreadPoolExecutor和ScheduledThreadPoolExecutor进行了详细的源码分析&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
+    
+    
+    <category term="线程池" scheme="https://blog.shanzhao.site/tags/%E7%BA%BF%E7%A8%8B%E6%B1%A0/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Java源码篇-Future</title>
+    <link href="https://blog.shanzhao.site/2020/05/09/java-yuan-ma-pian-future/"/>
+    <id>https://blog.shanzhao.site/2020/05/09/java-yuan-ma-pian-future/</id>
+    <published>2020-05-09T02:43:53.000Z</published>
+    <updated>2020-05-11T07:41:01.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	jdk中Future接口实现类相关源码解析。包括FutureTask和 ScheduledFutureTask&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
+    
+    
+    <category term="多线程" scheme="https://blog.shanzhao.site/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Java源码篇-锁</title>
+    <link href="https://blog.shanzhao.site/2020/04/18/java-yuan-ma-pian-suo/"/>
+    <id>https://blog.shanzhao.site/2020/04/18/java-yuan-ma-pian-suo/</id>
+    <published>2020-04-18T13:13:10.000Z</published>
+    <updated>2020-04-18T13:13:10.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	jdk中AQS实现类相关源码解析。包括 ReentrantLock，Condition，CountDownLatch，Semaphore，ReentrantReadWriteLock&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
+    
+    
+    <category term="AQS实现类" scheme="https://blog.shanzhao.site/tags/AQS%E5%AE%9E%E7%8E%B0%E7%B1%BB/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Java源码篇-AQS</title>
+    <link href="https://blog.shanzhao.site/2020/04/17/java-yuan-ma-pian-aqs/"/>
+    <id>https://blog.shanzhao.site/2020/04/17/java-yuan-ma-pian-aqs/</id>
+    <published>2020-04-17T13:13:10.000Z</published>
+    <updated>2025-04-19T10:22:38.466Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	总结了LockSupport的作用，并从源码分析了AbstractQueuedSynchronizer的实现逻辑&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
+    
+    
+    <category term="LockSupport" scheme="https://blog.shanzhao.site/tags/LockSupport/"/>
+    
+    <category term="AQS" scheme="https://blog.shanzhao.site/tags/AQS/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Java源码篇-Map</title>
+    <link href="https://blog.shanzhao.site/2020/04/09/java-yuan-ma-pian-map/"/>
+    <id>https://blog.shanzhao.site/2020/04/09/java-yuan-ma-pian-map/</id>
+    <published>2020-04-09T11:21:44.000Z</published>
+    <updated>2025-04-19T10:42:38.494Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	jdk中常用Map实现类相关源码解析。包括 HashMap，LinkedHashMap，ConcurrentHashMap&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
+    
+    
+    <category term="Map" scheme="https://blog.shanzhao.site/tags/Map/"/>
+    
+    <category term="ConcurrentHashMap" scheme="https://blog.shanzhao.site/tags/ConcurrentHashMap/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Git</title>
+    <link href="https://blog.shanzhao.site/2020/02/07/git/"/>
+    <id>https://blog.shanzhao.site/2020/02/07/git/</id>
+    <published>2020-02-07T13:21:12.000Z</published>
+    <updated>2020-11-13T03:25:10.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	Git常用命令总结&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Git" scheme="https://blog.shanzhao.site/categories/Git/"/>
+    
+    
+    <category term="Git" scheme="https://blog.shanzhao.site/tags/Git/"/>
+    
+  </entry>
+  
+</feed>
