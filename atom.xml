@@ -37,6 +37,45 @@
   </entry>
   
   <entry>
+    <title>JVM参数</title>
+    <link href="https://blog.shanzhao.site/2020/12/18/jvm-can-shu/"/>
+    <id>https://blog.shanzhao.site/2020/12/18/jvm-can-shu/</id>
+    <published>2020-12-18T12:29:59.000Z</published>
+    <updated>2025-12-19T05:34:59.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;JVM常用参数整理和垃圾收集器组合&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jvm" scheme="https://blog.shanzhao.site/categories/jvm/"/>
+    
+    
+    <category term="JVM参数" scheme="https://blog.shanzhao.site/tags/JVM%E5%8F%82%E6%95%B0/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>G1</title>
+    <link href="https://blog.shanzhao.site/2020/11/25/g1/"/>
+    <id>https://blog.shanzhao.site/2020/11/25/g1/</id>
+    <published>2020-11-25T10:16:52.000Z</published>
+    <updated>2020-11-25T10:16:52.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	简单总结了G1和其常用参数，并分析了的G1日志&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jvm" scheme="https://blog.shanzhao.site/categories/jvm/"/>
+    
+    
+    <category term="G1" scheme="https://blog.shanzhao.site/tags/G1/"/>
+    
+  </entry>
+  
+  <entry>
     <title>谈谈ThreadLocal为什么被设计为弱引用</title>
     <link href="https://blog.shanzhao.site/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/"/>
     <id>https://blog.shanzhao.site/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</id>
@@ -53,6 +92,28 @@
     
     
     <category term="ThreadLocal" scheme="https://blog.shanzhao.site/tags/ThreadLocal/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>CMS</title>
+    <link href="https://blog.shanzhao.site/2020/09/19/cms/"/>
+    <id>https://blog.shanzhao.site/2020/09/19/cms/</id>
+    <published>2020-09-19T14:26:14.000Z</published>
+    <updated>2020-09-19T14:26:14.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	主要分析了CMS收集器的算法实现和收集流程，和部分关键参数对CMS的影响，以及三色标记如何解决对象漏标问题。并在最后总结了CMS的优缺点&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="jvm" scheme="https://blog.shanzhao.site/categories/jvm/"/>
+    
+    
+    <category term="CMS" scheme="https://blog.shanzhao.site/tags/CMS/"/>
+    
+    <category term="三色标记" scheme="https://blog.shanzhao.site/tags/%E4%B8%89%E8%89%B2%E6%A0%87%E8%AE%B0/"/>
     
   </entry>
   

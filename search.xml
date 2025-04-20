@@ -1,6 +1,287 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>CMS</title>
+    <url>/2020/09/19/cms/</url>
+    <content><![CDATA[
+​	主要分析了CMS收集器的算法实现和收集流程，和部分关键参数对CMS的影响，以及三色标记如何解决对象漏标问题。并在最后总结了CMS的优缺点
+
+
+CMS​	CMS（Concurrent Mark-Sweep）是一种基于标记-清除算法实现的老年代垃圾回收器，以获取最短停顿时间为目标，适合对响应时间敏感的应用（如 Web 系统）。其核心思想是尽可能地让 GC 工作与用户线程并发执行，降低停顿时间。
+​	一次CMS gc会算作两次full gc，分别为初始标记和最终标记（算上的时STW次数），但在多次收集后产生的空间碎片如果影响到了对象的分配，也会才用标记-整理算法收集一次
+​	清除算法会产生空间碎片，如果cms区预留的空闲内存不能满足新对象的分配，那么会触发Concurrent Mode Failure，这时会冻结用户线程，临时启用Serial Old收集器重新回收老年代的垃圾，全程STW，耗时很长
+
+初始标记(CMS initial mark): STW，仅标记GCRoots对象的下一个可达对象，很快
+并发标记(CMS concurent mark)
+重新标记(CMS remark): STW，解决并发标记时”那些消失的对象“
+并发清除(CMS concurrent sweep)
+
+1.参数
+-XX:+UseConcMarkSweepGC   ： 启用CMS收集器（年轻代默认使用ParNew收集器）
+
+–XX:CMSWaitDuration&#x3D;2000 ： cms后台线程的轮询间隔时间（ms单位)
+
+-XX:+UseCMSInitiatingOccupancyOnly : 使用基于设定的阈值进行CMS gc，值为CMSInitiatingOccupancyFraction
+
+-XX:CMSInitiatingOccupancyFraction&#x3D;80 : 在UseCMSInitiatingOccupancyOnly参数启用后生效。当CMS区（老年代）占比达到80%后，启用CMS垃圾回收。默认为-1，代表不启用，则老年代垃圾回收阈值算法为：**( (100 - MinHeapFreeRatio) + (CMSTriggerRatio * MinHeapFreeRatio) &#x2F; 100.0) &#x2F; 100.0** &#x3D; 92%
+
+-XX:ConcGCThreads&#x3D;2 ：并发gc线程数，默认为（ParallelGCThreads+3）&#x2F; 4。ParallelGCThreads为新生代并行GC线程数，当CPU数量小于8时，ParallelGCThreads的值就是CPU的数量，当CPU数量大于8时，ParallelGCThreads的值等于3+5*cpuCount &#x2F; 8 （可用jstack查看）
+
+
+2 三色标记2.1 含义
+
+
+颜色
+含义
+
+
+
+白色
+尚未被标记的对象，可能是垃圾
+
+
+灰色
+被标记为可达，但其内部引用的对象还没有全部扫描完
+
+
+黑色
+可达，且其所有引用的对象也都已经被标记（扫描完）
+
+
+​	在三色标记开始时，所有对象初始状态都是白色。GC 从 GCRoots 出发，只能扫描到 GCRoots 可达的对象。每当扫描到一个新对象时，它会先被标记为灰色（表示已经被发现但尚未处理完）。当该对象的所有引用对象也都被扫描并标记后，它就会被染为黑色（表示处理完毕，不可回收）。
+而对于那些不可达的对象，由于没有任何路径从 GCRoots 可以触达它们，因此它们不会被扫描，颜色保持为白色，最终被识别为垃圾对象。
+因此，在三色标记结束时，只会存在黑色和白色两类对象：
+
+黑色对象：可达、已完全处理，不能被回收
+白色对象：不可达、未被处理，将被回收
+
+2.2 问题
+浮动垃圾：被标记为黑色的对象还会继续存活。但如果我们的用户线程此时对黑色对象丢弃引用，这个黑色对象就不可达了，就应该在本次垃圾清理中被回收。但这个影响不大，下次GC可进行处理
+对象漏标：在并发标记阶段，应用线程可能会修改对象引用关系，导致本应可达的对象未被正确扫描，仍然保持白色，最终被误回收。有如下两种情况
+对黑色对象A（此时A已完全扫描完毕）内部赋值一个白色对象B。B产生了漏标
+对灰色对象C（此时C内部还未扫描完）内部暂时断开了一个对象D使其变为白色，并在扫描完成后重新将D赋值到C中
+
+
+
+2.3 增量更新（Incremental Update）顾名思义，表示增加了引用。增量更新关注的是引用新增的情况，尤其是解决以下对象漏标场景：
+
+黑色对象 A 在并发标记后，新增引用了一个未被标记的白色对象 B。	
+
+在这种情况下，为了避免漏标，写屏障机制会将 A 重新标记为灰色，使其在“重新标记（Remark）”阶段重新被扫描一次，从而发现并标记 B，确保其不会被错误回收。总结就是黑色对象A一旦新插入了白色对象B的引用之后，A就变回灰色对象了。
+​	CMS 使用增量更新策略，因为它是老年代回收器，老年代中的对象多数是长寿命的，结构稳定，引用新增比引用删除更常见。但增量更新只能处理“新增引用”，无法处理“引用删除”导致的漏标，因此并不完美。这也是 CMS 在 JDK9 被标记为过时的重要原因之一。
+2.4 原始快照（Snapshot-At-The-Beginning，SATB）​	保存一份并发标记开始时的引用快照，当后续并发标记过程中对这些引用删除时，都会被记录到SATB缓冲区，标记结束后SATB缓冲区的对象被重新标记为存活。
+​	原始快照只处理对灰色对象C删除白色对象D的情况（将D记录到SATB缓冲区），重新标记阶段会在将D标为活跃。但不处理黑色新增引用，需要依赖其他机制保证（一般都是依赖写屏障，将B直接标为存活）
+​	G1使用原始快照能完全避免对象漏标，因为它就是用写屏障直接标记白色对象为存活的方式来处理给黑色对象新增的白色对象这种漏标情况。即SATB处理删除，写屏障兜底新增。虽不可避免的会增加浮动垃圾，但肯定不会漏标
+3 cms gc触发条件
+原文
+foreground collector  ：空间分配不够触发
+background collector
+显式调用 System.gc()，且配置了 -XX:+ExplicitGCInvokesConcurrent
+未配置 UseCMSInitiatingOccupancyOnly 时，JVM 会根据运行统计数据动态判断
+OldGen 达到某个使用阈值（静态或动态计算）
+Young GC 失败或预计失败，JVM 触发 CMS 作为悲观策略
+元空间（Metaspace）扩容触发，且 CMSClassUnloadingEnabled=true（默认开启）
+
+
+
+4 总结
+CMS 是一种低停顿老年代收集器，适合延迟敏感型系统。
+优点是并发执行、停顿低，缺点如下
+空间碎片严重
+需要预留足够空间，否则触发Concurrent Mode Failure 会退化为Serial GC，非常耗时
+只用了增量更新，没有完全解决漏标
+会产生浮动垃圾
+
+
+推荐配合 CMSInitiatingOccupancyFraction 与 UseCMSInitiatingOccupancyOnly 控制触发阈值，防止内存不足时被动触发 Full GC。
+
+]]></content>
+      <categories>
+        <category>jvm</category>
+      </categories>
+      <tags>
+        <tag>CMS</tag>
+        <tag>三色标记</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>G1</title>
+    <url>/2020/11/25/g1/</url>
+    <content><![CDATA[
+​	简单总结了G1和其常用参数，并分析了的G1日志
+
+
+G1​	G1（Garbage First）是 JDK 7 引入，并在 JDK 9 默认启用的服务端垃圾回收器。它的核心理念是将整个 Java 堆划分为多个大小相等的 Region，打破了传统“新生代 &#x2F; 老年代”的物理分区模式，转而以 Region 为基本单位进行垃圾管理与回收。	
+
+整堆收集：G1 是一个真正的 整堆并行压缩收集器，新生代和老年代都可以并行回收。
+并发标记：采用 三色标记法 + SATB + 写屏障机制，保证并发标记期间的准确性。
+可预测的停顿时间：用户可设置 -XX:MaxGCPauseMillis 控制最大停顿时间，G1 会在这个目标下选择哪些 Region 进入回收集（CSet）。
+
+常用参数设置
+-XX:+UseG1GC
+-XX:G1HeapRegionSize&#x3D;2M：一个Region的大小
+-XX:MaxGCPauseMillis&#x3D;80：允许收集停顿的最大时常（毫秒）
+-XX:InitiatingHeapOccupancyPercent&#x3D;45 ：老年代占用到 45% 时触发并发标记周期（默认45）
+不要再设置-xmn和-XX:NewRatio
+
+Region划分
+整个堆被分成多个 Region（默认 2048 个），每个 Region 的大小为 1MB ~ 32MB，并且必须是 2 的幂次方。
+每个 Region 会被动态标记为不同用途：
+E：Eden 区（新生代分配对象）
+S：Survivor 区（新生代存活对象）
+O：Old 区（长生命周期对象）
+H：Humongous 区（大对象，直接分配在老年代）
+
+
+
+​	大对象（如数组、长字符串等）若超过一个 Region 一半大小，会被当作 Humongous 对象，分配连续的多个 Region。由于这些对象移动成本高，G1 默认不会移动 Humongous 对象，而是直接将它们标记为老年代区域。
+Remembered Set（RSet）​	由于 G1 会独立地对某些 Region 进行回收，它必须知道老年代是否引用了某个新生代对象。这正是 Remembered Set（记忆集） 的作用：
+
+每个 Region 都维护了一个对应的 RSet，记录有哪些其它 Region 的对象引用了自己。
+在回收某个 Region 时，G1 只需要扫描这个 RSet，而不必全堆扫描，大幅降低了跨代引用处理的成本。
+
+
+简单说：RSet 让分区式回收变得可能而高效。
+
+Card Table（卡表）RSet 的实现依赖于 Card Table + 写屏障：
+
+Java 堆被进一步划分为更小的单位：Card，默认每个 Card 是 512 字节。
+JVM 在写引用字段时会触发 写屏障（Write Barrier），将对应 Card 标记为 dirty，并记录引用变更。
+在 GC 时，这些 dirty Card 会被用于更新 RSet，确保引用信息完整。
+
+
+卡表是写屏障的基础，RSet 是分区引用追踪的核心，三者协同构成 G1 的并发收集体系。
+
+日志解析2020-11-23T11:40:46.167+0800: 1.503: [GC pause (G1 Evacuation Pause) (young), 0.0048336 secs]
+   // 下面的Min,Avg,Max,Diff,Sum分别表示GC线程最小启动或耗时时间（后面的也是），平均，最大，最大差值，和总耗时，单位都为ms
+   [Parallel Time: 3.1 ms, GC Workers: 6] // 本次YGC共6个GC线程，总耗时3.1ms
+      [GC Worker Start (ms): Min: 1503.0, Avg: 1504.5, Max: 1506.1, Diff: 3.0] // 本次GC线程启动（相对于JVM的启动）
+      [Ext Root Scanning (ms): Min: 0.0, Avg: 0.2, Max: 0.7, Diff: 0.7, Sum: 1.1] // 本次GC线程的GC Roots扫描时间
+      [Update RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0] // 更新Remember Sets 的耗时统计信息（记忆集一般使用来解决跨Region的引用）
+         [Processed Buffers: Min: 0, Avg: 0.0, Max: 0, Diff: 0, Sum: 0]
+      [Scan RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0] // 每个Region都会有一个RSet，RSet又包含指向这个Region的Cards引用，这个阶段就是扫描RSet中的Cards，从而分辨出Eden哪些对象被老年代引用，从而这些不会被GC
+      [Code Root Scanning (ms): Min: 0.0, Avg: 0.0, Max: 0.2, Diff: 0.2, Sum: 0.2] // 扫描代码中的root节点（局部变量）
+      [Object Copy (ms): Min: 0.0, Avg: 1.3, Max: 2.7, Diff: 2.7, Sum: 7.6] // 对象copy，将存活的对象copy到目标Region中
+      [Termination (ms): Min: 0.0, Avg: 0.0, Max: 0.1, Diff: 0.1, Sum: 0.3]
+         [Termination Attempts: Min: 1, Avg: 1.2, Max: 2, Diff: 1, Sum: 7]
+      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.2] // GC线程完成其他任务的时间
+      [GC Worker Total (ms): Min: 0.0, Avg: 1.6, Max: 3.1, Diff: 3.1, Sum: 9.4] // GC线程整个生命周期总计消耗时间
+      [GC Worker End (ms): Min: 1506.1, Avg: 1506.1, Max: 1506.1, Diff: 0.0] // GC线程完成任务的停止时间（相对于JVM）
+   [Code Root Fixup: 0.0 ms]
+   [Code Root Purge: 0.0 ms]
+   [Clear CT: 0.1 ms] // 清理Card Table（卡表）
+   [Other: 1.6 ms]
+      [Choose CSet: 0.0 ms] // 选择要回收的Region放入CSet（会根据停顿时间来决定）
+      [Ref Proc: 1.4 ms] // 处理引用对象耗时时间（Weak、Soft、Phantom、JNI等等）
+      [Ref Enq: 0.0 ms] // 遍历所有引用，将不能回收的放入pending列表
+      [Redirty Cards: 0.0 ms] // 重置card为dirty
+      // 大型对象的回收
+      [Humongous Register: 0.0 ms] 
+      [Humongous Reclaim: 0.0 ms]
+      [Free CSet: 0.0 ms] // 释放CSet中Region占用的内存空间所耗时间
+   [Eden: 51.0M(51.0M)->0.0B(46.0M) Survivors: 0.0B->5120.0K Heap: 51.0M(1024.0M)->4815.7K(1024.0M)]
+ [Times: user=0.05 sys=0.00, real=0.01 secs] 
+
+总结
+G1 不再物理区分年轻代和老年代，转而统一使用多个 Region 管理整个堆。
+
+支持 并发标记 + 并发回收 + 可预测停顿，是整堆压缩收集器。
+
+使用 Remembered Set + Card Table + 写屏障 高效维护跨代引用关系。
+
+避免 Full GC 的目标是：通过周期性并发标记、预测性选择 CSet 来进行碎片整理。
+
+
+]]></content>
+      <categories>
+        <category>jvm</category>
+      </categories>
+      <tags>
+        <tag>G1</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>JVM参数</title>
+    <url>/2020/12/18/jvm-can-shu/</url>
+    <content><![CDATA[JVM常用参数整理和垃圾收集器组合
+ 
+
+JVM参数和垃圾收集器组合jvm参数整理
+-Xms64m ：初始堆大小
+-Xmx128m ：最大堆大小
+-Xmn32m ：年轻代大小
+-XX:MaxNewSize&#x3D;256m : 最大新生代大小
+-Xss512k：栈大小
+-XX:MetaspaceSize&#x3D;256M ：Metaspace扩容时触发FullGC的初始化阈值(并不是元空间的初始化大小，元空间是不断扩容的，当达到这个值时，就会触发full gc，链接）
+-XX:MaxMetaspaceSize&#x3D;512M：Metaspace最大大小
+-XX:NewRatio&#x3D;2：老年代和新生代的比例
+-XX:SurvivorRatio&#x3D;8 ：Eden区与一个Survivor区的大小比值（所以s0:s1:eden&#x3D;1:1:8）
+-XX:MinHeapFreeRatio&#x3D;40：空闲堆空间的最小百分比。如果空闲堆空间的比例小于它，则会进行堆扩容
+-XX:MaxHeapFreeRatio&#x3D;70：空闲堆空间的最大百分比。如果空闲堆空间的比例大于它，则会进行堆缩容
+-XX:-DisableExplicitGC：禁止显式GC，即禁止程序中System.gc()。个人感觉没必要
+-XX:+HeapDumpOnOutOfMemoryError：OOM时导出堆快照到文件
+-XX:HeapDumpPath&#x3D;&#x2F;home&#x2F;huskie&#x2F;gc&#x2F;oom.hprof：OOM时导出文件路径
+-Xloggc:&#x2F;home&#x2F;ruidong&#x2F;gc.log   存储gc日志的路径
+-XX:OnOutOfMemoryError：OOM时操作，比如如执行脚本发送邮件
+-XX:+TraceClassLoading：打印加载类的详细信息
+-XX:+PrintGCDetails：打印GC详细信息
+-XX:+PrintGCTimeStamps：打印CG发生的时间戳（相对于项目启动时间）
+-XX:+PrintGCDateStamps：打印GC发生的时间
+-XX:+PrintHeapAtGC：每一次GC前和GC后，都打印堆信息
+-XX:+PrintClassHistogram：按下Ctrl+Break后，打印类的信息
+-XX:+PrintGCApplicationConcurrentTime ：打印应用程序的运行时间（许多事情会导致JVM暂停所有线程，停在安全点。gc也只是其中的一种，当暂停之后在重启应用线程，则会刷新这个时间（归0），在重新计数）链接
+-XX:+PrintGCApplicationStoppedTime ：打印应用线程暂停的时间，显示应用线程被暂停了多久和应用线程暂停到安全点花费的时间
+-XX:TargetSurvivorRatio&#x3D;50 ：survivor空间的晋升大小空间百分比（默认为50）
+-XX:MaxTenuringThreshold&#x3D;15  ：年轻代晋升到老年代的最大年龄阈值(tenuring threshold)。默认值为 15[每次GC，增加1岁，到15岁如果还要存活，放入Old区]。jvm还会动态的计算晋升阈值，方法：依次从年龄为1的对象大小加起来，一直加到大小超过了 [（TargetSurvivorRatio * survivor_capacity）&#x2F; 100 ]值，这时加起来的最大年龄大小即为这次晋升的临界阈值（具体算法在：hotspot\src\share\vm\gc_implementation\shared\ageTable.cpp文件里，方法为compute_tenuring_threshold）
+-XX:+PrintTenuringDistribution ：ygc 时打印当前晋升年龄信息
+
+垃圾收集器新生代Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）单线程新生代收集器，复制算法，整个过程STW
+优势：内存消耗最小
+缺点：不适合大内存多处理器工作，慢
+ParNew多线程并行的新生代收集器，复制算法，整个过程STW
+
+-XX:ParallelGCThreads&#x3D;4 ：并行收集的线程数
+
+Parallel Scavenge
+吞吐量 &#x3D; 运行用户代码时间 &#x2F; ( 运行用户代码时间 + 垃圾收集时间 )
+
+吞吐量优先的新生代并行多线程收集器，复制算法（标记-复制算法）
+三个重要参数：
+
+XX:MaxGCPauseMillis ：垃圾收集最大停顿时间，大于0的毫秒数
+-XX:GCTimeRatio: 大于0小于100的整数（运行用户代码时间比上垃圾回收的时间），默认为99，即允许最大1%的垃圾回收时间
+-XX:+UseAdaptiveSizePolicy：开启垃圾收集器的自适应调节策略。虚拟机动态调整新生代，Eden区，Survivor区的比例和晋升大小
+
+老年代CMS标记-清除算法的老年代收集器
+Serial OldSerial的老年代会收集，标记-整理算法
+Parallel Scavenge OldParallel Scavenge收集器的老年代版本，标记-整理算法
+整堆G1（garbage-frist收集器）垃圾收集器组合
+Serial + SerialOld
+Serial + CMS (jdk8声明废弃，jdk9已被取消)
+ParNew +CMS （使用CMS收集器的默认组合)
+ParNew + SerialOld (jdk8声明废弃，jdk9已被取消)
+Parallel Scavenge +  SerialOld
+Parallel Scavenge + Parallel Scavenge Old（jdk8的默认组合）G1（jdk9的默认收集器，且CMS被标记为废弃了）
+
+tips
+java -XX:+PrintFlagsFinal -version  ：查看jvm默认参数。数据太多可配合grep使用
+
+GCRoots对象
+虚拟机栈(栈帧中的本地变量表)中引用的对象
+本地方法栈(Native 方法)中引用的对象
+方法区中类静态属性引用的对象
+方法区中常量引用的对象
+所有被同步锁持有的对象
+
+]]></content>
+      <categories>
+        <category>jvm</category>
+      </categories>
+      <tags>
+        <tag>JVM参数</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>CloudFlare-CDN缓存清除</title>
     <url>/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/</url>
     <content><![CDATA[
@@ -66,422 +347,6 @@ ZoneId获取
       </categories>
       <tags>
         <tag>cdn缓存清除</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Git</title>
-    <url>/2020/02/07/git/</url>
-    <content><![CDATA[​	Git常用命令总结
-
-
-Git1 git config# git查看配置
-git config --list
-# ================= 全局配置（保存在用户目录下的 ～/.gitconfig 文件中）======================
-# 设置全局用户名和邮箱（在 git commit 时记录为提交者信息））
-git config --global user.name  "reef"
-git config --global user.email "shanzhao.rd@gmail.com"
-# 设置全局代理（socks5 协议，端口号为 7890）
-git config --global http.proxy=socks5://127.0.0.1:7890
-git config --global https.proxy=socks5://127.0.0.1:7890
-
-# ================= 当前仓库单独配置（保存在当前仓库中 .git/config 文件中）======================
-# 设置仓库专属用户名和邮箱（覆盖全局设置）
-git config  user.name  "reef"
-git config  user.email "shanzhao.rd@gmail.com"
-# 设置当前仓库的代理（仅对该仓库生效）
-git config  http.proxy=socks5://127.0.0.1:7890
-git config  https.proxy=socks5://127.0.0.1:7890
-
-2 初始化仓库# 将当前文件夹初始化为一个 Git 本地仓库
-git init
-# 将指定文件夹初始化为一个 Git 本地仓库
-git init &lt;目录路径>
-
-3 本地仓库的操作3.1 查看文件状态# 可以查看分支名（branch）和文件的状态，如已修改（Modified），未跟踪的（untracked）,未修改的不会有提示
-git status
-# 简洁版的git status
-# 红色M 代表文件修改了但未加入暂存区
-# 绿色M 代表文件修改了并且已加入暂存区
-# ?? 代表未跟踪的，
-# A 代表文件已被加入到暂存区
-git status -s
-
-3.2 未暂存的文件添加到暂存区和解暂存# 将文件加入暂存区
-git add 文件名
-# 将暂存区的文件取消暂存
-git reset 文件名
-
-3.3 commit(暂存区文件的提交)# 不带文件名会提交暂存区所有的文件
-git commit -m "提交的日志信息"
-# 提交全部暂存区文件，并打开一个编辑器，让你写入提交日志（'i':插入，'ESC':退出编辑，':wq':保存并退出）
-git commit
-# 该语句可将不是暂存区的文件直接commit，因为-a就代表提交到了暂存区。两步合为一步了
-git commit -a -m "提交的日志信息"
-
-3.4 已commit的文件删除# 会放在暂存区，在commit之后就删除了。如果直接在文件夹中删除，则不会放在暂存区，要将其删除，就必须先add进暂存区，再commit
-git rm 文件名
-
-3.5 将文件添加至忽略列表
- 自动生成的文件，比如日志文件，class文件就不需要通过git提交，git一般只负责提交源代码。这种情况下，我们可以在工作区中创建一个.gitignore文件（文件名固定，可以在git命令行中用touch .gitignore语句创建）
-
-# 通配符（匹配任意）
-*
-# 取反。比如!hello.class文件，git就不会忽略掉hello.class文件
-!
-# 忽略当前目录下的xxx文件
-/xxx
-# 忽略当前目录下的doc文件夹下的所有
-doc/
-# 忽略当前目录下的doc文件夹里的所有txt文件
-doc/*.txt
-# 忽略当前目录下的doc文件里的所有文件夹里的class文件
-doc/**/*.class
-
-3.6 查看git操作日志# 因为日志太多，不会一次性全部显示，按回车会显示下面的，按Q会退出。
-git log
-
-4. 远程仓库的操作4.1 remote# 可以查看到本地关联的的远程仓库的别名（粗略查看）
-git remote
-# 显示远程仓库地址（详细点）
-git remote -v
-# 可查看更多信息（更详细）
-git remote show 远程仓库的别名
-# 添加(add)远程仓库（一个本地仓库可以添加多个远程仓库）
-git remote add 仓库别名 远程仓库的url
-# 删除本地仓库中配置的某个远程仓库别名及其对应的 URL（该命令不会影响到真正的远程仓库）
-git remote rm 远程仓库的别名
-
-4.2 clone# 克隆远程仓库到此命令行文件夹下面
-git clone 远程仓库的url
-
-4.3 fetch &amp; pull# 从远程仓库获取最新版本带本地仓库，不会合并(merge)。如果省略这两个参数，即别名为origin，分支为matser
-git fetch 仓库别名 远程仓库的branchName
-# 合并到本地仓库
-git merge origin/master
-
-# 从远程仓库获取最新版本带本地仓库，会合并(merge)。如果省略这两个参数，即别名为origin，分支为matser
-git pull 仓库别名 远程仓库的branchName
-# 用于合并本地和远程仓库之间没有共同历史的分支内容。（强制合并）
-git pull 仓库别名 远程仓库的branchName --allow-unrelated-histories
-
-5 Git分支操作# 列出所有本地分支
-git branch
-# 列出所有远程分支
-git branch -r
-# 列出所有本地和远程的分支
-git branch -a
-# 查看所有本地分支，并可查看是否和远程分支建立映射关系
-git branch -v
-# 在本仓库中新建一个分支(在正在使用的分支下创建新的分支，新的分支将会复制正在使用的分支的所有内容进行初始化)
-git branch 新分支名
-# 切换到指定的分支下，前面会有*提示
-git checkout 已存在的分支名
-# 本地仓库分支推送到远程仓库
-git push 仓库别名(shortname) 本地仓库的分支名(branchName)
-# 将指定的分支名的分支文件合并到正在使用的分支里（branchName -> 正在使用的分支）
-git merge 分支名(branchName)
-# 根据分支名删除分支，未push的不能删除
-git branch -d 分支名
-# 根据分支名强力删除分支，未push的也能删除
-git branch -D 分支名
-# 删除远程仓库中的分支
-git push 远程仓库的别名 -d 分支名
-# oldName是当前分支名，newName是想改成的名
-git branch -m oldName newName
-# 本地更新远程仓库分支
-git remote update origin --prune
-# =========分支追踪（名字不同也可以）============
-# 在本地新建分支local-branchName，并和对应的远程分支remote-branchName做映射，最后再checkout并pull
-git checkout -b local-branchName origin/remote-branchName
-# 将本地分支local-branchName分支追踪远程分支origin/remote-branchName（建立映射关系）   
-git branch --set-upstream local-branchName origin/remote-branchName
-# 将当前分支跟踪远程分支origin/remote-branchName   
-git branch -u origin/remote-branchName
-
-6 Git标签操作
- 标签指的是某个分支的某个特定时间点的状态，记录了截止到当前时间的当前分支的全部内容。根据标签，我们可以很方便的切回到标签标记时的状态
-
-# 创建一个新标签
-git tag 新的标签名
-# 列出所有标签
-git tag
-# 查看tag的信息
-git show 标签名
-# 将指定的标签推送至远程仓库
-git push 仓库别名 标签名
-# 新建一个分支，根据标签名指向指定的标签
-git checkout -b 新的分支名 标签名
-# 删除本地仓库中指定的标签
-git tag -d 标签名
-# 删除远程仓库中指定的标签
-git push origin :refs/tags/标签名
-
-7 SSH（secure shell）认证# 生成 SSH 密钥对的命令（由公钥和私钥组成，常用语SSH的连接和认证）
-ssh-keygen -t rsa
-
-上诉命令会生成两个文件，将公钥放在git远程仓库的ssh key里接可以使用ssh操作远程仓库了
-
-~&#x2F;.ssh&#x2F;id_rsa：私钥，用于客户端身份认证，需保密，放在本地
-~&#x2F;.ssh&#x2F;id_rsa.pub：公钥，可放在远程服务器上
-
-]]></content>
-      <categories>
-        <category>Git</category>
-      </categories>
-      <tags>
-        <tag>Git</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Java源码篇-AQS</title>
-    <url>/2020/04/17/java-yuan-ma-pian-aqs/</url>
-    <content><![CDATA[
-​	总结了LockSupport的作用，并从源码分析了AbstractQueuedSynchronizer的实现逻辑
-
-
-Java源码篇-AQS1 LockSupport1.1 总结Java中实现当前线程的阻塞和定时阻塞，并提供唤醒指定线程的工具，在内部使用sun.misc.Unsafe来实现这一系列的操作。在AQS中普遍被使用
-
-阻塞当前线程：通过 park() 方法使当前线程进入等待状态。
-定时阻塞：通过 parkNanos(long nanos) 或 parkUntil(long deadline) 方法使当前线程在指定时间内等待。
-唤醒指定线程：通过 unpark(Thread thread) 方法唤醒指定的处于等待状态的线程。
-
-1.2 核心代码/**
- * 唤醒指定的线程（如果该线程被park了）
- * 如果线程先被unpark（解除等待）了，那么该线程下一次调用park(进入等待)则不起作用，也就不会被阻塞
- */
-public static void unpark(Thread thread) {
-    if (thread != null)
-        UNSAFE.unpark(thread);
-}
-
-/**
- * 阻塞当前线程，并设置一个blocker（俗称阻塞器，这个只是用来jstack查看，并不能通过notifyAll来唤醒阻塞的线程）
- * blocker只能用来调试和诊断，并不影响线程的阻塞和唤醒
- */
-public static void park(Object blocker) {
-    Thread t = Thread.currentThread();
-    setBlocker(t, blocker);
-    UNSAFE.park(false, 0L);
-    setBlocker(t, null);
-}
-
-/**
- * 定时等待，阻塞当前线程指定的纳秒数，当时间到达时就自动唤醒（定时任务会调用）
- */
-public static void parkNanos(long nanos) {
-    if (nanos > 0)
-        UNSAFE.park(false, nanos);
-}
-
-/**
- * 定时等待，阻塞当前线程直到指定的时间戳（deadline）到来就自动唤醒（定时任务会调用）
- */
-public static void parkUntil(long deadline) {
-    UNSAFE.park(true, deadline);
-}
-
-2 AbstractQueuedSynchronizer
-​		Node是AQS的核心内部类，它是构建同步器的基础数据结构，通过不同的配置可以实现同步队列，也可实现等待队列
-
-2.1 同步队列​		当线程尝试获取锁时，未获取到锁的线程会被构造成一个Node，利用CAS放入同步尾部作为尾节点，等待被唤醒。同步队列关联的是整个锁，一对一的关系。而同步队列中的Node又根据nextWaiter字段判断当前Node是共享节点还是独占节点
-
-Node之间通过prev和next指针构成双向链表
-
-头节点(head)代表当前持有锁的线程
-
-包含waitStatus字段标记节点状态
-
-CANCELLED(1): 线程已取消
-SIGNAL(-1): 后继节点需要唤醒
-CONDITION(-2): 节点在等待队列中
-PROPAGATE(-3): 共享锁需要向后传播
-0: 初始状态
-
-
-使用nextWaiter区分共享&#x2F;互斥模式
-
-共享节点：共享锁的实现（Semaphore、CountDownLatch等）。nextWaiter字段为固定的Node#SHARED。释放当前节点的线程后，还具有向后传播的能力（根据state的值判断是否需要释放后继共享节点里的线程）
-
-互斥节点：互斥锁的实现（ReentrantLock等），nextWaiter字段为Node#EXCLUSIVE（即null），只会释放当前节点里的线程
-
-
-
-
-2.2 等待队列​		当已经获取到锁的线程触发java.util.concurrent.locks.Condition#await()方法阻塞自己，让出锁时。会将当前线程构造成一个Node（等待节点，状态为CONDITION），利用CAS放入等待队列尾部。等待队列关联的是Condition。所以，当ReentrantLock构造多个Condition时，就有多个等待队列，ReentrantLock和等待队列可以为一对多，而Condition和等待队列时一对一。而当其他线程获取当前锁（ReentrantLock）的线程调用java.util.concurrent.locks.Condition#signal等方法时，便会将等待队列的首节点转入到同步队列的尾节点，并重新设置Node的状态
-
-单向链表结构，只使用nextWaiter指针
-
-nextWaiter字段为等待队列中下一个等待节点的指针
-
-当调用signal()时，节点从等待队列转移到同步队列过程中的状态变化如下
-
-CONDITION -&gt; 0
-入队同步队列
-等待获取锁
-
-
-
-2.3 核心代码// 同步队列专属的头尾节点。
-// 因为只有在同步队列里的线程才需要被唤醒。等待队列里的线程如果要被唤醒，需要先加入到同步队列
-private transient volatile Node head;
-private transient volatile Node tail;
-// 核心，可获取到锁的次数
-// - ReentrantLock: 表示重入次数
-// - Semaphore: 表示剩余许可数
-// - CountDownLatch: 表示剩余计数
-private volatile int state;
-// 自旋的阈值（纳秒）。当超时等待时间小于这个值时，就不会再暂停线程，而是自旋。因为这个时间已经很少了，考虑到阻塞线程后上线文切换会消耗时间，就没必要再阻塞了
-static final long spinForTimeoutThreshold = 1000L;
-// 获取到独占锁的线程
-private transient Thread exclusiveOwnerThread;
-
-/**
-    留给子类实现的尝试获取共享锁的方法，共享锁获取，返回AQS里state的剩余值 
-    1：返回值 > 0，代表当前线程获取成功，且state还有剩余值，表示可以继续传播给下一个共享节点线程，让其尝试获取锁 
-    2：返回值 = 0，代表当前线程获取成功，但state值刚好被用完，那么下一个共享节点线程就不应该被唤醒了（因为这时已经获取不到state的剩余值了）
-    3：返回值 &lt; 0，代表当前线程都没获取成功，直接获取失败，阻塞等待被其他线程唤醒后在尝试获取
-*/
-protected int tryAcquireShared(int arg) {
-    throw new UnsupportedOperationException();
-}
-
-// 获取共享锁
-private void doAcquireSharedInterruptibly(int arg)
-    throws InterruptedException {
-    final Node node = addWaiter(Node.SHARED);
-    boolean failed = true;
-    try {
-        for (;;) {
-            final Node p = node.predecessor();
-            if (p == head) { // 首节点的下个节点才有资格获取锁（首节点就是获取到锁的节点）
-                int r = tryAcquireShared(arg);
-                if (r >= 0) { // 至少当前线程获取成功了，但可能state值已经被用完了
-                    // 获取成功，传播给下一个共享Node，根据state的剩余值来判断是否需要唤醒下一个共享Node里的线程
-                    setHeadAndPropagate(node, r);
-                    p.next = null; // help GC
-                    failed = false;
-                    return;
-                }
-            }
-            if (shouldParkAfterFailedAcquire(p, node) &amp;&amp;
-                parkAndCheckInterrupt()) // 不能获取到锁线程就park
-                throw new InterruptedException();
-        }
-    } finally {
-        if (failed)
-            cancelAcquire(node);
-    }
-}
-// 释放共享锁（Semaphore会使用）
-private void doReleaseShared() {
-      // 必要的循环
-      // 1. CAS操作可能失败需要重试
-    // 2. 在设置head的过程中可能有新的节点入队
-    // 3. 传播机制要求必须确保传播状态正确设置
-    for (;;) {
-        Node h = head;
-          // h != tail 检查确保队列中还有后继节点
-        if (h != null &amp;&amp; h != tail) {
-            int ws = h.waitStatus;
-            if (ws == Node.SIGNAL) {
-                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
-                    continue;            // loop to recheck cases
-                unparkSuccessor(h);
-            }
-            else if (ws == 0 &amp;&amp;
-                     !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
-                continue;                // loop on failed CAS
-        }
-        if (h == head)                   // loop if head changed
-            break;
-    }
-}
-
-/*
-    将目标节点（参数node）设为同步队列的尾部（使用CAS来解决并发问题）。
-    所以，在这整个过程中，链表中除首节点外其余节点的prev在任何时刻都不会为空；
-        但除尾节点外其余节点的next字段有可能为空 （刚好走完第②步，还没走到第③步）
-*/
-private Node enq(final Node node) {
-    for (;;) {
-        Node t = tail;
-        if (t == null) { // 初始化同步队列，设置一个空Node为首尾节点
-            if (compareAndSetHead(new Node()))
-                tail = head;
-        } else {
-            node.prev = t; // 先将目标节点的prev设置程原尾节点 ①
-            if (compareAndSetTail(t, node)) { // CAS设置尾节点 ②
-                t.next = node; // 设置成功了，才把原尾节点的next设为目标节点（现尾节点）③
-                return t;
-            }
-        }
-    }
-}
-
-// 唤醒目标节点（参数node）的最近下一个可唤醒节点中的线程
-private void unparkSuccessor(Node node) {
-    int ws = node.waitStatus;
-    if (ws &lt; 0)
-        compareAndSetWaitStatus(node, ws, 0);
-    // 首节点的下个节点唤醒失败时，就从尾节点向前遍历，直到找到距首节点最近的可唤醒的节点
-    // 目的是避免并发时（节点入队列和唤醒），倒数第二个节点（甚至不止）的next字段为空，导致拿不到其实已经入队列里的后续节点
-    Node s = node.next;
-    if (s == null || s.waitStatus > 0) {
-        s = null;
-        for (Node t = tail; t != null &amp;&amp; t != node; t = t.prev)
-            if (t.waitStatus &lt;= 0)
-                s = t;
-    }
-    if (s != null)
-        LockSupport.unpark(s.thread);
-}
-
-// ============内部的Node数据结构=================
-static final class Node {
-    // 共享锁
-    static final Node SHARED = new Node();
-    // 互斥锁
-    static final Node EXCLUSIVE = null;
-    //  取消获取锁
-    static final int CANCELLED =  1;
-
-    static final int SIGNAL    = -1;
-    // 等待condition唤醒（等待队列才会用到这个状态）
-    static final int CONDITION = -2;
-    static final int PROPAGATE = -3;
-        // 当前节点的状态
-    volatile int waitStatus;
-    // 同步队列专用
-    volatile Node prev;
-    // 同步队列专用
-    volatile Node next;
-    // 等待线程
-    volatile Thread thread;
-    // 1. 当前Node为同步队列中的共享节点时：SHARED
-    // 2. 当前Node为同步队列中的独占节点时：null
-    // 3. 当前Node为等待队列中的节点时：下一个等待节点的指针
-    Node nextWaiter;
-        // 判断当前节点是互斥锁，还是共享锁
-    final boolean isShared() {
-        return nextWaiter == SHARED;
-    }
-        // 当前节点的前驱结点
-    final Node predecessor() throws NullPointerException {
-        Node p = prev;
-        if (p == null)
-            throw new NullPointerException();
-        else
-            return p;
-    }
-}
-
-]]></content>
-      <categories>
-        <category>jdk</category>
-      </categories>
-      <tags>
-        <tag>LockSupport</tag>
-        <tag>AQS</tag>
       </tags>
   </entry>
   <entry>
@@ -1277,6 +1142,170 @@ get方法并没有加锁，如果桶已被转移怎么获取到数据？
       </tags>
   </entry>
   <entry>
+    <title>Git</title>
+    <url>/2020/02/07/git/</url>
+    <content><![CDATA[​	Git常用命令总结
+
+
+Git1 git config# git查看配置
+git config --list
+# ================= 全局配置（保存在用户目录下的 ～/.gitconfig 文件中）======================
+# 设置全局用户名和邮箱（在 git commit 时记录为提交者信息））
+git config --global user.name  "reef"
+git config --global user.email "shanzhao.rd@gmail.com"
+# 设置全局代理（socks5 协议，端口号为 7890）
+git config --global http.proxy=socks5://127.0.0.1:7890
+git config --global https.proxy=socks5://127.0.0.1:7890
+
+# ================= 当前仓库单独配置（保存在当前仓库中 .git/config 文件中）======================
+# 设置仓库专属用户名和邮箱（覆盖全局设置）
+git config  user.name  "reef"
+git config  user.email "shanzhao.rd@gmail.com"
+# 设置当前仓库的代理（仅对该仓库生效）
+git config  http.proxy=socks5://127.0.0.1:7890
+git config  https.proxy=socks5://127.0.0.1:7890
+
+2 初始化仓库# 将当前文件夹初始化为一个 Git 本地仓库
+git init
+# 将指定文件夹初始化为一个 Git 本地仓库
+git init &lt;目录路径>
+
+3 本地仓库的操作3.1 查看文件状态# 可以查看分支名（branch）和文件的状态，如已修改（Modified），未跟踪的（untracked）,未修改的不会有提示
+git status
+# 简洁版的git status
+# 红色M 代表文件修改了但未加入暂存区
+# 绿色M 代表文件修改了并且已加入暂存区
+# ?? 代表未跟踪的，
+# A 代表文件已被加入到暂存区
+git status -s
+
+3.2 未暂存的文件添加到暂存区和解暂存# 将文件加入暂存区
+git add 文件名
+# 将暂存区的文件取消暂存
+git reset 文件名
+
+3.3 commit(暂存区文件的提交)# 不带文件名会提交暂存区所有的文件
+git commit -m "提交的日志信息"
+# 提交全部暂存区文件，并打开一个编辑器，让你写入提交日志（'i':插入，'ESC':退出编辑，':wq':保存并退出）
+git commit
+# 该语句可将不是暂存区的文件直接commit，因为-a就代表提交到了暂存区。两步合为一步了
+git commit -a -m "提交的日志信息"
+
+3.4 已commit的文件删除# 会放在暂存区，在commit之后就删除了。如果直接在文件夹中删除，则不会放在暂存区，要将其删除，就必须先add进暂存区，再commit
+git rm 文件名
+
+3.5 将文件添加至忽略列表
+ 自动生成的文件，比如日志文件，class文件就不需要通过git提交，git一般只负责提交源代码。这种情况下，我们可以在工作区中创建一个.gitignore文件（文件名固定，可以在git命令行中用touch .gitignore语句创建）
+
+# 通配符（匹配任意）
+*
+# 取反。比如!hello.class文件，git就不会忽略掉hello.class文件
+!
+# 忽略当前目录下的xxx文件
+/xxx
+# 忽略当前目录下的doc文件夹下的所有
+doc/
+# 忽略当前目录下的doc文件夹里的所有txt文件
+doc/*.txt
+# 忽略当前目录下的doc文件里的所有文件夹里的class文件
+doc/**/*.class
+
+3.6 查看git操作日志# 因为日志太多，不会一次性全部显示，按回车会显示下面的，按Q会退出。
+git log
+
+4. 远程仓库的操作4.1 remote# 可以查看到本地关联的的远程仓库的别名（粗略查看）
+git remote
+# 显示远程仓库地址（详细点）
+git remote -v
+# 可查看更多信息（更详细）
+git remote show 远程仓库的别名
+# 添加(add)远程仓库（一个本地仓库可以添加多个远程仓库）
+git remote add 仓库别名 远程仓库的url
+# 删除本地仓库中配置的某个远程仓库别名及其对应的 URL（该命令不会影响到真正的远程仓库）
+git remote rm 远程仓库的别名
+
+4.2 clone# 克隆远程仓库到此命令行文件夹下面
+git clone 远程仓库的url
+
+4.3 fetch &amp; pull# 从远程仓库获取最新版本带本地仓库，不会合并(merge)。如果省略这两个参数，即别名为origin，分支为matser
+git fetch 仓库别名 远程仓库的branchName
+# 合并到本地仓库
+git merge origin/master
+
+# 从远程仓库获取最新版本带本地仓库，会合并(merge)。如果省略这两个参数，即别名为origin，分支为matser
+git pull 仓库别名 远程仓库的branchName
+# 用于合并本地和远程仓库之间没有共同历史的分支内容。（强制合并）
+git pull 仓库别名 远程仓库的branchName --allow-unrelated-histories
+
+5 Git分支操作# 列出所有本地分支
+git branch
+# 列出所有远程分支
+git branch -r
+# 列出所有本地和远程的分支
+git branch -a
+# 查看所有本地分支，并可查看是否和远程分支建立映射关系
+git branch -v
+# 在本仓库中新建一个分支(在正在使用的分支下创建新的分支，新的分支将会复制正在使用的分支的所有内容进行初始化)
+git branch 新分支名
+# 切换到指定的分支下，前面会有*提示
+git checkout 已存在的分支名
+# 本地仓库分支推送到远程仓库
+git push 仓库别名(shortname) 本地仓库的分支名(branchName)
+# 将指定的分支名的分支文件合并到正在使用的分支里（branchName -> 正在使用的分支）
+git merge 分支名(branchName)
+# 根据分支名删除分支，未push的不能删除
+git branch -d 分支名
+# 根据分支名强力删除分支，未push的也能删除
+git branch -D 分支名
+# 删除远程仓库中的分支
+git push 远程仓库的别名 -d 分支名
+# oldName是当前分支名，newName是想改成的名
+git branch -m oldName newName
+# 本地更新远程仓库分支
+git remote update origin --prune
+# =========分支追踪（名字不同也可以）============
+# 在本地新建分支local-branchName，并和对应的远程分支remote-branchName做映射，最后再checkout并pull
+git checkout -b local-branchName origin/remote-branchName
+# 将本地分支local-branchName分支追踪远程分支origin/remote-branchName（建立映射关系）   
+git branch --set-upstream local-branchName origin/remote-branchName
+# 将当前分支跟踪远程分支origin/remote-branchName   
+git branch -u origin/remote-branchName
+
+6 Git标签操作
+ 标签指的是某个分支的某个特定时间点的状态，记录了截止到当前时间的当前分支的全部内容。根据标签，我们可以很方便的切回到标签标记时的状态
+
+# 创建一个新标签
+git tag 新的标签名
+# 列出所有标签
+git tag
+# 查看tag的信息
+git show 标签名
+# 将指定的标签推送至远程仓库
+git push 仓库别名 标签名
+# 新建一个分支，根据标签名指向指定的标签
+git checkout -b 新的分支名 标签名
+# 删除本地仓库中指定的标签
+git tag -d 标签名
+# 删除远程仓库中指定的标签
+git push origin :refs/tags/标签名
+
+7 SSH（secure shell）认证# 生成 SSH 密钥对的命令（由公钥和私钥组成，常用语SSH的连接和认证）
+ssh-keygen -t rsa
+
+上诉命令会生成两个文件，将公钥放在git远程仓库的ssh key里接可以使用ssh操作远程仓库了
+
+~&#x2F;.ssh&#x2F;id_rsa：私钥，用于客户端身份认证，需保密，放在本地
+~&#x2F;.ssh&#x2F;id_rsa.pub：公钥，可放在远程服务器上
+
+]]></content>
+      <categories>
+        <category>Git</category>
+      </categories>
+      <tags>
+        <tag>Git</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Java源码篇-线程池</title>
     <url>/2020/05/12/java-yuan-ma-pian-xian-cheng-chi/</url>
     <content><![CDATA[​	对jdk的ThreadPoolExecutor和ScheduledThreadPoolExecutor进行了详细的源码分析
@@ -1778,6 +1807,258 @@ static class DelayedWorkQueue extends AbstractQueue&lt;Runnable>
       </tags>
   </entry>
   <entry>
+    <title>Java源码篇-AQS</title>
+    <url>/2020/04/17/java-yuan-ma-pian-aqs/</url>
+    <content><![CDATA[
+​	总结了LockSupport的作用，并从源码分析了AbstractQueuedSynchronizer的实现逻辑
+
+
+Java源码篇-AQS1 LockSupport1.1 总结Java中实现当前线程的阻塞和定时阻塞，并提供唤醒指定线程的工具，在内部使用sun.misc.Unsafe来实现这一系列的操作。在AQS中普遍被使用
+
+阻塞当前线程：通过 park() 方法使当前线程进入等待状态。
+定时阻塞：通过 parkNanos(long nanos) 或 parkUntil(long deadline) 方法使当前线程在指定时间内等待。
+唤醒指定线程：通过 unpark(Thread thread) 方法唤醒指定的处于等待状态的线程。
+
+1.2 核心代码/**
+ * 唤醒指定的线程（如果该线程被park了）
+ * 如果线程先被unpark（解除等待）了，那么该线程下一次调用park(进入等待)则不起作用，也就不会被阻塞
+ */
+public static void unpark(Thread thread) {
+    if (thread != null)
+        UNSAFE.unpark(thread);
+}
+
+/**
+ * 阻塞当前线程，并设置一个blocker（俗称阻塞器，这个只是用来jstack查看，并不能通过notifyAll来唤醒阻塞的线程）
+ * blocker只能用来调试和诊断，并不影响线程的阻塞和唤醒
+ */
+public static void park(Object blocker) {
+    Thread t = Thread.currentThread();
+    setBlocker(t, blocker);
+    UNSAFE.park(false, 0L);
+    setBlocker(t, null);
+}
+
+/**
+ * 定时等待，阻塞当前线程指定的纳秒数，当时间到达时就自动唤醒（定时任务会调用）
+ */
+public static void parkNanos(long nanos) {
+    if (nanos > 0)
+        UNSAFE.park(false, nanos);
+}
+
+/**
+ * 定时等待，阻塞当前线程直到指定的时间戳（deadline）到来就自动唤醒（定时任务会调用）
+ */
+public static void parkUntil(long deadline) {
+    UNSAFE.park(true, deadline);
+}
+
+2 AbstractQueuedSynchronizer
+​		Node是AQS的核心内部类，它是构建同步器的基础数据结构，通过不同的配置可以实现同步队列，也可实现等待队列
+
+2.1 同步队列​		当线程尝试获取锁时，未获取到锁的线程会被构造成一个Node，利用CAS放入同步尾部作为尾节点，等待被唤醒。同步队列关联的是整个锁，一对一的关系。而同步队列中的Node又根据nextWaiter字段判断当前Node是共享节点还是独占节点
+
+Node之间通过prev和next指针构成双向链表
+
+头节点(head)代表当前持有锁的线程
+
+包含waitStatus字段标记节点状态
+
+CANCELLED(1): 线程已取消
+SIGNAL(-1): 后继节点需要唤醒
+CONDITION(-2): 节点在等待队列中
+PROPAGATE(-3): 共享锁需要向后传播
+0: 初始状态
+
+
+使用nextWaiter区分共享&#x2F;互斥模式
+
+共享节点：共享锁的实现（Semaphore、CountDownLatch等）。nextWaiter字段为固定的Node#SHARED。释放当前节点的线程后，还具有向后传播的能力（根据state的值判断是否需要释放后继共享节点里的线程）
+
+互斥节点：互斥锁的实现（ReentrantLock等），nextWaiter字段为Node#EXCLUSIVE（即null），只会释放当前节点里的线程
+
+
+
+
+2.2 等待队列​		当已经获取到锁的线程触发java.util.concurrent.locks.Condition#await()方法阻塞自己，让出锁时。会将当前线程构造成一个Node（等待节点，状态为CONDITION），利用CAS放入等待队列尾部。等待队列关联的是Condition。所以，当ReentrantLock构造多个Condition时，就有多个等待队列，ReentrantLock和等待队列可以为一对多，而Condition和等待队列时一对一。而当其他线程获取当前锁（ReentrantLock）的线程调用java.util.concurrent.locks.Condition#signal等方法时，便会将等待队列的首节点转入到同步队列的尾节点，并重新设置Node的状态
+
+单向链表结构，只使用nextWaiter指针
+
+nextWaiter字段为等待队列中下一个等待节点的指针
+
+当调用signal()时，节点从等待队列转移到同步队列过程中的状态变化如下
+
+CONDITION -&gt; 0
+入队同步队列
+等待获取锁
+
+
+
+2.3 核心代码// 同步队列专属的头尾节点。
+// 因为只有在同步队列里的线程才需要被唤醒。等待队列里的线程如果要被唤醒，需要先加入到同步队列
+private transient volatile Node head;
+private transient volatile Node tail;
+// 核心，可获取到锁的次数
+// - ReentrantLock: 表示重入次数
+// - Semaphore: 表示剩余许可数
+// - CountDownLatch: 表示剩余计数
+private volatile int state;
+// 自旋的阈值（纳秒）。当超时等待时间小于这个值时，就不会再暂停线程，而是自旋。因为这个时间已经很少了，考虑到阻塞线程后上线文切换会消耗时间，就没必要再阻塞了
+static final long spinForTimeoutThreshold = 1000L;
+// 获取到独占锁的线程
+private transient Thread exclusiveOwnerThread;
+
+/**
+    留给子类实现的尝试获取共享锁的方法，共享锁获取，返回AQS里state的剩余值 
+    1：返回值 > 0，代表当前线程获取成功，且state还有剩余值，表示可以继续传播给下一个共享节点线程，让其尝试获取锁 
+    2：返回值 = 0，代表当前线程获取成功，但state值刚好被用完，那么下一个共享节点线程就不应该被唤醒了（因为这时已经获取不到state的剩余值了）
+    3：返回值 &lt; 0，代表当前线程都没获取成功，直接获取失败，阻塞等待被其他线程唤醒后在尝试获取
+*/
+protected int tryAcquireShared(int arg) {
+    throw new UnsupportedOperationException();
+}
+
+// 获取共享锁
+private void doAcquireSharedInterruptibly(int arg)
+    throws InterruptedException {
+    final Node node = addWaiter(Node.SHARED);
+    boolean failed = true;
+    try {
+        for (;;) {
+            final Node p = node.predecessor();
+            if (p == head) { // 首节点的下个节点才有资格获取锁（首节点就是获取到锁的节点）
+                int r = tryAcquireShared(arg);
+                if (r >= 0) { // 至少当前线程获取成功了，但可能state值已经被用完了
+                    // 获取成功，传播给下一个共享Node，根据state的剩余值来判断是否需要唤醒下一个共享Node里的线程
+                    setHeadAndPropagate(node, r);
+                    p.next = null; // help GC
+                    failed = false;
+                    return;
+                }
+            }
+            if (shouldParkAfterFailedAcquire(p, node) &amp;&amp;
+                parkAndCheckInterrupt()) // 不能获取到锁线程就park
+                throw new InterruptedException();
+        }
+    } finally {
+        if (failed)
+            cancelAcquire(node);
+    }
+}
+// 释放共享锁（Semaphore会使用）
+private void doReleaseShared() {
+      // 必要的循环
+      // 1. CAS操作可能失败需要重试
+    // 2. 在设置head的过程中可能有新的节点入队
+    // 3. 传播机制要求必须确保传播状态正确设置
+    for (;;) {
+        Node h = head;
+          // h != tail 检查确保队列中还有后继节点
+        if (h != null &amp;&amp; h != tail) {
+            int ws = h.waitStatus;
+            if (ws == Node.SIGNAL) {
+                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
+                    continue;            // loop to recheck cases
+                unparkSuccessor(h);
+            }
+            else if (ws == 0 &amp;&amp;
+                     !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
+                continue;                // loop on failed CAS
+        }
+        if (h == head)                   // loop if head changed
+            break;
+    }
+}
+
+/*
+    将目标节点（参数node）设为同步队列的尾部（使用CAS来解决并发问题）。
+    所以，在这整个过程中，链表中除首节点外其余节点的prev在任何时刻都不会为空；
+        但除尾节点外其余节点的next字段有可能为空 （刚好走完第②步，还没走到第③步）
+*/
+private Node enq(final Node node) {
+    for (;;) {
+        Node t = tail;
+        if (t == null) { // 初始化同步队列，设置一个空Node为首尾节点
+            if (compareAndSetHead(new Node()))
+                tail = head;
+        } else {
+            node.prev = t; // 先将目标节点的prev设置程原尾节点 ①
+            if (compareAndSetTail(t, node)) { // CAS设置尾节点 ②
+                t.next = node; // 设置成功了，才把原尾节点的next设为目标节点（现尾节点）③
+                return t;
+            }
+        }
+    }
+}
+
+// 唤醒目标节点（参数node）的最近下一个可唤醒节点中的线程
+private void unparkSuccessor(Node node) {
+    int ws = node.waitStatus;
+    if (ws &lt; 0)
+        compareAndSetWaitStatus(node, ws, 0);
+    // 首节点的下个节点唤醒失败时，就从尾节点向前遍历，直到找到距首节点最近的可唤醒的节点
+    // 目的是避免并发时（节点入队列和唤醒），倒数第二个节点（甚至不止）的next字段为空，导致拿不到其实已经入队列里的后续节点
+    Node s = node.next;
+    if (s == null || s.waitStatus > 0) {
+        s = null;
+        for (Node t = tail; t != null &amp;&amp; t != node; t = t.prev)
+            if (t.waitStatus &lt;= 0)
+                s = t;
+    }
+    if (s != null)
+        LockSupport.unpark(s.thread);
+}
+
+// ============内部的Node数据结构=================
+static final class Node {
+    // 共享锁
+    static final Node SHARED = new Node();
+    // 互斥锁
+    static final Node EXCLUSIVE = null;
+    //  取消获取锁
+    static final int CANCELLED =  1;
+
+    static final int SIGNAL    = -1;
+    // 等待condition唤醒（等待队列才会用到这个状态）
+    static final int CONDITION = -2;
+    static final int PROPAGATE = -3;
+        // 当前节点的状态
+    volatile int waitStatus;
+    // 同步队列专用
+    volatile Node prev;
+    // 同步队列专用
+    volatile Node next;
+    // 等待线程
+    volatile Thread thread;
+    // 1. 当前Node为同步队列中的共享节点时：SHARED
+    // 2. 当前Node为同步队列中的独占节点时：null
+    // 3. 当前Node为等待队列中的节点时：下一个等待节点的指针
+    Node nextWaiter;
+        // 判断当前节点是互斥锁，还是共享锁
+    final boolean isShared() {
+        return nextWaiter == SHARED;
+    }
+        // 当前节点的前驱结点
+    final Node predecessor() throws NullPointerException {
+        Node p = prev;
+        if (p == null)
+            throw new NullPointerException();
+        else
+            return p;
+    }
+}
+
+]]></content>
+      <categories>
+        <category>jdk</category>
+      </categories>
+      <tags>
+        <tag>LockSupport</tag>
+        <tag>AQS</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Java源码篇-锁</title>
     <url>/2020/04/18/java-yuan-ma-pian-suo/</url>
     <content><![CDATA[​	jdk中AQS实现类相关源码解析。包括 ReentrantLock，Condition，CountDownLatch，Semaphore，ReentrantReadWriteLock
@@ -2082,6 +2363,10 @@ static int exclusiveCount(int c) { return c &amp; EXCLUSIVE_MASK; }
 }
 
 
+ThreadLocal 被强引用持有，不会被回收
+
+
+ThreadLocal只被弱引用持有，gc后被回收了
 
 ​	如上面的代码，当构造一个A对象时，内部的local对象也构造了，之后调用get和set方法对local对象取值和设置值，当A对象不可达时，垃圾收集器就会回收A。
 ​	现在我们假设ThreadLocalMap的Entey里的key（ThreadLocal对象）不是弱引用的，且已经调用了A的对象的get或set方法，那么垃圾收集器回收A对象时，一定不会回收里面的local对象，为什么？
