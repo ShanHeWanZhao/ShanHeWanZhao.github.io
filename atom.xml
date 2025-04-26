@@ -37,6 +37,26 @@
   </entry>
   
   <entry>
+    <title>Spring-容器初始化</title>
+    <link href="https://blog.shanzhao.site/2021/01/08/spring-rong-qi-chu-shi-hua/"/>
+    <id>https://blog.shanzhao.site/2021/01/08/spring-rong-qi-chu-shi-hua/</id>
+    <published>2021-01-08T12:40:58.000Z</published>
+    <updated>2021-01-15T07:40:33.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	整体分析了BeanFactory和ApplicationContext的区别。并从Spring Bean创建流程源码分析了bean的创建流程并对其进行总结，并分析了三级缓存的作用&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="spring" scheme="https://blog.shanzhao.site/categories/spring/"/>
+    
+    
+    <category term="Java" scheme="https://blog.shanzhao.site/tags/Java/"/>
+    
+  </entry>
+  
+  <entry>
     <title>JVM参数</title>
     <link href="https://blog.shanzhao.site/2020/12/18/jvm-can-shu/"/>
     <id>https://blog.shanzhao.site/2020/12/18/jvm-can-shu/</id>
