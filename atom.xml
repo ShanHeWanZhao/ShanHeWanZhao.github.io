@@ -37,9 +37,47 @@
   </entry>
   
   <entry>
-    <title>Spring-容器初始化</title>
-    <link href="https://blog.shanzhao.site/2021/01/08/spring-rong-qi-chu-shi-hua/"/>
-    <id>https://blog.shanzhao.site/2021/01/08/spring-rong-qi-chu-shi-hua/</id>
+    <title>Spring-@Resource和@Autowired的分析</title>
+    <link href="https://blog.shanzhao.site/2021/01/18/spring-resource-he-autowired-de-fen-xi/"/>
+    <id>https://blog.shanzhao.site/2021/01/18/spring-resource-he-autowired-de-fen-xi/</id>
+    <published>2021-01-18T12:22:04.000Z</published>
+    <updated>2021-01-18T12:22:04.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	从源码分析了@Resource和@Autowired的依赖创建流程和这两个注解的的异同&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>Spring-Bean的字段填充阶段处理</title>
+    <link href="https://blog.shanzhao.site/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/"/>
+    <id>https://blog.shanzhao.site/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</id>
+    <published>2021-01-14T04:33:58.000Z</published>
+    <updated>2021-01-14T04:33:58.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="spring" scheme="https://blog.shanzhao.site/categories/spring/"/>
+    
+    
+    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Spring-Bean初始化</title>
+    <link href="https://blog.shanzhao.site/2021/01/08/spring-bean-de-chu-shi-hua/"/>
+    <id>https://blog.shanzhao.site/2021/01/08/spring-bean-de-chu-shi-hua/</id>
     <published>2021-01-08T12:40:58.000Z</published>
     <updated>2021-01-15T07:40:33.000Z</updated>
     
@@ -52,7 +90,7 @@
     <category term="spring" scheme="https://blog.shanzhao.site/categories/spring/"/>
     
     
-    <category term="Java" scheme="https://blog.shanzhao.site/tags/Java/"/>
+    <category term="spring三级缓存" scheme="https://blog.shanzhao.site/tags/spring%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98/"/>
     
   </entry>
   
