@@ -105,6 +105,319 @@ CMS 是一种低停顿老年代收集器，适合延迟敏感型系统。
       </tags>
   </entry>
   <entry>
+    <title>CloudFlare-CDN缓存清除</title>
+    <url>/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/</url>
+    <content><![CDATA[
+​	给出了一些api用于清除Cloudflare的CDN缓存方式
+ 
+
+CloudFlare-CDN缓存清除​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
+1 purgeUrl
+2 使用ApiKey清除（不推荐）
+ZONE_ID：区域id，即你在CF上托管的根域名id
+EMAIL：你的邮箱
+API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
+
+2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{"purge_everything": true}'
+
+2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
+
+3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
+
+3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+     -H "Authorization: Bearer $API_TOKEN" \
+     -H "Content-Type:application/json"
+
+3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{"purge_everything": true}'
+
+3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
+
+4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
+5 参考链接
+官方清除缓存文档
+cloudflare dashboard创建token和查看ApiKey
+ZoneId获取
+
+]]></content>
+      <categories>
+        <category>cloudflare</category>
+      </categories>
+      <tags>
+        <tag>cdn缓存清除</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Git</title>
+    <url>/2020/02/07/git/</url>
+    <content><![CDATA[​	Git常用命令总结
+
+
+Git1 git config# git查看配置
+git config --list
+# ================= 全局配置（保存在用户目录下的 ～/.gitconfig 文件中）======================
+# 设置全局用户名和邮箱（在 git commit 时记录为提交者信息））
+git config --global user.name  "reef"
+git config --global user.email "shanzhao.rd@gmail.com"
+# 设置全局代理（socks5 协议，端口号为 7890）
+git config --global http.proxy=socks5://127.0.0.1:7890
+git config --global https.proxy=socks5://127.0.0.1:7890
+
+# ================= 当前仓库单独配置（保存在当前仓库中 .git/config 文件中）======================
+# 设置仓库专属用户名和邮箱（覆盖全局设置）
+git config  user.name  "reef"
+git config  user.email "shanzhao.rd@gmail.com"
+# 设置当前仓库的代理（仅对该仓库生效）
+git config  http.proxy=socks5://127.0.0.1:7890
+git config  https.proxy=socks5://127.0.0.1:7890
+
+2 初始化仓库# 将当前文件夹初始化为一个 Git 本地仓库
+git init
+# 将指定文件夹初始化为一个 Git 本地仓库
+git init &lt;目录路径>
+
+3 本地仓库的操作3.1 查看文件状态# 可以查看分支名（branch）和文件的状态，如已修改（Modified），未跟踪的（untracked）,未修改的不会有提示
+git status
+# 简洁版的git status
+# 红色M 代表文件修改了但未加入暂存区
+# 绿色M 代表文件修改了并且已加入暂存区
+# ?? 代表未跟踪的，
+# A 代表文件已被加入到暂存区
+git status -s
+
+3.2 未暂存的文件添加到暂存区和解暂存# 将文件加入暂存区
+git add 文件名
+# 将暂存区的文件取消暂存
+git reset 文件名
+
+3.3 commit(暂存区文件的提交)# 不带文件名会提交暂存区所有的文件
+git commit -m "提交的日志信息"
+# 提交全部暂存区文件，并打开一个编辑器，让你写入提交日志（'i':插入，'ESC':退出编辑，':wq':保存并退出）
+git commit
+# 该语句可将不是暂存区的文件直接commit，因为-a就代表提交到了暂存区。两步合为一步了
+git commit -a -m "提交的日志信息"
+
+3.4 已commit的文件删除# 会放在暂存区，在commit之后就删除了。如果直接在文件夹中删除，则不会放在暂存区，要将其删除，就必须先add进暂存区，再commit
+git rm 文件名
+
+3.5 将文件添加至忽略列表
+ 自动生成的文件，比如日志文件，class文件就不需要通过git提交，git一般只负责提交源代码。这种情况下，我们可以在工作区中创建一个.gitignore文件（文件名固定，可以在git命令行中用touch .gitignore语句创建）
+
+# 通配符（匹配任意）
+*
+# 取反。比如!hello.class文件，git就不会忽略掉hello.class文件
+!
+# 忽略当前目录下的xxx文件
+/xxx
+# 忽略当前目录下的doc文件夹下的所有
+doc/
+# 忽略当前目录下的doc文件夹里的所有txt文件
+doc/*.txt
+# 忽略当前目录下的doc文件里的所有文件夹里的class文件
+doc/**/*.class
+
+3.6 查看git操作日志# 因为日志太多，不会一次性全部显示，按回车会显示下面的，按Q会退出。
+git log
+
+4. 远程仓库的操作4.1 remote# 可以查看到本地关联的的远程仓库的别名（粗略查看）
+git remote
+# 显示远程仓库地址（详细点）
+git remote -v
+# 可查看更多信息（更详细）
+git remote show 远程仓库的别名
+# 添加(add)远程仓库（一个本地仓库可以添加多个远程仓库）
+git remote add 仓库别名 远程仓库的url
+# 删除本地仓库中配置的某个远程仓库别名及其对应的 URL（该命令不会影响到真正的远程仓库）
+git remote rm 远程仓库的别名
+
+4.2 clone# 克隆远程仓库到此命令行文件夹下面
+git clone 远程仓库的url
+
+4.3 fetch &amp; pull# 从远程仓库获取最新版本带本地仓库，不会合并(merge)。如果省略这两个参数，即别名为origin，分支为matser
+git fetch 仓库别名 远程仓库的branchName
+# 合并到本地仓库
+git merge origin/master
+
+# 从远程仓库获取最新版本带本地仓库，会合并(merge)。如果省略这两个参数，即别名为origin，分支为matser
+git pull 仓库别名 远程仓库的branchName
+# 用于合并本地和远程仓库之间没有共同历史的分支内容。（强制合并）
+git pull 仓库别名 远程仓库的branchName --allow-unrelated-histories
+
+5 Git分支操作# 列出所有本地分支
+git branch
+# 列出所有远程分支
+git branch -r
+# 列出所有本地和远程的分支
+git branch -a
+# 查看所有本地分支，并可查看是否和远程分支建立映射关系
+git branch -v
+# 在本仓库中新建一个分支(在正在使用的分支下创建新的分支，新的分支将会复制正在使用的分支的所有内容进行初始化)
+git branch 新分支名
+# 切换到指定的分支下，前面会有*提示
+git checkout 已存在的分支名
+# 本地仓库分支推送到远程仓库
+git push 仓库别名(shortname) 本地仓库的分支名(branchName)
+# 将指定的分支名的分支文件合并到正在使用的分支里（branchName -> 正在使用的分支）
+git merge 分支名(branchName)
+# 根据分支名删除分支，未push的不能删除
+git branch -d 分支名
+# 根据分支名强力删除分支，未push的也能删除
+git branch -D 分支名
+# 删除远程仓库中的分支
+git push 远程仓库的别名 -d 分支名
+# oldName是当前分支名，newName是想改成的名
+git branch -m oldName newName
+# 本地更新远程仓库分支
+git remote update origin --prune
+# =========分支追踪（名字不同也可以）============
+# 在本地新建分支local-branchName，并和对应的远程分支remote-branchName做映射，最后再checkout并pull
+git checkout -b local-branchName origin/remote-branchName
+# 将本地分支local-branchName分支追踪远程分支origin/remote-branchName（建立映射关系）   
+git branch --set-upstream local-branchName origin/remote-branchName
+# 将当前分支跟踪远程分支origin/remote-branchName   
+git branch -u origin/remote-branchName
+
+6 Git标签操作
+ 标签指的是某个分支的某个特定时间点的状态，记录了截止到当前时间的当前分支的全部内容。根据标签，我们可以很方便的切回到标签标记时的状态
+
+# 创建一个新标签
+git tag 新的标签名
+# 列出所有标签
+git tag
+# 查看tag的信息
+git show 标签名
+# 将指定的标签推送至远程仓库
+git push 仓库别名 标签名
+# 新建一个分支，根据标签名指向指定的标签
+git checkout -b 新的分支名 标签名
+# 删除本地仓库中指定的标签
+git tag -d 标签名
+# 删除远程仓库中指定的标签
+git push origin :refs/tags/标签名
+
+7 SSH（secure shell）认证# 生成 SSH 密钥对的命令（由公钥和私钥组成，常用语SSH的连接和认证）
+ssh-keygen -t rsa
+
+上诉命令会生成两个文件，将公钥放在git远程仓库的ssh key里接可以使用ssh操作远程仓库了
+
+~&#x2F;.ssh&#x2F;id_rsa：私钥，用于客户端身份认证，需保密，放在本地
+~&#x2F;.ssh&#x2F;id_rsa.pub：公钥，可放在远程服务器上
+
+]]></content>
+      <categories>
+        <category>Git</category>
+      </categories>
+      <tags>
+        <tag>Git</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>JVM参数</title>
+    <url>/2020/12/18/jvm-can-shu/</url>
+    <content><![CDATA[JVM常用参数整理和垃圾收集器组合
+ 
+
+JVM参数和垃圾收集器组合jvm参数整理
+-Xms64m ：初始堆大小
+-Xmx128m ：最大堆大小
+-Xmn32m ：年轻代大小
+-XX:MaxNewSize&#x3D;256m : 最大新生代大小
+-Xss512k：栈大小
+-XX:MetaspaceSize&#x3D;256M ：Metaspace扩容时触发FullGC的初始化阈值(并不是元空间的初始化大小，元空间是不断扩容的，当达到这个值时，就会触发full gc，链接）
+-XX:MaxMetaspaceSize&#x3D;512M：Metaspace最大大小
+-XX:NewRatio&#x3D;2：老年代和新生代的比例
+-XX:SurvivorRatio&#x3D;8 ：Eden区与一个Survivor区的大小比值（所以s0:s1:eden&#x3D;1:1:8）
+-XX:MinHeapFreeRatio&#x3D;40：空闲堆空间的最小百分比。如果空闲堆空间的比例小于它，则会进行堆扩容
+-XX:MaxHeapFreeRatio&#x3D;70：空闲堆空间的最大百分比。如果空闲堆空间的比例大于它，则会进行堆缩容
+-XX:-DisableExplicitGC：禁止显式GC，即禁止程序中System.gc()。个人感觉没必要
+-XX:+HeapDumpOnOutOfMemoryError：OOM时导出堆快照到文件
+-XX:HeapDumpPath&#x3D;&#x2F;home&#x2F;huskie&#x2F;gc&#x2F;oom.hprof：OOM时导出文件路径
+-Xloggc:&#x2F;home&#x2F;ruidong&#x2F;gc.log   存储gc日志的路径
+-XX:OnOutOfMemoryError：OOM时操作，比如如执行脚本发送邮件
+-XX:+TraceClassLoading：打印加载类的详细信息
+-XX:+PrintGCDetails：打印GC详细信息
+-XX:+PrintGCTimeStamps：打印CG发生的时间戳（相对于项目启动时间）
+-XX:+PrintGCDateStamps：打印GC发生的时间
+-XX:+PrintHeapAtGC：每一次GC前和GC后，都打印堆信息
+-XX:+PrintClassHistogram：按下Ctrl+Break后，打印类的信息
+-XX:+PrintGCApplicationConcurrentTime ：打印应用程序的运行时间（许多事情会导致JVM暂停所有线程，停在安全点。gc也只是其中的一种，当暂停之后在重启应用线程，则会刷新这个时间（归0），在重新计数）链接
+-XX:+PrintGCApplicationStoppedTime ：打印应用线程暂停的时间，显示应用线程被暂停了多久和应用线程暂停到安全点花费的时间
+-XX:TargetSurvivorRatio&#x3D;50 ：survivor空间的晋升大小空间百分比（默认为50）
+-XX:MaxTenuringThreshold&#x3D;15  ：年轻代晋升到老年代的最大年龄阈值(tenuring threshold)。默认值为 15[每次GC，增加1岁，到15岁如果还要存活，放入Old区]。jvm还会动态的计算晋升阈值，方法：依次从年龄为1的对象大小加起来，一直加到大小超过了 [（TargetSurvivorRatio * survivor_capacity）&#x2F; 100 ]值，这时加起来的最大年龄大小即为这次晋升的临界阈值（具体算法在：hotspot\src\share\vm\gc_implementation\shared\ageTable.cpp文件里，方法为compute_tenuring_threshold）
+-XX:+PrintTenuringDistribution ：ygc 时打印当前晋升年龄信息
+
+垃圾收集器新生代Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）单线程新生代收集器，复制算法，整个过程STW
+优势：内存消耗最小
+缺点：不适合大内存多处理器工作，慢
+ParNew多线程并行的新生代收集器，复制算法，整个过程STW
+
+-XX:ParallelGCThreads&#x3D;4 ：并行收集的线程数
+
+Parallel Scavenge
+吞吐量 &#x3D; 运行用户代码时间 &#x2F; ( 运行用户代码时间 + 垃圾收集时间 )
+
+吞吐量优先的新生代并行多线程收集器，复制算法（标记-复制算法）
+三个重要参数：
+
+XX:MaxGCPauseMillis ：垃圾收集最大停顿时间，大于0的毫秒数
+-XX:GCTimeRatio: 大于0小于100的整数（运行用户代码时间比上垃圾回收的时间），默认为99，即允许最大1%的垃圾回收时间
+-XX:+UseAdaptiveSizePolicy：开启垃圾收集器的自适应调节策略。虚拟机动态调整新生代，Eden区，Survivor区的比例和晋升大小
+
+老年代CMS标记-清除算法的老年代收集器
+Serial OldSerial的老年代会收集，标记-整理算法
+Parallel Scavenge OldParallel Scavenge收集器的老年代版本，标记-整理算法
+整堆G1（garbage-frist收集器）垃圾收集器组合
+Serial + SerialOld
+Serial + CMS (jdk8声明废弃，jdk9已被取消)
+ParNew +CMS （使用CMS收集器的默认组合)
+ParNew + SerialOld (jdk8声明废弃，jdk9已被取消)
+Parallel Scavenge +  SerialOld
+Parallel Scavenge + Parallel Scavenge Old（jdk8的默认组合）G1（jdk9的默认收集器，且CMS被标记为废弃了）
+
+tips
+java -XX:+PrintFlagsFinal -version  ：查看jvm默认参数。数据太多可配合grep使用
+
+GCRoots对象
+虚拟机栈(栈帧中的本地变量表)中引用的对象
+本地方法栈(Native 方法)中引用的对象
+方法区中类静态属性引用的对象
+方法区中常量引用的对象
+所有被同步锁持有的对象
+
+]]></content>
+      <categories>
+        <category>jvm</category>
+      </categories>
+      <tags>
+        <tag>JVM参数</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>G1</title>
     <url>/2020/11/25/g1/</url>
     <content><![CDATA[
@@ -201,152 +514,255 @@ G1 不再物理区分年轻代和老年代，转而统一使用多个 Region 管
       </tags>
   </entry>
   <entry>
-    <title>JVM参数</title>
-    <url>/2020/12/18/jvm-can-shu/</url>
-    <content><![CDATA[JVM常用参数整理和垃圾收集器组合
- 
-
-JVM参数和垃圾收集器组合jvm参数整理
--Xms64m ：初始堆大小
--Xmx128m ：最大堆大小
--Xmn32m ：年轻代大小
--XX:MaxNewSize&#x3D;256m : 最大新生代大小
--Xss512k：栈大小
--XX:MetaspaceSize&#x3D;256M ：Metaspace扩容时触发FullGC的初始化阈值(并不是元空间的初始化大小，元空间是不断扩容的，当达到这个值时，就会触发full gc，链接）
--XX:MaxMetaspaceSize&#x3D;512M：Metaspace最大大小
--XX:NewRatio&#x3D;2：老年代和新生代的比例
--XX:SurvivorRatio&#x3D;8 ：Eden区与一个Survivor区的大小比值（所以s0:s1:eden&#x3D;1:1:8）
--XX:MinHeapFreeRatio&#x3D;40：空闲堆空间的最小百分比。如果空闲堆空间的比例小于它，则会进行堆扩容
--XX:MaxHeapFreeRatio&#x3D;70：空闲堆空间的最大百分比。如果空闲堆空间的比例大于它，则会进行堆缩容
--XX:-DisableExplicitGC：禁止显式GC，即禁止程序中System.gc()。个人感觉没必要
--XX:+HeapDumpOnOutOfMemoryError：OOM时导出堆快照到文件
--XX:HeapDumpPath&#x3D;&#x2F;home&#x2F;huskie&#x2F;gc&#x2F;oom.hprof：OOM时导出文件路径
--Xloggc:&#x2F;home&#x2F;ruidong&#x2F;gc.log   存储gc日志的路径
--XX:OnOutOfMemoryError：OOM时操作，比如如执行脚本发送邮件
--XX:+TraceClassLoading：打印加载类的详细信息
--XX:+PrintGCDetails：打印GC详细信息
--XX:+PrintGCTimeStamps：打印CG发生的时间戳（相对于项目启动时间）
--XX:+PrintGCDateStamps：打印GC发生的时间
--XX:+PrintHeapAtGC：每一次GC前和GC后，都打印堆信息
--XX:+PrintClassHistogram：按下Ctrl+Break后，打印类的信息
--XX:+PrintGCApplicationConcurrentTime ：打印应用程序的运行时间（许多事情会导致JVM暂停所有线程，停在安全点。gc也只是其中的一种，当暂停之后在重启应用线程，则会刷新这个时间（归0），在重新计数）链接
--XX:+PrintGCApplicationStoppedTime ：打印应用线程暂停的时间，显示应用线程被暂停了多久和应用线程暂停到安全点花费的时间
--XX:TargetSurvivorRatio&#x3D;50 ：survivor空间的晋升大小空间百分比（默认为50）
--XX:MaxTenuringThreshold&#x3D;15  ：年轻代晋升到老年代的最大年龄阈值(tenuring threshold)。默认值为 15[每次GC，增加1岁，到15岁如果还要存活，放入Old区]。jvm还会动态的计算晋升阈值，方法：依次从年龄为1的对象大小加起来，一直加到大小超过了 [（TargetSurvivorRatio * survivor_capacity）&#x2F; 100 ]值，这时加起来的最大年龄大小即为这次晋升的临界阈值（具体算法在：hotspot\src\share\vm\gc_implementation\shared\ageTable.cpp文件里，方法为compute_tenuring_threshold）
--XX:+PrintTenuringDistribution ：ygc 时打印当前晋升年龄信息
-
-垃圾收集器新生代Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）单线程新生代收集器，复制算法，整个过程STW
-优势：内存消耗最小
-缺点：不适合大内存多处理器工作，慢
-ParNew多线程并行的新生代收集器，复制算法，整个过程STW
-
--XX:ParallelGCThreads&#x3D;4 ：并行收集的线程数
-
-Parallel Scavenge
-吞吐量 &#x3D; 运行用户代码时间 &#x2F; ( 运行用户代码时间 + 垃圾收集时间 )
-
-吞吐量优先的新生代并行多线程收集器，复制算法（标记-复制算法）
-三个重要参数：
-
-XX:MaxGCPauseMillis ：垃圾收集最大停顿时间，大于0的毫秒数
--XX:GCTimeRatio: 大于0小于100的整数（运行用户代码时间比上垃圾回收的时间），默认为99，即允许最大1%的垃圾回收时间
--XX:+UseAdaptiveSizePolicy：开启垃圾收集器的自适应调节策略。虚拟机动态调整新生代，Eden区，Survivor区的比例和晋升大小
-
-老年代CMS标记-清除算法的老年代收集器
-Serial OldSerial的老年代会收集，标记-整理算法
-Parallel Scavenge OldParallel Scavenge收集器的老年代版本，标记-整理算法
-整堆G1（garbage-frist收集器）垃圾收集器组合
-Serial + SerialOld
-Serial + CMS (jdk8声明废弃，jdk9已被取消)
-ParNew +CMS （使用CMS收集器的默认组合)
-ParNew + SerialOld (jdk8声明废弃，jdk9已被取消)
-Parallel Scavenge +  SerialOld
-Parallel Scavenge + Parallel Scavenge Old（jdk8的默认组合）G1（jdk9的默认收集器，且CMS被标记为废弃了）
-
-tips
-java -XX:+PrintFlagsFinal -version  ：查看jvm默认参数。数据太多可配合grep使用
-
-GCRoots对象
-虚拟机栈(栈帧中的本地变量表)中引用的对象
-本地方法栈(Native 方法)中引用的对象
-方法区中类静态属性引用的对象
-方法区中常量引用的对象
-所有被同步锁持有的对象
-
-]]></content>
-      <categories>
-        <category>jvm</category>
-      </categories>
-      <tags>
-        <tag>JVM参数</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>CloudFlare-CDN缓存清除</title>
-    <url>/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/</url>
+    <title>Java源码篇-AQS</title>
+    <url>/2020/04/17/java-yuan-ma-pian-aqs/</url>
     <content><![CDATA[
-​	给出了一些api用于清除Cloudflare的CDN缓存方式
- 
+​	总结了LockSupport的作用，并从源码分析了AbstractQueuedSynchronizer的实现逻辑
 
-CloudFlare-CDN缓存清除​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
-1 purgeUrl
-2 使用ApiKey清除（不推荐）
-ZONE_ID：区域id，即你在CF上托管的根域名id
-EMAIL：你的邮箱
-API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
 
-2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{"purge_everything": true}'
+Java源码篇-AQS1 LockSupport1.1 总结Java中实现当前线程的阻塞和定时阻塞，并提供唤醒指定线程的工具，在内部使用sun.misc.Unsafe来实现这一系列的操作。在AQS中普遍被使用
 
-2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
+阻塞当前线程：通过 park() 方法使当前线程进入等待状态。
+定时阻塞：通过 parkNanos(long nanos) 或 parkUntil(long deadline) 方法使当前线程在指定时间内等待。
+唤醒指定线程：通过 unpark(Thread thread) 方法唤醒指定的处于等待状态的线程。
 
-3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
+1.2 核心代码/**
+ * 唤醒指定的线程（如果该线程被park了）
+ * 如果线程先被unpark（解除等待）了，那么该线程下一次调用park(进入等待)则不起作用，也就不会被阻塞
+ */
+public static void unpark(Thread thread) {
+    if (thread != null)
+        UNSAFE.unpark(thread);
+}
 
-3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
-     -H "Authorization: Bearer $API_TOKEN" \
-     -H "Content-Type:application/json"
+/**
+ * 阻塞当前线程，并设置一个blocker（俗称阻塞器，这个只是用来jstack查看，并不能通过notifyAll来唤醒阻塞的线程）
+ * blocker只能用来调试和诊断，并不影响线程的阻塞和唤醒
+ */
+public static void park(Object blocker) {
+    Thread t = Thread.currentThread();
+    setBlocker(t, blocker);
+    UNSAFE.park(false, 0L);
+    setBlocker(t, null);
+}
 
-3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{"purge_everything": true}'
+/**
+ * 定时等待，阻塞当前线程指定的纳秒数，当时间到达时就自动唤醒（定时任务会调用）
+ */
+public static void parkNanos(long nanos) {
+    if (nanos > 0)
+        UNSAFE.park(false, nanos);
+}
 
-3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
+/**
+ * 定时等待，阻塞当前线程直到指定的时间戳（deadline）到来就自动唤醒（定时任务会调用）
+ */
+public static void parkUntil(long deadline) {
+    UNSAFE.park(true, deadline);
+}
 
-4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
-5 参考链接
-官方清除缓存文档
-cloudflare dashboard创建token和查看ApiKey
-ZoneId获取
+2 AbstractQueuedSynchronizer
+​		Node是AQS的核心内部类，它是构建同步器的基础数据结构，通过不同的配置可以实现同步队列，也可实现等待队列
+
+2.1 同步队列​		当线程尝试获取锁时，未获取到锁的线程会被构造成一个Node，利用CAS放入同步尾部作为尾节点，等待被唤醒。同步队列关联的是整个锁，一对一的关系。而同步队列中的Node又根据nextWaiter字段判断当前Node是共享节点还是独占节点
+
+Node之间通过prev和next指针构成双向链表
+
+头节点(head)代表当前持有锁的线程
+
+包含waitStatus字段标记节点状态
+
+CANCELLED(1): 线程已取消
+SIGNAL(-1): 后继节点需要唤醒
+CONDITION(-2): 节点在等待队列中
+PROPAGATE(-3): 共享锁需要向后传播
+0: 初始状态
+
+
+使用nextWaiter区分共享&#x2F;互斥模式
+
+共享节点：共享锁的实现（Semaphore、CountDownLatch等）。nextWaiter字段为固定的Node#SHARED。释放当前节点的线程后，还具有向后传播的能力（根据state的值判断是否需要释放后继共享节点里的线程）
+
+互斥节点：互斥锁的实现（ReentrantLock等），nextWaiter字段为Node#EXCLUSIVE（即null），只会释放当前节点里的线程
+
+
+
+
+2.2 等待队列​		当已经获取到锁的线程触发java.util.concurrent.locks.Condition#await()方法阻塞自己，让出锁时。会将当前线程构造成一个Node（等待节点，状态为CONDITION），利用CAS放入等待队列尾部。等待队列关联的是Condition。所以，当ReentrantLock构造多个Condition时，就有多个等待队列，ReentrantLock和等待队列可以为一对多，而Condition和等待队列时一对一。而当其他线程获取当前锁（ReentrantLock）的线程调用java.util.concurrent.locks.Condition#signal等方法时，便会将等待队列的首节点转入到同步队列的尾节点，并重新设置Node的状态
+
+单向链表结构，只使用nextWaiter指针
+
+nextWaiter字段为等待队列中下一个等待节点的指针
+
+当调用signal()时，节点从等待队列转移到同步队列过程中的状态变化如下
+
+CONDITION -&gt; 0
+入队同步队列
+等待获取锁
+
+
+
+2.3 核心代码// 同步队列专属的头尾节点。
+// 因为只有在同步队列里的线程才需要被唤醒。等待队列里的线程如果要被唤醒，需要先加入到同步队列
+private transient volatile Node head;
+private transient volatile Node tail;
+// 核心，可获取到锁的次数
+// - ReentrantLock: 表示重入次数
+// - Semaphore: 表示剩余许可数
+// - CountDownLatch: 表示剩余计数
+private volatile int state;
+// 自旋的阈值（纳秒）。当超时等待时间小于这个值时，就不会再暂停线程，而是自旋。因为这个时间已经很少了，考虑到阻塞线程后上线文切换会消耗时间，就没必要再阻塞了
+static final long spinForTimeoutThreshold = 1000L;
+// 获取到独占锁的线程
+private transient Thread exclusiveOwnerThread;
+
+/**
+    留给子类实现的尝试获取共享锁的方法，共享锁获取，返回AQS里state的剩余值 
+    1：返回值 > 0，代表当前线程获取成功，且state还有剩余值，表示可以继续传播给下一个共享节点线程，让其尝试获取锁 
+    2：返回值 = 0，代表当前线程获取成功，但state值刚好被用完，那么下一个共享节点线程就不应该被唤醒了（因为这时已经获取不到state的剩余值了）
+    3：返回值 &lt; 0，代表当前线程都没获取成功，直接获取失败，阻塞等待被其他线程唤醒后在尝试获取
+*/
+protected int tryAcquireShared(int arg) {
+    throw new UnsupportedOperationException();
+}
+
+// 获取共享锁
+private void doAcquireSharedInterruptibly(int arg)
+    throws InterruptedException {
+    final Node node = addWaiter(Node.SHARED);
+    boolean failed = true;
+    try {
+        for (;;) {
+            final Node p = node.predecessor();
+            if (p == head) { // 首节点的下个节点才有资格获取锁（首节点就是获取到锁的节点）
+                int r = tryAcquireShared(arg);
+                if (r >= 0) { // 至少当前线程获取成功了，但可能state值已经被用完了
+                    // 获取成功，传播给下一个共享Node，根据state的剩余值来判断是否需要唤醒下一个共享Node里的线程
+                    setHeadAndPropagate(node, r);
+                    p.next = null; // help GC
+                    failed = false;
+                    return;
+                }
+            }
+            if (shouldParkAfterFailedAcquire(p, node) &amp;&amp;
+                parkAndCheckInterrupt()) // 不能获取到锁线程就park
+                throw new InterruptedException();
+        }
+    } finally {
+        if (failed)
+            cancelAcquire(node);
+    }
+}
+// 释放共享锁（Semaphore会使用）
+private void doReleaseShared() {
+      // 必要的循环
+      // 1. CAS操作可能失败需要重试
+    // 2. 在设置head的过程中可能有新的节点入队
+    // 3. 传播机制要求必须确保传播状态正确设置
+    for (;;) {
+        Node h = head;
+          // h != tail 检查确保队列中还有后继节点
+        if (h != null &amp;&amp; h != tail) {
+            int ws = h.waitStatus;
+            if (ws == Node.SIGNAL) {
+                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
+                    continue;            // loop to recheck cases
+                unparkSuccessor(h);
+            }
+            else if (ws == 0 &amp;&amp;
+                     !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
+                continue;                // loop on failed CAS
+        }
+        if (h == head)                   // loop if head changed
+            break;
+    }
+}
+
+/*
+    将目标节点（参数node）设为同步队列的尾部（使用CAS来解决并发问题）。
+    所以，在这整个过程中，链表中除首节点外其余节点的prev在任何时刻都不会为空；
+        但除尾节点外其余节点的next字段有可能为空 （刚好走完第②步，还没走到第③步）
+*/
+private Node enq(final Node node) {
+    for (;;) {
+        Node t = tail;
+        if (t == null) { // 初始化同步队列，设置一个空Node为首尾节点
+            if (compareAndSetHead(new Node()))
+                tail = head;
+        } else {
+            node.prev = t; // 先将目标节点的prev设置程原尾节点 ①
+            if (compareAndSetTail(t, node)) { // CAS设置尾节点 ②
+                t.next = node; // 设置成功了，才把原尾节点的next设为目标节点（现尾节点）③
+                return t;
+            }
+        }
+    }
+}
+
+// 唤醒目标节点（参数node）的最近下一个可唤醒节点中的线程
+private void unparkSuccessor(Node node) {
+    int ws = node.waitStatus;
+    if (ws &lt; 0)
+        compareAndSetWaitStatus(node, ws, 0);
+    // 首节点的下个节点唤醒失败时，就从尾节点向前遍历，直到找到距首节点最近的可唤醒的节点
+    // 目的是避免并发时（节点入队列和唤醒），倒数第二个节点（甚至不止）的next字段为空，导致拿不到其实已经入队列里的后续节点
+    Node s = node.next;
+    if (s == null || s.waitStatus > 0) {
+        s = null;
+        for (Node t = tail; t != null &amp;&amp; t != node; t = t.prev)
+            if (t.waitStatus &lt;= 0)
+                s = t;
+    }
+    if (s != null)
+        LockSupport.unpark(s.thread);
+}
+
+// ============内部的Node数据结构=================
+static final class Node {
+    // 共享锁
+    static final Node SHARED = new Node();
+    // 互斥锁
+    static final Node EXCLUSIVE = null;
+    //  取消获取锁
+    static final int CANCELLED =  1;
+
+    static final int SIGNAL    = -1;
+    // 等待condition唤醒（等待队列才会用到这个状态）
+    static final int CONDITION = -2;
+    static final int PROPAGATE = -3;
+        // 当前节点的状态
+    volatile int waitStatus;
+    // 同步队列专用
+    volatile Node prev;
+    // 同步队列专用
+    volatile Node next;
+    // 等待线程
+    volatile Thread thread;
+    // 1. 当前Node为同步队列中的共享节点时：SHARED
+    // 2. 当前Node为同步队列中的独占节点时：null
+    // 3. 当前Node为等待队列中的节点时：下一个等待节点的指针
+    Node nextWaiter;
+        // 判断当前节点是互斥锁，还是共享锁
+    final boolean isShared() {
+        return nextWaiter == SHARED;
+    }
+        // 当前节点的前驱结点
+    final Node predecessor() throws NullPointerException {
+        Node p = prev;
+        if (p == null)
+            throw new NullPointerException();
+        else
+            return p;
+    }
+}
 
 ]]></content>
       <categories>
-        <category>cloudflare</category>
+        <category>jdk</category>
       </categories>
       <tags>
-        <tag>cdn缓存清除</tag>
+        <tag>LockSupport</tag>
+        <tag>AQS</tag>
       </tags>
   </entry>
   <entry>
@@ -1142,170 +1558,6 @@ get方法并没有加锁，如果桶已被转移怎么获取到数据？
       </tags>
   </entry>
   <entry>
-    <title>Git</title>
-    <url>/2020/02/07/git/</url>
-    <content><![CDATA[​	Git常用命令总结
-
-
-Git1 git config# git查看配置
-git config --list
-# ================= 全局配置（保存在用户目录下的 ～/.gitconfig 文件中）======================
-# 设置全局用户名和邮箱（在 git commit 时记录为提交者信息））
-git config --global user.name  "reef"
-git config --global user.email "shanzhao.rd@gmail.com"
-# 设置全局代理（socks5 协议，端口号为 7890）
-git config --global http.proxy=socks5://127.0.0.1:7890
-git config --global https.proxy=socks5://127.0.0.1:7890
-
-# ================= 当前仓库单独配置（保存在当前仓库中 .git/config 文件中）======================
-# 设置仓库专属用户名和邮箱（覆盖全局设置）
-git config  user.name  "reef"
-git config  user.email "shanzhao.rd@gmail.com"
-# 设置当前仓库的代理（仅对该仓库生效）
-git config  http.proxy=socks5://127.0.0.1:7890
-git config  https.proxy=socks5://127.0.0.1:7890
-
-2 初始化仓库# 将当前文件夹初始化为一个 Git 本地仓库
-git init
-# 将指定文件夹初始化为一个 Git 本地仓库
-git init &lt;目录路径>
-
-3 本地仓库的操作3.1 查看文件状态# 可以查看分支名（branch）和文件的状态，如已修改（Modified），未跟踪的（untracked）,未修改的不会有提示
-git status
-# 简洁版的git status
-# 红色M 代表文件修改了但未加入暂存区
-# 绿色M 代表文件修改了并且已加入暂存区
-# ?? 代表未跟踪的，
-# A 代表文件已被加入到暂存区
-git status -s
-
-3.2 未暂存的文件添加到暂存区和解暂存# 将文件加入暂存区
-git add 文件名
-# 将暂存区的文件取消暂存
-git reset 文件名
-
-3.3 commit(暂存区文件的提交)# 不带文件名会提交暂存区所有的文件
-git commit -m "提交的日志信息"
-# 提交全部暂存区文件，并打开一个编辑器，让你写入提交日志（'i':插入，'ESC':退出编辑，':wq':保存并退出）
-git commit
-# 该语句可将不是暂存区的文件直接commit，因为-a就代表提交到了暂存区。两步合为一步了
-git commit -a -m "提交的日志信息"
-
-3.4 已commit的文件删除# 会放在暂存区，在commit之后就删除了。如果直接在文件夹中删除，则不会放在暂存区，要将其删除，就必须先add进暂存区，再commit
-git rm 文件名
-
-3.5 将文件添加至忽略列表
- 自动生成的文件，比如日志文件，class文件就不需要通过git提交，git一般只负责提交源代码。这种情况下，我们可以在工作区中创建一个.gitignore文件（文件名固定，可以在git命令行中用touch .gitignore语句创建）
-
-# 通配符（匹配任意）
-*
-# 取反。比如!hello.class文件，git就不会忽略掉hello.class文件
-!
-# 忽略当前目录下的xxx文件
-/xxx
-# 忽略当前目录下的doc文件夹下的所有
-doc/
-# 忽略当前目录下的doc文件夹里的所有txt文件
-doc/*.txt
-# 忽略当前目录下的doc文件里的所有文件夹里的class文件
-doc/**/*.class
-
-3.6 查看git操作日志# 因为日志太多，不会一次性全部显示，按回车会显示下面的，按Q会退出。
-git log
-
-4. 远程仓库的操作4.1 remote# 可以查看到本地关联的的远程仓库的别名（粗略查看）
-git remote
-# 显示远程仓库地址（详细点）
-git remote -v
-# 可查看更多信息（更详细）
-git remote show 远程仓库的别名
-# 添加(add)远程仓库（一个本地仓库可以添加多个远程仓库）
-git remote add 仓库别名 远程仓库的url
-# 删除本地仓库中配置的某个远程仓库别名及其对应的 URL（该命令不会影响到真正的远程仓库）
-git remote rm 远程仓库的别名
-
-4.2 clone# 克隆远程仓库到此命令行文件夹下面
-git clone 远程仓库的url
-
-4.3 fetch &amp; pull# 从远程仓库获取最新版本带本地仓库，不会合并(merge)。如果省略这两个参数，即别名为origin，分支为matser
-git fetch 仓库别名 远程仓库的branchName
-# 合并到本地仓库
-git merge origin/master
-
-# 从远程仓库获取最新版本带本地仓库，会合并(merge)。如果省略这两个参数，即别名为origin，分支为matser
-git pull 仓库别名 远程仓库的branchName
-# 用于合并本地和远程仓库之间没有共同历史的分支内容。（强制合并）
-git pull 仓库别名 远程仓库的branchName --allow-unrelated-histories
-
-5 Git分支操作# 列出所有本地分支
-git branch
-# 列出所有远程分支
-git branch -r
-# 列出所有本地和远程的分支
-git branch -a
-# 查看所有本地分支，并可查看是否和远程分支建立映射关系
-git branch -v
-# 在本仓库中新建一个分支(在正在使用的分支下创建新的分支，新的分支将会复制正在使用的分支的所有内容进行初始化)
-git branch 新分支名
-# 切换到指定的分支下，前面会有*提示
-git checkout 已存在的分支名
-# 本地仓库分支推送到远程仓库
-git push 仓库别名(shortname) 本地仓库的分支名(branchName)
-# 将指定的分支名的分支文件合并到正在使用的分支里（branchName -> 正在使用的分支）
-git merge 分支名(branchName)
-# 根据分支名删除分支，未push的不能删除
-git branch -d 分支名
-# 根据分支名强力删除分支，未push的也能删除
-git branch -D 分支名
-# 删除远程仓库中的分支
-git push 远程仓库的别名 -d 分支名
-# oldName是当前分支名，newName是想改成的名
-git branch -m oldName newName
-# 本地更新远程仓库分支
-git remote update origin --prune
-# =========分支追踪（名字不同也可以）============
-# 在本地新建分支local-branchName，并和对应的远程分支remote-branchName做映射，最后再checkout并pull
-git checkout -b local-branchName origin/remote-branchName
-# 将本地分支local-branchName分支追踪远程分支origin/remote-branchName（建立映射关系）   
-git branch --set-upstream local-branchName origin/remote-branchName
-# 将当前分支跟踪远程分支origin/remote-branchName   
-git branch -u origin/remote-branchName
-
-6 Git标签操作
- 标签指的是某个分支的某个特定时间点的状态，记录了截止到当前时间的当前分支的全部内容。根据标签，我们可以很方便的切回到标签标记时的状态
-
-# 创建一个新标签
-git tag 新的标签名
-# 列出所有标签
-git tag
-# 查看tag的信息
-git show 标签名
-# 将指定的标签推送至远程仓库
-git push 仓库别名 标签名
-# 新建一个分支，根据标签名指向指定的标签
-git checkout -b 新的分支名 标签名
-# 删除本地仓库中指定的标签
-git tag -d 标签名
-# 删除远程仓库中指定的标签
-git push origin :refs/tags/标签名
-
-7 SSH（secure shell）认证# 生成 SSH 密钥对的命令（由公钥和私钥组成，常用语SSH的连接和认证）
-ssh-keygen -t rsa
-
-上诉命令会生成两个文件，将公钥放在git远程仓库的ssh key里接可以使用ssh操作远程仓库了
-
-~&#x2F;.ssh&#x2F;id_rsa：私钥，用于客户端身份认证，需保密，放在本地
-~&#x2F;.ssh&#x2F;id_rsa.pub：公钥，可放在远程服务器上
-
-]]></content>
-      <categories>
-        <category>Git</category>
-      </categories>
-      <tags>
-        <tag>Git</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Java源码篇-线程池</title>
     <url>/2020/05/12/java-yuan-ma-pian-xian-cheng-chi/</url>
     <content><![CDATA[​	对jdk的ThreadPoolExecutor和ScheduledThreadPoolExecutor进行了详细的源码分析
@@ -1807,785 +2059,6 @@ static class DelayedWorkQueue extends AbstractQueue&lt;Runnable>
       </tags>
   </entry>
   <entry>
-    <title>Java源码篇-AQS</title>
-    <url>/2020/04/17/java-yuan-ma-pian-aqs/</url>
-    <content><![CDATA[
-​	总结了LockSupport的作用，并从源码分析了AbstractQueuedSynchronizer的实现逻辑
-
-
-Java源码篇-AQS1 LockSupport1.1 总结Java中实现当前线程的阻塞和定时阻塞，并提供唤醒指定线程的工具，在内部使用sun.misc.Unsafe来实现这一系列的操作。在AQS中普遍被使用
-
-阻塞当前线程：通过 park() 方法使当前线程进入等待状态。
-定时阻塞：通过 parkNanos(long nanos) 或 parkUntil(long deadline) 方法使当前线程在指定时间内等待。
-唤醒指定线程：通过 unpark(Thread thread) 方法唤醒指定的处于等待状态的线程。
-
-1.2 核心代码/**
- * 唤醒指定的线程（如果该线程被park了）
- * 如果线程先被unpark（解除等待）了，那么该线程下一次调用park(进入等待)则不起作用，也就不会被阻塞
- */
-public static void unpark(Thread thread) {
-    if (thread != null)
-        UNSAFE.unpark(thread);
-}
-
-/**
- * 阻塞当前线程，并设置一个blocker（俗称阻塞器，这个只是用来jstack查看，并不能通过notifyAll来唤醒阻塞的线程）
- * blocker只能用来调试和诊断，并不影响线程的阻塞和唤醒
- */
-public static void park(Object blocker) {
-    Thread t = Thread.currentThread();
-    setBlocker(t, blocker);
-    UNSAFE.park(false, 0L);
-    setBlocker(t, null);
-}
-
-/**
- * 定时等待，阻塞当前线程指定的纳秒数，当时间到达时就自动唤醒（定时任务会调用）
- */
-public static void parkNanos(long nanos) {
-    if (nanos > 0)
-        UNSAFE.park(false, nanos);
-}
-
-/**
- * 定时等待，阻塞当前线程直到指定的时间戳（deadline）到来就自动唤醒（定时任务会调用）
- */
-public static void parkUntil(long deadline) {
-    UNSAFE.park(true, deadline);
-}
-
-2 AbstractQueuedSynchronizer
-​		Node是AQS的核心内部类，它是构建同步器的基础数据结构，通过不同的配置可以实现同步队列，也可实现等待队列
-
-2.1 同步队列​		当线程尝试获取锁时，未获取到锁的线程会被构造成一个Node，利用CAS放入同步尾部作为尾节点，等待被唤醒。同步队列关联的是整个锁，一对一的关系。而同步队列中的Node又根据nextWaiter字段判断当前Node是共享节点还是独占节点
-
-Node之间通过prev和next指针构成双向链表
-
-头节点(head)代表当前持有锁的线程
-
-包含waitStatus字段标记节点状态
-
-CANCELLED(1): 线程已取消
-SIGNAL(-1): 后继节点需要唤醒
-CONDITION(-2): 节点在等待队列中
-PROPAGATE(-3): 共享锁需要向后传播
-0: 初始状态
-
-
-使用nextWaiter区分共享&#x2F;互斥模式
-
-共享节点：共享锁的实现（Semaphore、CountDownLatch等）。nextWaiter字段为固定的Node#SHARED。释放当前节点的线程后，还具有向后传播的能力（根据state的值判断是否需要释放后继共享节点里的线程）
-
-互斥节点：互斥锁的实现（ReentrantLock等），nextWaiter字段为Node#EXCLUSIVE（即null），只会释放当前节点里的线程
-
-
-
-
-2.2 等待队列​		当已经获取到锁的线程触发java.util.concurrent.locks.Condition#await()方法阻塞自己，让出锁时。会将当前线程构造成一个Node（等待节点，状态为CONDITION），利用CAS放入等待队列尾部。等待队列关联的是Condition。所以，当ReentrantLock构造多个Condition时，就有多个等待队列，ReentrantLock和等待队列可以为一对多，而Condition和等待队列时一对一。而当其他线程获取当前锁（ReentrantLock）的线程调用java.util.concurrent.locks.Condition#signal等方法时，便会将等待队列的首节点转入到同步队列的尾节点，并重新设置Node的状态
-
-单向链表结构，只使用nextWaiter指针
-
-nextWaiter字段为等待队列中下一个等待节点的指针
-
-当调用signal()时，节点从等待队列转移到同步队列过程中的状态变化如下
-
-CONDITION -&gt; 0
-入队同步队列
-等待获取锁
-
-
-
-2.3 核心代码// 同步队列专属的头尾节点。
-// 因为只有在同步队列里的线程才需要被唤醒。等待队列里的线程如果要被唤醒，需要先加入到同步队列
-private transient volatile Node head;
-private transient volatile Node tail;
-// 核心，可获取到锁的次数
-// - ReentrantLock: 表示重入次数
-// - Semaphore: 表示剩余许可数
-// - CountDownLatch: 表示剩余计数
-private volatile int state;
-// 自旋的阈值（纳秒）。当超时等待时间小于这个值时，就不会再暂停线程，而是自旋。因为这个时间已经很少了，考虑到阻塞线程后上线文切换会消耗时间，就没必要再阻塞了
-static final long spinForTimeoutThreshold = 1000L;
-// 获取到独占锁的线程
-private transient Thread exclusiveOwnerThread;
-
-/**
-    留给子类实现的尝试获取共享锁的方法，共享锁获取，返回AQS里state的剩余值 
-    1：返回值 > 0，代表当前线程获取成功，且state还有剩余值，表示可以继续传播给下一个共享节点线程，让其尝试获取锁 
-    2：返回值 = 0，代表当前线程获取成功，但state值刚好被用完，那么下一个共享节点线程就不应该被唤醒了（因为这时已经获取不到state的剩余值了）
-    3：返回值 &lt; 0，代表当前线程都没获取成功，直接获取失败，阻塞等待被其他线程唤醒后在尝试获取
-*/
-protected int tryAcquireShared(int arg) {
-    throw new UnsupportedOperationException();
-}
-
-// 获取共享锁
-private void doAcquireSharedInterruptibly(int arg)
-    throws InterruptedException {
-    final Node node = addWaiter(Node.SHARED);
-    boolean failed = true;
-    try {
-        for (;;) {
-            final Node p = node.predecessor();
-            if (p == head) { // 首节点的下个节点才有资格获取锁（首节点就是获取到锁的节点）
-                int r = tryAcquireShared(arg);
-                if (r >= 0) { // 至少当前线程获取成功了，但可能state值已经被用完了
-                    // 获取成功，传播给下一个共享Node，根据state的剩余值来判断是否需要唤醒下一个共享Node里的线程
-                    setHeadAndPropagate(node, r);
-                    p.next = null; // help GC
-                    failed = false;
-                    return;
-                }
-            }
-            if (shouldParkAfterFailedAcquire(p, node) &amp;&amp;
-                parkAndCheckInterrupt()) // 不能获取到锁线程就park
-                throw new InterruptedException();
-        }
-    } finally {
-        if (failed)
-            cancelAcquire(node);
-    }
-}
-// 释放共享锁（Semaphore会使用）
-private void doReleaseShared() {
-      // 必要的循环
-      // 1. CAS操作可能失败需要重试
-    // 2. 在设置head的过程中可能有新的节点入队
-    // 3. 传播机制要求必须确保传播状态正确设置
-    for (;;) {
-        Node h = head;
-          // h != tail 检查确保队列中还有后继节点
-        if (h != null &amp;&amp; h != tail) {
-            int ws = h.waitStatus;
-            if (ws == Node.SIGNAL) {
-                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
-                    continue;            // loop to recheck cases
-                unparkSuccessor(h);
-            }
-            else if (ws == 0 &amp;&amp;
-                     !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
-                continue;                // loop on failed CAS
-        }
-        if (h == head)                   // loop if head changed
-            break;
-    }
-}
-
-/*
-    将目标节点（参数node）设为同步队列的尾部（使用CAS来解决并发问题）。
-    所以，在这整个过程中，链表中除首节点外其余节点的prev在任何时刻都不会为空；
-        但除尾节点外其余节点的next字段有可能为空 （刚好走完第②步，还没走到第③步）
-*/
-private Node enq(final Node node) {
-    for (;;) {
-        Node t = tail;
-        if (t == null) { // 初始化同步队列，设置一个空Node为首尾节点
-            if (compareAndSetHead(new Node()))
-                tail = head;
-        } else {
-            node.prev = t; // 先将目标节点的prev设置程原尾节点 ①
-            if (compareAndSetTail(t, node)) { // CAS设置尾节点 ②
-                t.next = node; // 设置成功了，才把原尾节点的next设为目标节点（现尾节点）③
-                return t;
-            }
-        }
-    }
-}
-
-// 唤醒目标节点（参数node）的最近下一个可唤醒节点中的线程
-private void unparkSuccessor(Node node) {
-    int ws = node.waitStatus;
-    if (ws &lt; 0)
-        compareAndSetWaitStatus(node, ws, 0);
-    // 首节点的下个节点唤醒失败时，就从尾节点向前遍历，直到找到距首节点最近的可唤醒的节点
-    // 目的是避免并发时（节点入队列和唤醒），倒数第二个节点（甚至不止）的next字段为空，导致拿不到其实已经入队列里的后续节点
-    Node s = node.next;
-    if (s == null || s.waitStatus > 0) {
-        s = null;
-        for (Node t = tail; t != null &amp;&amp; t != node; t = t.prev)
-            if (t.waitStatus &lt;= 0)
-                s = t;
-    }
-    if (s != null)
-        LockSupport.unpark(s.thread);
-}
-
-// ============内部的Node数据结构=================
-static final class Node {
-    // 共享锁
-    static final Node SHARED = new Node();
-    // 互斥锁
-    static final Node EXCLUSIVE = null;
-    //  取消获取锁
-    static final int CANCELLED =  1;
-
-    static final int SIGNAL    = -1;
-    // 等待condition唤醒（等待队列才会用到这个状态）
-    static final int CONDITION = -2;
-    static final int PROPAGATE = -3;
-        // 当前节点的状态
-    volatile int waitStatus;
-    // 同步队列专用
-    volatile Node prev;
-    // 同步队列专用
-    volatile Node next;
-    // 等待线程
-    volatile Thread thread;
-    // 1. 当前Node为同步队列中的共享节点时：SHARED
-    // 2. 当前Node为同步队列中的独占节点时：null
-    // 3. 当前Node为等待队列中的节点时：下一个等待节点的指针
-    Node nextWaiter;
-        // 判断当前节点是互斥锁，还是共享锁
-    final boolean isShared() {
-        return nextWaiter == SHARED;
-    }
-        // 当前节点的前驱结点
-    final Node predecessor() throws NullPointerException {
-        Node p = prev;
-        if (p == null)
-            throw new NullPointerException();
-        else
-            return p;
-    }
-}
-
-]]></content>
-      <categories>
-        <category>jdk</category>
-      </categories>
-      <tags>
-        <tag>LockSupport</tag>
-        <tag>AQS</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Spring-Bean的字段填充阶段处理</title>
-    <url>/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</url>
-    <content><![CDATA[
-​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程
- 
-
-Spring-Bean的字段填充阶段相关处理器CommonAnnotationBeanPostProcessor​	专用来处理非Srping官方提供，而是javax的通用如下注解：
-
-@javax.annotation.Resource
-@javax.annotation.PostConstruct
-@javax.annotation.PreDestroy
-@javax.ejb.EJB
-@javax.xml.ws.WebServiceRef
-
-其主要有两个重要过程，一是提取这些注解所在字段或方法的元数据。之后才是使用这些注解
-其架构如下图所示。1被用在解析注解所在字段的元数据，2则是使用这些注解的处理器接口，3则表示它也具备Init和Destory注解解析的功能
-
-CommonAnnotationBeanPostProcessor架构
-
-解析Field和方法
-public void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class&lt;?> beanType, String beanName) {
-      // 调用父接口，解析@PostConstruct和@PreDestroy相关方法
-    super.postProcessMergedBeanDefinition(beanDefinition, beanType, beanName);
-        // 解析其余的注解
-    InjectionMetadata metadata = findResourceMetadata(beanName, beanType, null);
-    metadata.checkConfigMembers(beanDefinition);
-}
-
-private InjectionMetadata findResourceMetadata(String beanName, final Class&lt;?> clazz, @Nullable PropertyValues pvs) {
-    // 构建当前bean的缓存key，用于存放这个bean的所有依赖
-        String cacheKey = (StringUtils.hasLength(beanName) ? beanName : clazz.getName());
-        // 先从injectionMetadataCache缓存中拿，没有再构造，最后放入缓存
-        InjectionMetadata metadata = this.injectionMetadataCache.get(cacheKey);
-        if (InjectionMetadata.needsRefresh(metadata, clazz)) {
-            synchronized (this.injectionMetadataCache) {
-                metadata = this.injectionMetadataCache.get(cacheKey);
-                if (InjectionMetadata.needsRefresh(metadata, clazz)) {
-                    if (metadata != null) {
-                        metadata.clear(pvs);
-                    }
-                    metadata = buildResourceMetadata(clazz);
-                    this.injectionMetadataCache.put(cacheKey, metadata);
-                }
-            }
-        }
-        return metadata;
-    }
-// 开始解析@WebServiceRef，@EJB和@Resource
-// 这里面任意一个解析后都会进行Modifier.isStatic判断。可知静态字段或方法不支持自动注入，直接抛出了异常
-private InjectionMetadata buildResourceMetadata(final Class&lt;?> clazz) {
-        List&lt;InjectionMetadata.InjectedElement> elements = new ArrayList&lt;>();
-        Class&lt;?> targetClass = clazz;
-
-        do {
-            final List&lt;InjectionMetadata.InjectedElement> currElements = new ArrayList&lt;>();
-
-      // 遍历这个class的所有field，依次对每个field进行处理
-            ReflectionUtils.doWithLocalFields(targetClass, field -> {
-                // @WebServiceRef注解处理
-                if (webServiceRefClass != null &amp;&amp; field.isAnnotationPresent(webServiceRefClass)) {
-                    if (Modifier.isStatic(field.getModifiers())) {
-                        throw new IllegalStateException("@WebServiceRef annotation is not supported on static fields");
-                    }
-                    currElements.add(new WebServiceRefElement(field, field, null));
-                }
-                // @EJB注解处理
-                else if (ejbRefClass != null &amp;&amp; field.isAnnotationPresent(ejbRefClass)) {
-                    if (Modifier.isStatic(field.getModifiers())) {
-                        throw new IllegalStateException("@EJB annotation is not supported on static fields");
-                    }
-                    currElements.add(new EjbRefElement(field, field, null));
-                }
-                // @Resource注解处理
-                else if (field.isAnnotationPresent(Resource.class)) {
-                    if (Modifier.isStatic(field.getModifiers())) {
-                        throw new IllegalStateException("@Resource annotation is not supported on static fields");
-                    }
-                    if (!this.ignoredResourceTypes.contains(field.getType().getName())) {
-                        currElements.add(new ResourceElement(field, field, null));
-                    }
-                }
-            });
-
-      // 再遍历这个class的所有method，处理以set方法进行注入的方式
-            ReflectionUtils.doWithLocalMethods(targetClass, method -> {
-                Method bridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
-                if (!BridgeMethodResolver.isVisibilityBridgeMethodPair(method, bridgedMethod)) {
-                    return;
-                }
-                if (method.equals(ClassUtils.getMostSpecificMethod(method, clazz))) {
-                    if (webServiceRefClass != null &amp;&amp; bridgedMethod.isAnnotationPresent(webServiceRefClass)) {
-                        if (Modifier.isStatic(method.getModifiers())) {
-                            throw new IllegalStateException("@WebServiceRef annotation is not supported on static methods");
-                        }
-                        if (method.getParameterCount() != 1) {
-                            throw new IllegalStateException("@WebServiceRef annotation requires a single-arg method: " + method);
-                        }
-                        PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
-                        currElements.add(new WebServiceRefElement(method, bridgedMethod, pd));
-                    }
-                    else if (ejbRefClass != null &amp;&amp; bridgedMethod.isAnnotationPresent(ejbRefClass)) {
-                        if (Modifier.isStatic(method.getModifiers())) {
-                            throw new IllegalStateException("@EJB annotation is not supported on static methods");
-                        }
-                        if (method.getParameterCount() != 1) {
-                            throw new IllegalStateException("@EJB annotation requires a single-arg method: " + method);
-                        }
-                        PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
-                        currElements.add(new EjbRefElement(method, bridgedMethod, pd));
-                    }
-                    else if (bridgedMethod.isAnnotationPresent(Resource.class)) {
-                        if (Modifier.isStatic(method.getModifiers())) {
-                            throw new IllegalStateException("@Resource annotation is not supported on static methods");
-                        }
-                        Class&lt;?>[] paramTypes = method.getParameterTypes();
-                        if (paramTypes.length != 1) {
-                            throw new IllegalStateException("@Resource annotation requires a single-arg method: " + method);
-                        }
-                        if (!this.ignoredResourceTypes.contains(paramTypes[0].getName())) {
-                            PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
-                            currElements.add(new ResourceElement(method, bridgedMethod, pd));
-                        }
-                    }
-                }
-            });
-
-            elements.addAll(0, currElements);
-            targetClass = targetClass.getSuperclass();
-        }
-        while (targetClass != null &amp;&amp; targetClass != Object.class);
-
-        return new InjectionMetadata(clazz, elements);
-    }
-
-ResourceElement源码​	以@Resource注解解析后的数据ResourceElement为例，可以发现beanName默认为@Resource的name字段。如果没有则为field字段（注解在field上）。或者则去掉前面的set，再将下个字母变为小写作为beanName（注解在set方法上）
-private class ResourceElement extends LookupElement {
-
-    /**
-     * 存在@Lazy注解，且value为true，这个值就为true
-     */
-    private final boolean lazyLookup;
-
-    public ResourceElement(Member member, AnnotatedElement ae, @Nullable PropertyDescriptor pd) {
-       super(member, pd);
-       Resource resource = ae.getAnnotation(Resource.class);
-       // @Resource的name字段
-       String resourceName = resource.name();
-       Class&lt;?> resourceType = resource.type();
-       this.isDefaultName = !StringUtils.hasLength(resourceName);
-       if (this.isDefaultName) { // name字段为空
-          // 先获取这个字段名
-          resourceName = this.member.getName();
-          if (this.member instanceof Method &amp;&amp; resourceName.startsWith("set") &amp;&amp; resourceName.length() > 3) { // 注解在set方法上，则去掉前面的set，再将下个字母变为小写作为beanName
-             resourceName = Introspector.decapitalize(resourceName.substring(3));
-          }
-       }
-       else if (embeddedValueResolver != null) { // 支持占位符解析
-          resourceName = embeddedValueResolver.resolveStringValue(resourceName);
-       }
-       if (Object.class != resourceType) {
-          checkResourceType(resourceType);
-       }
-       else {
-          // No resource type specified... check field/method.
-          resourceType = getResourceType();
-       }
-       // 默认字段名
-       this.name = (resourceName != null ? resourceName : "");
-       // 默认当前字段的Class类型
-       this.lookupType = resourceType;
-       String lookupValue = resource.lookup();
-       this.mappedName = (StringUtils.hasLength(lookupValue) ? lookupValue : resource.mappedName());
-       Lazy lazy = ae.getAnnotation(Lazy.class);
-       this.lazyLookup = (lazy != null &amp;&amp; lazy.value());
-    }
-
-   /**
-           字段注入方法，如果需要懒加载，则会创建一个代理对象
-   */
-    @Override
-    protected Object getResourceToInject(Object target, @Nullable String requestingBeanName) {
-       return (this.lazyLookup ? buildLazyResourceProxy(this, requestingBeanName) :
-             getResource(this, requestingBeanName));
-    }
-}
-
-字段注入bean的populateBean调用了InstantiationAwareBeanPostProcessor#postProcessProperties方法，开始字段的注入
-CommonAnnotationBeanPostProcessor#postProcessPropertiespublic PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
-        // 找出上一步缓存的元数据
-    InjectionMetadata metadata = findResourceMetadata(beanName, bean.getClass(), pvs);
-    try {
-      // 开始注入
-       metadata.inject(bean, beanName, pvs);
-    }
-    catch (Throwable ex) {
-       throw new BeanCreationException(beanName, "Injection of resource dependencies failed", ex);
-    }
-    return pvs;
-}
-
-InjectionMetadata.InjectedElement#injectprotected void inject(Object target, @Nullable String requestingBeanName, @Nullable PropertyValues pvs)
-       throws Throwable {
-
-    if (this.isField) { // 字段注入
-       Field field = (Field) this.member;
-       ReflectionUtils.makeAccessible(field);
-       // 根据不同的子类getResourceToInject实现，获取对应的bean。会触发依赖bean的创建
-       // 依赖bean创建完毕并返回后，再将其赋予给field
-       field.set(target, getResourceToInject(target, requestingBeanName));
-    }
-    else { // set方法注入
-       if (checkPropertySkipping(pvs)) {
-          return;
-       }
-       try {
-          Method method = (Method) this.member;
-          ReflectionUtils.makeAccessible(method);
-          method.invoke(target, getResourceToInject(target, requestingBeanName));
-       }
-       catch (InvocationTargetException ex) {
-          throw ex.getTargetException();
-       }
-    }
-}
-
-总结CommonAnnotationBeanPostProcessor 是标准注解(@Resource/@PostConstruct/@PreDestroy)的解析者，通过元数据提前解析+生命周期钩子回调，实现了依赖注入和生命周期管理。
-
-CommonAnnotationBeanPostProcessor#postProcessMergedBeanDefinition：负责扫描 @Resource、@PostConstruct、@PreDestroy 注解，把解析结果封装成 InjectionMetadata（字段、方法对应的 ResourceElement 等），再缓存下来，等待后续注入或生命周期回调使用
-CommonAnnotationBeanPostProcessor#postProcessProperties：负责根据解析好的 InjectionMetadata 真正进行注入
-InitDestroyAnnotationBeanPostProcessor#postProcessBeforeInitialization： 在 Bean 初始化前，调用所有 @PostConstruct 标注的方法
-InitDestroyAnnotationBeanPostProcessor#postProcessBeforeDestruction：在 Bean 销毁前，调用所有 @PreDestroy 标注的方法。
-
-
-
-AutowiredAnnotationBeanPostProcessor根据构造方法可知，它专用来处理Spring提供的这些注解
-public AutowiredAnnotationBeanPostProcessor() {
-      // @Autowired支持
-    this.autowiredAnnotationTypes.add(Autowired.class);
-      // @Value支持
-    this.autowiredAnnotationTypes.add(Value.class);
-    try {
-       // javax提供的@Value支持
-       this.autowiredAnnotationTypes.add((Class&lt;? extends Annotation>)
-             ClassUtils.forName("javax.inject.Value", AutowiredAnnotationBeanPostProcessor.class.getClassLoader()));
-       logger.trace("JSR-330 'javax.inject.Inject' annotation found and supported for autowiring");
-    }
-    catch (ClassNotFoundException ex) {
-       // JSR-330 API not available - simply skip.
-    }
-}
-
-
-@org.springframework.beans.factory.annotation.Autowired
-@org.springframework.beans.factory.annotation.Value
-@javax.inject.Inject
-
-​		整体流程和上面的CommonAnnotationBeanPostProcessor差不多。都是在postProcessMergedBeanDefinition方法里进行bean内部有上诉3个注解的字段或方法进行解析并缓存。然后在postProcessProperties进行依赖注入
-]]></content>
-      <categories>
-        <category>spring</category>
-      </categories>
-      <tags>
-        <tag>BeanPostProcessor</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Java源码篇-锁</title>
-    <url>/2020/04/18/java-yuan-ma-pian-suo/</url>
-    <content><![CDATA[​	jdk中AQS实现类相关源码解析。包括 ReentrantLock，Condition，CountDownLatch，Semaphore，ReentrantReadWriteLock
-
-
-锁1 ReentrantLock​		基于AQS实现的一种可重入互斥锁，所以只允许一个线程获取到锁。获取到锁时state设为1，当获取到锁的线程尝试重入时，便会增加state，同理需要将state减到0才会释放锁
-1.1 非公平锁（NonfairSync）lock
-
-java.util.concurrent.locks.ReentrantLock.Sync#nonfairTryAcquire：利用CAS尝试设置state，能设置成功，代表获取到锁，成功返回。设置失败，代表已经被其他线程获取了锁，返回失败
-返回失败后将当前线程构造为Node节点，设置到同步队列的链表中进入到java.util.concurrent.locks.AbstractQueuedSynchronizer#acquireQueued方法：死循环获取当前Node的前一个节点（同步队列的首节点是成功获取到锁的节点），如果前驱结点为首节点，当前Node才有资格获取锁。如果还是获取不到，就调用java.util.concurrent.locks.LockSupport#park(java.lang.Object)方法阻塞当前线程，等待其他线程唤醒再去竞争锁
-
-
-unlock
-
-java.util.concurrent.locks.ReentrantLock.Sync#tryRelease：复原state（将其归0），exclusiveOwnerThread设为null
-java.util.concurrent.locks.AbstractQueuedSynchronizer#release：在tryRelease成功后，使用java.util.concurrent.locks.LockSupport#unpark方法唤醒同步队列首节点的下一个节点里的线程，让他再去尝试获取锁
-
-
-1.2 公平锁（FairSync）lock
-​		和非公平锁很像，不同的部分就在覆盖了java.util.concurrent.locks.AbstractQueuedSynchronizer#tryAcquire这个方法和非公平锁略有不同。在新的线程获取锁失败，并将自己构造为Node节点并放入同步队列链表后，还会通过调用java.util.concurrent.locks.AbstractQueuedSynchronizer#hasQueuedPredecessors方法
-
-unlock：和非公平锁一样核心代码
-// ReentrantLock的公平锁第一次尝试获取锁
-protected final boolean tryAcquire(int acquires) {
-        final Thread current = Thread.currentThread();
-        int c = getState();
-        if (c == 0) {
-            if (!hasQueuedPredecessors() &amp;&amp; // 测试当前线程是否是等待最久的线程
-                compareAndSetState(0, acquires)) {
-                setExclusiveOwnerThread(current);
-                return true;
-            }
-        }
-        else if (current == getExclusiveOwnerThread()) {
-            int nextc = c + acquires;
-            if (nextc &lt; 0)
-                throw new Error("Maximum lock count exceeded");
-            setState(nextc);
-            return true;
-        }
-        return false;
-    }
-} 
-
-/** 
- * 查询是否有线程等待获取的时间长于当前线程
- * 判断是否存在队列中第二个Node(因为首节点是个空节点)，且第二个节点中的线程是否是当前线程
- * 也就是说：判断同步队列中当前节点是否有前驱结点
- * true:代表当前线程不是等待最久的线程或压根就没有等待的线程
- * false:在代表当前线程已经是等待最久的线程（毕竟队列越前面，则代表进去的越久）&lt;p/>
- * 只有公平锁才需要用到这个方法，来判断当前线程是否等待时间最长
- */
-public final boolean hasQueuedPredecessors() {
-    Node t = tail; 
-    Node h = head;
-    Node s;
-    // 用 h != t 来做判断是因为调用这个方法的线程此时还没有进入等待队列
-    // 如果 h != t，则代表队列中有线程在等待获取锁
-    return h != t &amp;&amp;
-        ((s = h.next) == null || s.thread != Thread.currentThread());
-}
-
-1.3 总结1.3.1 为什么叫公平锁和非公平锁​	根据上面的分析，公平锁在获取锁是总是会先判断当前线程是否是等待最久的线程。所以，就算是同步队列存在大量Node，且有线程第一次在获取锁，那么，下一次获取到锁的线程也一定是同步队列的首节点的下一个节点，即必须排队。（首节点就是当前获取到锁的节点，只有获取成功了，同步才会更新首节点）
-​	非公平锁中：对于已经进入同步队列的线程来说，也只能首节点的下一个节点里的线程能尝试获取锁。但对于还未构造成Node加入到同步队列的线程来说，这个线程和首节点的下一个节点里的线程能竞争获取锁，所以非公平。但对于已经进入同步队列的线程来说，前驱结点是一定比后面的节点先获取到锁的
-1.3.2 各自优势
-公平锁：防止线程饥饿，分散性很好，适合线程等待时间敏感的场景
-非公平锁：更快。一是获取锁是不用判断当前线程是否是等待最久的线程。二是上下文交换没有公平锁频繁。在存在大量锁竞争的前提下，可以肯定，公平锁上下文切换很频繁，获取锁后的线程再次获取锁时是一定会阻塞的。而非公平锁则不一样，下一次获取到锁的线程仍可能是上一次获取到锁的线程，没有上下文切换
-
-2 Condition等待通知接口，代替Object原生的wait和notify，其具体实现为AQS里的ConditionObject（定义在AQS里的非静态内部类，所以使用了AQS部分方法来实现其功能）。只有获取到锁的线程才能调用Condition的阻塞和唤醒方法。三个核心组件如下
-
-等待队列：使用 Node 节点串联，与 AQS 同步队列共用 Node 结构 
-状态转换：Node 在等待队列和同步队列之间的转换 
-线程控制：包括阻塞、唤醒、中断处理等机制
-
-主要字段
-// 等待队列中的首节点
-private transient Node firstWaiter;
-// 等待队列中的尾节点
-private transient Node lastWaiter;
-
-2.1 Condition#await流程
-
-首先将当前线程构造为等待节点，并加入到等待队列的末尾
-其次释放锁资源（能够await的线程一定是获取到锁的），同时唤醒同步队列的第二个节点，让其尝试获取锁
-死循环判断当前节点是否为同步节点（等待节点在等待队列里，是一定要阻塞的。同步节点在同步队列里，是可以并被唤醒并尝试获取锁的），await到这里线程就阻塞了
-当被唤醒后，当前节点一定被加入了同步队列，再尝试获取锁，如果能获取到，代表就可以返回了。如果获取不到，就表示当前同步块被其他线程暂用了，也还是阻塞。不过下一次被唤醒后就会通过同步队列的唤醒方式来尝试获取锁
-
-
-代码public final void await() throws InterruptedException {
-    if (Thread.interrupted()) // 响应中断
-        throw new InterruptedException();
-    // 构建等待节点并加入等待队列
-    Node node = addConditionWaiter();
-    // 先检查当前线程是否已获取到锁，否则抛异常。然后完全释放锁并且唤醒同步队列中的第二个节点
-    int savedState = fullyRelease(node);
-    int interruptMode = 0;
-    // 死循环判断当前节点是否在等待队列中
-    // 等待队列中的节点一定要阻塞，而同步队列中的节点是可以被唤醒的
-    while (!isOnSyncQueue(node)) {
-        LockSupport.park(this);
-        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
-            break;
-    }
-    // 当signal后，需要重新获取锁，要复原现场，需要重新持有上一次所持有的所有的state值
-    if (acquireQueued(node, savedState) &amp;&amp; interruptMode != THROW_IE)
-        interruptMode = REINTERRUPT;
-    if (node.nextWaiter != null) // clean up if cancelled
-        unlinkCancelledWaiters();
-    if (interruptMode != 0) // 当前节点有中断
-        reportInterruptAfterWait(interruptMode);
-}
-/**
- *   将当前线程构造为一个等待节点，并加入到等待队列的尾部，并通过nextWaiter字段建立联系 &lt;br/>
- *  注意：等待队列建立关联用的是nextWaiter字段，不是prev和next字段
- */
-private Node addConditionWaiter() {
-    Node lastW = lastWaiter; // 尾节点
-    // If lastWaiter is cancelled, clean out.
-    if (lastW != null &amp;&amp; lastW.waitStatus != Node.CONDITION) {
-        unlinkCancelledWaiters();
-        lastW = lastWaiter;
-    }
-    Node node = new Node(Thread.currentThread(), Node.CONDITION);
-    if (lastW == null)
-        firstWaiter = node;
-    else
-        lastW.nextWaiter = node;
-    lastWaiter = node;
-    return node;
-}
-
-// ====================以下为AQS中的方法===================
-// 判断这个节点是否在同步队列上
-// false -> 这个节点在等待队列上
-// true -> 这个节点在同步队列上
-final boolean isOnSyncQueue(Node node) {
-    if (node.waitStatus == Node.CONDITION || node.prev == null)
-        return false;
-    if (node.next != null) // If has successor, it must be on queue
-        return true;
-    return findNodeFromTail(node);
-}
-/**
-* 当前节点尝试获取锁
-* 返回true -> 获取锁的过程有中断
-*/
-final boolean acquireQueued(final Node node, int arg) {
-    boolean failed = true;
-    try {
-        boolean interrupted = false;
-        for (;;) {
-            final Node prevNode = node.predecessor();
-            // 只有当前节点的前驱结点为首节点，当前节点里的线程才有资格获取锁
-            // 只可能有一个线程获取成功（即获取锁），所以设置首节点不需要同步了
-            if (prevNode == head &amp;&amp; tryAcquire(arg)) {
-                setHead(node);
-                prevNode.next = null; // help GC
-                failed = false;
-                return interrupted;
-            }
-            if (shouldParkAfterFailedAcquire(prevNode, node) &amp;&amp;
-                parkAndCheckInterrupt())
-                interrupted = true;
-        }
-    } finally {
-        if (failed)
-            cancelAcquire(node);
-    }
-}
-
-2.2 Condition#signal和signalAll分析singal的目的很简单，就是将等待队列的首节点转移到同步队列的尾节点，signalAll则是将等待队列中的所有节点都转移到同步节点。signal方法本身不能唤醒线程，只是让这些节点里的线程有资格被唤醒，可以将signal和排队买票做类比
-
-等待队列相当于候补区
-signal 相当于叫号，让候补区的人去正式排队区（同步队列）
-但叫号本身并不会直接让人拿到票，还需要排队区的人按顺序获取票（锁）
-
-代码private void doSignal(Node first) {
-    do {
-        // 将首节点的nextWaiter转移到首节点，如果nextWaiter为空，则表示队列中只有一个节点，且首尾相同
-        if ( (firstWaiter = first.nextWaiter) == null)
-            lastWaiter = null;
-        first.nextWaiter = null; // gc处理
-    } while (!transferForSignal(first) &amp;&amp;
-             (first = firstWaiter) != null);
-}
-// 将当前的等待节点转换为同步节点，并加入到同步队列的末尾
-final boolean transferForSignal(Node node) {
-    if (!compareAndSetWaitStatus(node, Node.CONDITION, 0))
-        return false;
-    Node p = enq(node);
-    int ws = p.waitStatus;
-    if (ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL))
-        LockSupport.unpark(node.thread); // 前驱节点被取消了，或者设置为SIGNAL失败
-    return true;
-}
-
-2.3 总结​		Condition实现了等待通知，当一个线程进入同步块后，就可以调用await，释放自己获取的锁资源，将自己阻塞。内部实现是首先将当前线程构造成一个等待节点，加入ConditionObject的等待队列的末尾，再释放锁资源，之后唤醒同步队列的第二个节点让其尝试获取锁。而当其他进入同步块的线程调用signal后，会将等待队列的首节点转移到同步队列，并将其变成同步节点，最后再使用同步队列的唤醒机制等待被唤醒。
-​		所以signal并不能直接唤醒一个await的线程，最佳使用案例就是消费者发送者机制，比如阻塞队列。
-3 CountDownLatchCountDownLatch为共享锁实现，只能使用一次。用来“卡点”，阻塞的线程需要等待其他线程准备好了后（countDown直到AQS里的state为0），才继续被唤醒执行后面的代码。
-在CountDownLatch中，AQS里的state值并不表示可获取到锁的次数，而是java.util.concurrent.CountDownLatch#countDown state值的次数后会释放所有调用了**java.util.concurrent.CountDownLatch#await()**的线程
-内部的同步器Sync主要方法
-/**
-    获取共享锁，只有AQS的state为0才能获取到
-    通过这个接口就可以猜到，当state为0时（拉下了所有门闩），总会返回1，代表获取锁成功。
-    并依次传播下去递归调用这个方法，直到同步队列的所有Node里的线程全部唤醒，这就是CountDownLatch的原理
-*/
-protected int tryAcquireShared(int acquires) {
-    return (getState() == 0) ? 1 : -1;
-}
-
-// 释放共享锁，state第一次被减为0才释放成功，也就表示了CountDownLatch只能用一次
-protected boolean tryReleaseShared(int releases) {
-    // Decrement count; signal when transition to zero
-    for (;;) {
-        int c = getState();
-        if (c == 0)
-            return false;
-        int nextc = c-1;
-        if (compareAndSetState(c, nextc))
-            return nextc == 0;
-    }
-}
-
-await方法会阻塞当前线程，直到其他线程“拉下所有门闩”。阻塞的线程会构造为共享节点加入同步队列，只有队首节点的下一个节点才有资格尝试获取锁，获取不到就LockSupport#park
-countDown会将state值减小1，当state将为0时，释放同步队列里的第二个共享节点里的线程。当这个线程释放后，就能成功获取到锁了，将这个事件传播下去，一次唤醒同步队列里的所有共享节点。至此，所有被阻塞的线程都被唤醒且会成功获取到锁，最终从await方法里返回
-4 Semaphore信号量，共享锁实现。可以利用构造器指定令牌（permits）的数量。当线程到达时，获取（acquire）指定数量的令牌，当没有可用令牌（premits为0）时，阻塞线程，等待令牌的释放（release）再被唤醒后继续执行。基于此，即可实现共享锁（permits大于1），也可实现不可重入的互斥锁（permits为1）
-也分为公平锁和分公平锁，其判断方式完全和ReentrantLock一致。
-​		非公平锁允许准备进入同步块的线程（还未加入同步队列）和同步队列中的第二个节点竞争获取锁。而公平锁则只允许同步队列中第二个节点里的线程能尝试获取锁。
-​		其实现方式就是将state设为我们允许并发运行的线程数量，每当一个线程获取到锁后，将state - 1，如果state为0则阻塞所有准备进入同步块的线程，并将其构造为共享节点加入同步队列。每当有线程从同步块退出时，将state + 1，并根据是否非公平来唤醒同步队列的第二个节点来尝试获取锁
-5 ReentrantReadWriteLock​		读写锁，支持并发的读或互斥的写。读写锁分别各自实现，读锁使用共享锁，写锁使用互斥锁。ReentrantReadWriteLock内部的ReadLock和WriteLock都使用了内部同一个Sync对象来实现读写加锁的功能，在Sync内，他将AQS的state转换为二进制，高十六位表示读状态位，低十六位表示写状态位。由于读是共享的，所以state的高十六位表示了当前有多少个线程在读，在此期间写锁是禁用的。而低十六位是写锁，所以只可能有一个线程，但可能数字大于1（这是就表示写锁重入了）。当写锁被占用是，读是不允许的
-static final int SHARED_SHIFT= 16;                     //   读状态位            写状态位
-static final int SHARED_UNIT  = (1 &lt;&lt; SHARED_SHIFT); // 0000000000000001 0000000000000000
-static final int MAX_COUNT = (1 &lt;&lt; SHARED_SHIFT) - 1;//0000000000000000 1111111111111111
-static final int EXCLUSIVE_MASK = (1 &lt;&lt; SHARED_SHIFT) - 1;//0000000000000000 1111111111111111
-// 获取共享锁冲入次数（读锁专用）
-static int sharedCount(int c)    { return c >>> SHARED_SHIFT; }
-// 获取排他锁冲入次数（写锁专用）
-static int exclusiveCount(int c) { return c &amp; EXCLUSIVE_MASK; }
-
-
-读写锁都支持重入，但写锁只能让当前线程重入，并且要解锁时需要unlock重入的次数。
-
-支持锁降级但不支持锁升级
-
- 锁降级：即一个线程在持有写锁的情况下，可以继续获取读锁，然后释放写锁，从而将写锁降级为读锁。在某些场景下很有用，比如
-
-在写操作完成后，仍然需要保持对数据的读访问权限
-避免其他线程在写锁释放后立即获取写锁，导致数据不一致
-
-
-
-
-]]></content>
-      <categories>
-        <category>jdk</category>
-      </categories>
-      <tags>
-        <tag>AQS实现类</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Spring-@Resource和@Autowired的分析</title>
     <url>/2021/01/18/spring-resource-he-autowired-de-fen-xi/</url>
     <content><![CDATA[
@@ -2918,7 +2391,7 @@ protected Map&lt;String, Object> findAutowireCandidates(
 
 两个注解总结共同点
 都支持容器类型的Bean解析（比如Stream，数组，集合，Map）
-都支持**@Lazy，@Qualifier，@Value**等注解
+都支持@Lazy，@Qualifier，@Value等注解
 都支持字段、方法参数
 
 不同点
@@ -2930,6 +2403,997 @@ protected Map&lt;String, Object> findAutowireCandidates(
       <categories>
         <category>Spring</category>
       </categories>
+  </entry>
+  <entry>
+    <title>Spring-AOP</title>
+    <url>/2021/02/08/spring-aop/</url>
+    <content><![CDATA[​	从源码分析了Spring AOP的实现逻辑，以及利用arthas对代理class进行反编译以更加清晰的理解源码流程
+
+
+Spring-AOP源码解析@EnableAspectJAutoProxy​	其主要功能是向容器中注册AnnotationAwareAspectJAutoProxyCreator这个BeanDefinition，以此实现基于以下注解的代理功能
+
+
+
+注解名
+说明
+
+
+
+@Aspect
+声明一个类是切面类
+
+
+@Before
+前置通知，目标方法执行前执行
+
+
+@After
+后置通知，目标方法执行后执行（无论是否异常）
+
+
+@AfterReturning
+返回通知，目标方法正常返回后执行
+
+
+@AfterThrowing
+异常通知，目标方法抛出异常时执行
+
+
+@Around
+环绕通知，完全控制目标方法执行的时机，可决定是否继续执行目标方法
+
+
+@Pointcut
+定义可复用的切点表达式，供上述注解引用
+
+
+AnnotationAwareAspectJAutoProxyCreator​	Spring实现自动装配动态代理的Bean后置处理器，具有最高的执行优先级（表示是最先被执行的BeanPostProcessor。设置最高优先级的代码在org.springframework.aop.config.AopConfigUtils#registerOrEscalateApcAsRequired中）
+wrapIfNecessary​	bean进行包装（增强）的入口，它会在如下两个地方被调用
+
+postProcessAfterInitialization：常规的的bean初始化完成后hook，需要对bean进行代理并返回给容器
+getEarlyBeanReference：针对循环依赖需要提前获取bean的引用。Spring 会在三级缓存中暴露“早期对象引用”。如果此 bean 需要 AOP，必须在这个阶段就包上代理，否则依赖方会拿到原始对象，导致切面失效。
+
+protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
+        // 已经处理过
+        if (StringUtils.hasLength(beanName) &amp;&amp; this.targetSourcedBeans.contains(beanName)) {
+            return bean;
+        }
+        // 无需增强的bean缓存判断
+        if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
+            return bean;
+        }
+        // 是一个基础设施类或者指定的不需要代理
+        if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
+            this.advisedBeans.put(cacheKey, Boolean.FALSE);
+            return bean;
+        }
+
+        // 查找这个bean能使用的所有Advisor
+        Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+        if (specificInterceptors != DO_NOT_PROXY) { // 存在增强器
+            this.advisedBeans.put(cacheKey, Boolean.TRUE);
+      // 创建其代理
+            Object proxy = createProxy(
+                    bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+            this.proxyTypes.put(cacheKey, proxy.getClass());
+            return proxy;
+        }
+        // 当前bean不需要增强，缓存起来
+        this.advisedBeans.put(cacheKey, Boolean.FALSE);
+        return bean;
+    }
+
+获取Advisor阶段首先Advisor是什么？
+
+​	我理解为增强器，一个Advisor对应一个切面。既包含Advice，也包含过滤器（判断bean是否需要增强的东西）。所以能用一个Advisor来判断任意一个bean是否能被它增强，并提供增强的Advice。
+​	主要子接口为PointcutAdvisor，PointcutAdvisor提供了Pointcut，利用这个Pointcut即可以bean的class和method进行匹配看它是否能被增强。而Advisor获取的Advice则为真正执行代理方法的拦截器。
+
+findCandidateAdvisors有两种如下获取Advisor的方式
+
+查找所有实现了Advisor接口的BeanDefinition，并对其进行实例化（这种一般都是框架注册的增强器）
+
+注解方式：获取所有基于注解的切面bean，并进行实例化
+
+先拿到容器中所有Bean的beanName，再遍历这些beanName。通过BeanFactory获取当前beanName的Class，再判断Class上是否有@Aspect注解。如果存在@Aspect，就利用ReflectiveAspectJAdvisorFactory去解析这些Bean，将@Aspect Bean中的每个增强方法（如下注解，每个注解标注的方法就是一个增强方法）构造成一个Advisor（实现类为InstantiationModelAwarePointcutAdvisorImpl），最后封装到List里，返回给上层
+
+
+
+
+@Override
+protected List&lt;Advisor> findCandidateAdvisors() {
+   // 查找spring内置的增强器（包括不限于事务、缓存等）
+   List&lt;Advisor> advisors = super.findCandidateAdvisors();
+   // aspectJAdvisorsBuilder不会为空，默认为BeanFactoryAspectJAdvisorsBuilderAdapter
+   if (this.aspectJAdvisorsBuilder != null) {
+      // 获取所有的与@Aspect注解相关的Advisor
+      advisors.addAll(this.aspectJAdvisorsBuilder.buildAspectJAdvisors());
+   }
+   return advisors;
+}
+
+// 父类中的findAdvisorBeans
+public List&lt;Advisor> findAdvisorBeans() {
+  // 先从缓存中找，没有再搜索
+  String[] advisorNames = this.cachedAdvisorBeanNames;
+  if (advisorNames == null) { // 缓存为空
+    // 查找出所有实现了Advisor接口的BeanDefinition，并缓存
+    advisorNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
+        this.beanFactory, Advisor.class, true, false);
+    this.cachedAdvisorBeanNames = advisorNames;
+  }
+  if (advisorNames.length == 0) {
+    return new ArrayList&lt;>();
+  }
+
+  List&lt;Advisor> advisors = new ArrayList&lt;>();
+  for (String name : advisorNames) {
+    if (isEligibleBean(name)) {
+      if (this.beanFactory.isCurrentlyInCreation(name)) {
+        if (logger.isTraceEnabled()) {
+          logger.trace("Skipping currently created advisor '" + name + "'");
+        }
+      }
+      else {
+        try {
+          // 尝试实例化这个Advisor Bean，并放入结果中
+          advisors.add(this.beanFactory.getBean(name, Advisor.class));
+        }
+        catch (BeanCreationException ex) {
+          Throwable rootCause = ex.getMostSpecificCause();
+          if (rootCause instanceof BeanCurrentlyInCreationException) {
+            BeanCreationException bce = (BeanCreationException) rootCause;
+            String bceBeanName = bce.getBeanName();
+            if (bceBeanName != null &amp;&amp; this.beanFactory.isCurrentlyInCreation(bceBeanName)) {
+              if (logger.isTraceEnabled()) {
+                logger.trace("Skipping advisor '" + name +
+                    "' with dependency on currently created bean: " + ex.getMessage());
+              }
+              // Ignore: indicates a reference back to the bean we're trying to advise.
+              // We want to find advisors other than the currently created bean itself.
+              continue;
+            }
+          }
+          throw ex;
+        }
+      }
+    }
+  }
+  return advisors;
+}
+// BeanFactoryAspectJAdvisorsBuilder#buildAspectJAdvisors方法，找出基于注解的切面
+public List&lt;Advisor> buildAspectJAdvisors() {
+  // @Aspect注解BeanName的缓存
+  List&lt;String> aspectNames = this.aspectBeanNames;
+
+  if (aspectNames == null) {
+    synchronized (this) {
+      aspectNames = this.aspectBeanNames;
+      if (aspectNames == null) {
+        List&lt;Advisor> advisors = new ArrayList&lt;>();
+        aspectNames = new ArrayList&lt;>();
+        // 获取所有beanName
+        String[] beanNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
+            this.beanFactory, Object.class, true, false);
+        for (String beanName : beanNames) {
+          if (!isEligibleBean(beanName)) {
+            continue;
+          }
+          // 获取这个bean的type
+          Class&lt;?> beanType = this.beanFactory.getType(beanName);
+          if (beanType == null) {
+            continue;
+          }
+          // 存在 org.aspectj.lang.annotation.Aspect 注解
+          if (this.advisorFactory.isAspect(beanType)) {
+            aspectNames.add(beanName);
+            AspectMetadata amd = new AspectMetadata(beanType, beanName);
+            // 解析@Aspetc的value值，如果没有，默认kind就为SINGLETON
+            if (amd.getAjType().getPerClause().getKind() == PerClauseKind.SINGLETON) {
+              MetadataAwareAspectInstanceFactory factory =
+                  new BeanFactoryAspectInstanceFactory(this.beanFactory, beanName);
+              // 解析标记 AspectJ 注解中的增强方法，并将每个切点方法都构造成一个Advisor
+              // 其实现类为InstantiationModelAwarePointcutAdvisorImpl
+              List&lt;Advisor> classAdvisors = this.advisorFactory.getAdvisors(factory);
+              // 缓存起来切面的解析结果
+              if (this.beanFactory.isSingleton(beanName)) {
+                this.advisorsCache.put(beanName, classAdvisors);
+              }
+              else {
+                this.aspectFactoryCache.put(beanName, factory);
+              }
+              advisors.addAll(classAdvisors);
+            }
+            else {
+              // Per target or per this.
+              if (this.beanFactory.isSingleton(beanName)) {
+                throw new IllegalArgumentException("Bean with name '" + beanName +
+                    "' is a singleton, but aspect instantiation model is not singleton");
+              }
+              MetadataAwareAspectInstanceFactory factory =
+                  new PrototypeAspectInstanceFactory(this.beanFactory, beanName);
+              this.aspectFactoryCache.put(beanName, factory);
+              advisors.addAll(this.advisorFactory.getAdvisors(factory));
+            }
+          }
+        }
+        this.aspectBeanNames = aspectNames;
+        return advisors;
+      }
+    }
+  }
+
+  if (aspectNames.isEmpty()) { // 没有自定义的@Aspect，返回空
+    return Collections.emptyList();
+  }
+  List&lt;Advisor> advisors = new ArrayList&lt;>();
+  for (String aspectName : aspectNames) {
+    List&lt;Advisor> cachedAdvisors = this.advisorsCache.get(aspectName);
+    if (cachedAdvisors != null) {
+      advisors.addAll(cachedAdvisors);
+    }
+    else {
+      MetadataAwareAspectInstanceFactory factory = this.aspectFactoryCache.get(aspectName);
+      advisors.addAll(this.advisorFactory.getAdvisors(factory));
+    }
+  }
+  return advisors;
+}
+
+findAdvisorsThatCanApply​	将上面流程中获取到的所有Advisor做过滤，过滤出可以对当前bean进行增强的Advisor。核心方法在org.springframework.aop.support.AopUtils#canApply中
+public static boolean canApply(Pointcut pc, Class&lt;?> targetClass, boolean hasIntroductions) {
+  Assert.notNull(pc, "Pointcut must not be null");
+  if (!pc.getClassFilter().matches(targetClass)) { // 先按类匹配，如果类都匹配不了，那直接就不需要代理了
+    return false;
+  }
+
+  MethodMatcher methodMatcher = pc.getMethodMatcher(); // 获取方法匹配器
+  if (methodMatcher == MethodMatcher.TRUE) {
+    // No need to iterate the methods if we're matching any method anyway...
+    return true;
+  }
+
+  IntroductionAwareMethodMatcher introductionAwareMethodMatcher = null;
+  if (methodMatcher instanceof IntroductionAwareMethodMatcher) {
+    introductionAwareMethodMatcher = (IntroductionAwareMethodMatcher) methodMatcher;
+  }
+  // 目标类和其所有接口的集和
+  Set&lt;Class&lt;?>> classes = new LinkedHashSet&lt;>();
+  if (!Proxy.isProxyClass(targetClass)) {
+    classes.add(ClassUtils.getUserClass(targetClass));
+  }
+  classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+
+  for (Class&lt;?> clazz : classes) {
+    Method[] methods = ReflectionUtils.getAllDeclaredMethods(clazz);
+    for (Method method : methods) {
+      // 对目标类和其所有接口的每个方法都进行匹配，只要能匹配上，就代表这个类可以增强，直接返回true
+      if (introductionAwareMethodMatcher != null ?
+          introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions) :
+          methodMatcher.matches(method, targetClass)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+sortAdvisors​	源码就不分析了，直接说作用：它是 Spring AOP 中对多个 Advisor（增强器）进行排序的关键逻辑。它根据切面、通知类上的 @Order 注解或实现 Ordered 接口的优先级，对同一目标类或方法的所有 Advisor 进行排序。
+​	排序完成后，每个类或方法的增强器顺序就被固定下来。在运行时调用该方法时，AOP 拦截器链会严格按照这个顺序执行对应的切面逻辑，确保增强行为的预期一致性。
+开始增强（创建代理）cglib getProxycglib的增强实现主要步骤总结
+
+
+校验final方法（只是打个日志，final方法不能增强）
+
+创建org.springframework.cglib.proxy.Enhancer（核心的cglib增强器）
+
+对Enhancer进行一系列的填充，包括设置当前Class为增强类的父类。当前Class的所有接口，增强类也要实现。
+
+设置增强Class的命名策略（BySpringCGLIB）
+
+默认再将当前线程上下文的ClassLoader设为加载增强Class字节码的ClassLoader
+
+对Enhancer设置一些Callback，并设置固定的CallbackFilter（ProxyCallbackFilter）。非常重要：
+ 
+ ​									Callback数组（每一个Callback都是方法的拦截器）
+ 
+ ​	Callback数组的索引（ProxyCallbackFilter#accept实现），用来确定被增强的类的每一个方法该使用具体的某个拦截器，返回的是拦截器的数组索引
+
+生成增强Class的字节码并实例化（代理bean就产生了），将其返回
+
+
+
+// CglibAopProxy的创建代理方法
+public Object getProxy(@Nullable ClassLoader classLoader) {
+   if (logger.isTraceEnabled()) {
+      logger.trace("Creating CGLIB proxy: " + this.advised.getTargetSource());
+   }
+
+   try {
+      // 上一个被代理的目标类class（有可能已经是cglib的代理类了）
+      Class&lt;?> rootClass = this.advised.getTargetClass();
+      Assert.state(rootClass != null, "Target class must be available for creating a CGLIB proxy");
+      // 真正代理的目标类class
+      Class&lt;?> proxySuperClass = rootClass;
+      if (ClassUtils.isCglibProxyClass(rootClass)) { // 已经是个cglib代理类了，就需要把真正被代理类的class和接口找出来
+         proxySuperClass = rootClass.getSuperclass();
+         Class&lt;?>[] additionalInterfaces = rootClass.getInterfaces();
+         for (Class&lt;?> additionalInterface : additionalInterfaces) {
+            this.advised.addInterface(additionalInterface);
+         }
+      }
+
+      // 验证class的final相关方法并写日志
+      validateClassIfNecessary(proxySuperClass, classLoader);
+
+      // 创建通用的增强器，准备增强了
+      Enhancer enhancer = createEnhancer();
+      if (classLoader != null) {
+         enhancer.setClassLoader(classLoader);
+         if (classLoader instanceof SmartClassLoader &amp;&amp;
+               ((SmartClassLoader) classLoader).isClassReloadable(proxySuperClass)) {
+            enhancer.setUseCache(false);
+         }
+      }
+      // 设置被代理类class为增强类的父类
+      enhancer.setSuperclass(proxySuperClass);
+      // 对增强类设置接口：Advised和SpringProxy
+      enhancer.setInterfaces(AopProxyUtils.completeProxiedInterfaces(this.advised));
+      enhancer.setNamingPolicy(SpringNamingPolicy.INSTANCE);
+      enhancer.setStrategy(new ClassLoaderAwareUndeclaredThrowableStrategy(classLoader));
+
+      // 设置拦截器（真正支持切面操作的拦截器）
+      Callback[] callbacks = getCallbacks(rootClass);
+      Class&lt;?>[] types = new Class&lt;?>[callbacks.length];
+      for (int x = 0; x &lt; types.length; x++) {
+         types[x] = callbacks[x].getClass();
+      }
+
+      // 非常重要，就是通过这个filter来确定某个方法应该使用哪一个Callback的
+      // 所以，代理类的任何一个方法只会用上一个Callback
+      enhancer.setCallbackFilter(new ProxyCallbackFilter(
+            this.advised.getConfigurationOnlyCopy(), this.fixedInterceptorMap, this.fixedInterceptorOffset));
+      enhancer.setCallbackTypes(types);
+
+      // 生成代理类的class并实例化其对象
+      return createProxyClassAndInstance(enhancer, callbacks);
+   }
+   catch (CodeGenerationException | IllegalArgumentException ex) {
+      throw new AopConfigException("Could not generate CGLIB subclass of " + this.advised.getTargetClass() +
+            ": Common causes of this problem include using a final class or a non-visible class",
+            ex);
+   }
+   catch (Throwable ex) {
+      // TargetSource.getTarget() failed
+      throw new AopConfigException("Unexpected AOP exception", ex);
+   }
+}
+
+jdk getProxy// JdkDynamicAopProxy的创建代理方法，该代理的InvocationHandler就为JdkDynamicAopProxy本身
+public Object getProxy(@Nullable ClassLoader classLoader) {
+   if (logger.isTraceEnabled()) {
+      logger.trace("Creating JDK dynamic proxy: " + this.advised.getTargetSource());
+   }
+   // 对增强类设置Interface：Advised和SpringProxy和DecoratingProxy
+   Class&lt;?>[] proxiedInterfaces = AopProxyUtils.completeProxiedInterfaces(this.advised, true);
+   findDefinedEqualsAndHashCodeMethods(proxiedInterfaces);
+   return Proxy.newProxyInstance(classLoader, proxiedInterfaces, this);
+}
+
+调用阶段cglib invokecglib代理类中方法有切面时的调用重点流程分析（这时使用的Callback就是DynamicAdvisedInterceptor）
+
+获取方法对应的拦截器链
+
+ Spring 会调用 AdvisorChainFactory#getInterceptorsAndDynamicInterceptionAdvice 方法，为当前方法构建拦截器链。 它会遍历所有注册的 Advisor，并依次通过其中的 ClassFilter 和 MethodMatcher 判断当前方法是否匹配。如果匹配，就将该 Advisor 对应的拦截器（MethodInterceptor）加入到列表中，并最终缓存该方法与其拦截器链的映射关系。
+
+
+触发代理方法调用
+
+如果目标类采用了 CGLIB 代理（proxyTargetClass = true），则在调用代理对象方法时，会进入 CglibAopProxy.DynamicAdvisedInterceptor#intercept 方法。
+
+
+构造并执行拦截链
+
+Spring 会构造一个 CglibMethodInvocation 对象，它是 ReflectiveMethodInvocation 的子类，封装了目标对象、方法、参数、拦截器链等执行上下文。 调用 proceed() 方法开始执行拦截链。
+
+
+依次执行拦截器
+
+proceed() 方法会通过内部字段 currentInterceptorIndex（初始值为 -1）递增索引，按顺序执行拦截器链中的下一个 MethodInterceptor。 每个拦截器如果调用了 invocation.proceed()，则控制权会继续传递给下一个拦截器，实现“链式调用”。
+
+
+执行原始方法
+
+当所有拦截器都执行完后（即 currentInterceptorIndex &gt;= interceptors.size()），会最终调用原始目标对象的实际方法，实现增强与目标方法的结合。
+
+
+
+// DynamicAdvisedInterceptor#intercept的入口
+@Override
+@Nullable
+public Object intercept(Object proxy, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
+   Object oldProxy = null;
+   boolean setProxyContext = false;
+   Object target = null;
+   // 先准备目标对象源（调用原bean方法时会用到）
+   TargetSource targetSource = this.advised.getTargetSource();
+   try {
+      if (this.advised.exposeProxy) {
+         // 在当前线程上下文中设置了需要暴露代理，就要设置到当前线程ThreadLocal中
+         // 就是用来解决方法内部需要调用代理方法
+         oldProxy = AopContext.setCurrentProxy(proxy);
+         setProxyContext = true;
+      }
+      // 获取真实的，不是代理的目标对象
+      // 例：Session域从SimpleBeanTargetSource中获取，再转到BeanFactory，再转到SessionScope中，获取目标对象
+      target = targetSource.getTarget();
+      Class&lt;?> targetClass = (target != null ? target.getClass() : null);
+      // 对当前方法构造切面链并缓存
+      List&lt;Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
+      Object retVal;
+      // 无切面，且方法为public，直接调用原方法
+      if (chain.isEmpty() &amp;&amp; Modifier.isPublic(method.getModifiers())) {
+
+         Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
+         retVal = methodProxy.invoke(target, argsToUse);
+      }
+      else { // 存在切面，构造方法调用器并执行
+         retVal = new CglibMethodInvocation(proxy, target, method, args, targetClass, chain, methodProxy).proceed();
+      }
+      retVal = processReturnType(proxy, target, method, retVal);
+      return retVal;
+   }
+   finally {
+      if (target != null &amp;&amp; !targetSource.isStatic()) {
+         targetSource.releaseTarget(target);
+      }
+      if (setProxyContext) { // 方法代理全部执行完毕，恢复执行前的现场
+         AopContext.setCurrentProxy(oldProxy);
+      }
+   }
+}
+
+jdk invokepublic Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+  Object oldProxy = null;
+  boolean setProxyContext = false;
+
+  TargetSource targetSource = this.advised.targetSource;
+  Object target = null;
+
+  try {
+    // 一些通用方法的处理
+    if (!this.equalsDefined &amp;&amp; AopUtils.isEqualsMethod(method)) {
+      return equals(args[0]);
+    }
+    else if (!this.hashCodeDefined &amp;&amp; AopUtils.isHashCodeMethod(method)) {
+      return hashCode();
+    }
+    else if (method.getDeclaringClass() == DecoratingProxy.class) {
+      return AopProxyUtils.ultimateTargetClass(this.advised);
+    }
+    // opaque为false，且该方法的类为实现了Advised的接口，则使用advised字段调用该方法
+    else if (!this.advised.opaque &amp;&amp; method.getDeclaringClass().isInterface() &amp;&amp;
+        method.getDeclaringClass().isAssignableFrom(Advised.class)) {
+      // Service invocations on ProxyConfig with the proxy config...
+      return AopUtils.invokeJoinpointUsingReflection(this.advised, method, args);
+    }
+
+    Object retVal;
+
+    if (this.advised.exposeProxy) { // 需要暴露当前proxy，以便在本类中调用代理方法
+      oldProxy = AopContext.setCurrentProxy(proxy);
+      setProxyContext = true;
+    }
+
+    target = targetSource.getTarget();
+    Class&lt;?> targetClass = (target != null ? target.getClass() : null);
+
+    // 获取这个方法的所有拦截链
+    List&lt;Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
+
+    if (chain.isEmpty()) { // 拦截链为空，则直接调用原方法
+      Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
+      retVal = AopUtils.invokeJoinpointUsingReflection(target, method, argsToUse);
+    }
+    else {
+      // 构造ReflectiveMethodInvocation，准备走代理方法了
+      MethodInvocation invocation =
+          new ReflectiveMethodInvocation(proxy, target, method, args, targetClass, chain);
+      retVal = invocation.proceed();
+    }
+
+    // 处理返回值类型
+    Class&lt;?> returnType = method.getReturnType();
+    if (retVal != null &amp;&amp; retVal == target &amp;&amp;
+        returnType != Object.class &amp;&amp; returnType.isInstance(proxy) &amp;&amp;
+        !RawTargetAccess.class.isAssignableFrom(method.getDeclaringClass())) {
+      retVal = proxy;
+    }
+    else if (retVal == null &amp;&amp; returnType != Void.TYPE &amp;&amp; returnType.isPrimitive()) {
+      throw new AopInvocationException(
+          "Null return value from advice does not match primitive return type for: " + method);
+    }
+    return retVal;
+  }
+  finally {
+    if (target != null &amp;&amp; !targetSource.isStatic()) {
+      targetSource.releaseTarget(target);
+    }
+    if (setProxyContext) {
+      // 恢复现场，移除当前线程上下文中的proxy
+      AopContext.setCurrentProxy(oldProxy);
+    }
+  }
+}
+
+ReflectiveMethodInvocation​	Spring AOP 的cglib和jdk代理都会用到的数据结构。是 方法拦截链执行的核心实现类。每当调用代理类中的方法时，都会构造一个ReflectiveMethodInvocation对象，内部封装了一个方法调用的上下文，包括目标对象、目标方法、方法参数、拦截器链等。核心是通过调用 proceed() 方法按顺序执行所有拦截器，最终调用目标方法。
+public class ReflectiveMethodInvocation implements ProxyMethodInvocation, Cloneable {
+    // 用于记录当前执行到第几个拦截器
+    private int currentInterceptorIndex = -1;
+
+    // 进行动态增强器的匹配判断，执行拦截器，和传播的实现
+    public Object proceed() throws Throwable {
+        // 执行完所有增强方法后执行切点方法
+        if (this.currentInterceptorIndex == this.interceptorsAndDynamicMethodMatchers.size() - 1) {
+            return invokeJoinpoint();
+        }
+
+        // 获取下一个要执行的拦截器
+        Object interceptorOrInterceptionAdvice = this.interceptorsAndDynamicMethodMatchers
+                .get(++this.currentInterceptorIndex);
+        // 调用拦截器方法时，都需要将this作为参数传递以保证当前拦截能传播给后面的增强器（proceed方法）
+
+        if (interceptorOrInterceptionAdvice instanceof InterceptorAndDynamicMethodMatcher) { // 动态匹配的增强器，需要进行动态参数匹配
+            InterceptorAndDynamicMethodMatcher dm = (InterceptorAndDynamicMethodMatcher) interceptorOrInterceptionAdvice;
+            Class&lt;?> targetClass = (this.targetClass != null ? this.targetClass : this.method.getDeclaringClass());
+            if (dm.methodMatcher.matches(this.method, targetClass, this.arguments)) {
+                // 匹配，执行拦截器
+                return dm.interceptor.invoke(this);
+            } else {
+                // 匹配失败就不执行拦截器，触发下一个拦截器的判断和执行
+                return proceed();
+            }
+        } else {
+            // 非动态拦截器，比如事务的TransactionInterceptor，和异步的 AnnotationAsyncExecutionInterceptor等等
+            return ((MethodInterceptor) interceptorOrInterceptionAdvice).invoke(this);
+        }
+    }
+}
+
+总结​	不论是cglib还是jdk的增强，增强的实现都可以总结为对原方法可使用的Advisor的收集，再构造成ReflectiveMethodInvocation，由ReflectiveMethodInvocation去进行动态增强器（一般都和参数有关）的判断，执行拦截器和拦截的传播。​	且Spring都会默认对代理bean实现两个接口（代码实现在AopProxyUtils#completeProxiedInterfaces中），分别是SpringProxy和Advised。SpringProxy用来表示当前bean已经被spring的增强了，而Advised则可以用来拿到原始bean（所以，要在代理bean中拿到原始bean，直接将代理bean强转为Advised，再利用其getTargetSource方法得到原始非代理bean）
+AOP测试被增强的class，其中@BizLog是注解切面，切面类为LogInterceptor，用来做日志打印的
+package site.shanzhao;
+
+import site.shanzhao.BizLog;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+@Component
+public class SpringAopDemo {
+
+    @Transactional
+    @BizLog
+    public void aopMethod(){
+        System.out.println("aopMethod run...............");
+    }
+
+    public void notAopMethod(){
+        System.out.println("notAopMethod run...............");
+    }
+}
+
+arthas解密sc
+sc -d site.shanzhao.SpringAopDemo：查看指定的class加载信息（这里有两个class信息，增强class和源class，我这里只关心增强的class）
+
+重点观察interfaces这一行，可以发现这个代理类实现了3个接口，分别为SpringProxy，Advised和Factory
+
+
+
+
+ class-info        site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
+ code-source       /Users/shanzhao/IdeaProjects/soil/target/classes/
+ name              site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
+ isInterface       false
+ isAnnotation      false
+ isEnum            false
+ isAnonymousClass  false
+ isArray           false
+ isLocalClass      false
+ isMemberClass     false
+ isPrimitive       false
+ isSynthetic       false
+ simple-name       SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
+ modifier          public
+ annotation
+ interfaces        org.springframework.aop.SpringProxy,org.springframework.aop.framework.Advised,org.springframework.cglib.proxy.Factory
+ super-class       +-site.shanzhao.SpringAopDemo
+                     +-java.lang.Object
+ class-loader      +-sun.misc.Launcher$AppClassLoader@18b4aac2
+                     +-sun.misc.Launcher$ExtClassLoader@13fee20c
+ classLoaderHash   18b4aac2
+
+jad
+jad site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60：使用jad反编译代理class，这里只展示出了重点代码
+
+// package site.shanzhao;
+
+import java.lang.reflect.Method;
+import org.aopalliance.aop.Advice;
+import org.springframework.aop.Advisor;
+import org.springframework.aop.SpringProxy;
+import org.springframework.aop.TargetClassAware;
+import org.springframework.aop.TargetSource;
+import org.springframework.aop.framework.Advised;
+import org.springframework.aop.framework.AopConfigException;
+import org.springframework.cglib.core.ReflectUtils;
+import org.springframework.cglib.core.Signature;
+import org.springframework.cglib.proxy.Callback;
+import org.springframework.cglib.proxy.Dispatcher;
+import org.springframework.cglib.proxy.Factory;
+import org.springframework.cglib.proxy.MethodInterceptor;
+import org.springframework.cglib.proxy.MethodProxy;
+import org.springframework.cglib.proxy.NoOp;
+import site.shanzhao.SpringAopDemo;
+
+public class SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
+extends SpringAopDemo
+implements SpringProxy,
+Advised,
+Factory {
+    private boolean CGLIB$BOUND;
+    public static Object CGLIB$FACTORY_DATA;
+    private static final ThreadLocal CGLIB$THREAD_CALLBACKS;
+    private static final Callback[] CGLIB$STATIC_CALLBACKS;
+    private MethodInterceptor CGLIB$CALLBACK_0;
+    private MethodInterceptor CGLIB$CALLBACK_1;
+    private NoOp CGLIB$CALLBACK_2;
+    private Dispatcher CGLIB$CALLBACK_3;
+    private Dispatcher CGLIB$CALLBACK_4;
+    private MethodInterceptor CGLIB$CALLBACK_5;
+    private MethodInterceptor CGLIB$CALLBACK_6;
+
+    // 为org.springframework.aop.framework.Advised的接口，内部直接使用4号callback转化为ProxyFactory对象再调用目标方法
+    @Override
+    public final TargetSource getTargetSource() {
+        Dispatcher dispatcher = this.CGLIB$CALLBACK_4;
+        if (dispatcher == null) {
+            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
+            dispatcher = this.CGLIB$CALLBACK_4;
+        }
+        return ((Advised)dispatcher.loadObject()).getTargetSource();
+    }
+    // aop增强的方法，使用0号callback进行处理，实现类为DynamicAdvisedInterceptor。
+    // 应该有两个适合这个方法的Advisor，一个是@BizLog的LogInterceptor切面，另一个是事物切面
+    public final void aopMethod() {
+        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_0;
+        if (methodInterceptor == null) {
+            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
+            methodInterceptor = this.CGLIB$CALLBACK_0;
+        }
+        if (methodInterceptor != null) {
+            Object object = methodInterceptor.intercept(this, CGLIB$aopMethod$0$Method, CGLIB$emptyArgs, CGLIB$aopMethod$0$Proxy);
+            return;
+        }
+        super.aopMethod();
+    }
+   // 未增强的方法，同样使用0号callback进行处理，但却不会有适合这个方法的Advisor
+   public final void notAopMethod() {
+        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_0;
+        if (methodInterceptor == null) {
+            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
+            methodInterceptor = this.CGLIB$CALLBACK_0;
+        }
+        if (methodInterceptor != null) {
+            Object object = methodInterceptor.intercept(this, CGLIB$notAopMethod$1$Method, CGLIB$emptyArgs, CGLIB$notAopMethod$1$Proxy);
+            return;
+        }
+        super.notAopMethod();
+    }
+
+        // Object的equals方法，使用5号callback处理，实现类为EqualsInterceptor
+    public final boolean equals(Object object) {
+        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_5;
+        if (methodInterceptor == null) {
+            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
+            methodInterceptor = this.CGLIB$CALLBACK_5;
+        }
+        if (methodInterceptor != null) {
+            Object object2 = methodInterceptor.intercept(this, CGLIB$equals$2$Method, new Object[]{object}, CGLIB$equals$2$Proxy);
+            return object2 == null ? false : (Boolean)object2;
+        }
+        return super.equals(object);
+    }
+
+}
+
+debug下代理类的信息这是从容器中直接获取SpringAopDemo这个class得到的对象，也就是代理类而不是源对象
+
+
+重点信息已用红框框处，逐个分析
+
+CGLIB$CALLBACK_0：通用拦截器，有切面和没有切面的普通方法方法都会用
+advised：实现为org.springframework.aop.framework.ProxyFactory。是 Spring AOP 中封装代理创建逻辑的核心工具类，实现了 Advised 接口。它通过维护一系列配置和内部结构，完成对目标对象的方法级别增强。
+targetSource：内部封装了源对象，可以将当前代理类强转为Advised，在调用其getTargetSource方法获取到源对象
+methodCache：缓存方法与其对应增强（Advisor）链的映射，加快方法调用时的拦截查找过程。
+notAopMethod：没有切面，所以size&#x3D;0
+aopMethod：有两个切面，缓存的size&#x3D;2
+
+
+advisor：代理类所有的Advisor
+proxyTargetClass：是否直接代理的目标class。为true则表示cglib proxy，fasle则是jdk proxy
+exposeProxy：是否将当前代理暴露到 ThreadLocal 上下文中，允许在目标对象内部通过 AopContext.currentProxy() 获取自身代理对象，用于内部方法调用也能被增强。
+frozen：表示配置是否被冻结。默认为false，支持在运行时动态添加或移除 Advisor。如果设置为 true，配置将被锁定，并跳过 methodCache 的清理逻辑以提升性能。
+
+
+
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>AOP</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java源码篇-锁</title>
+    <url>/2020/04/18/java-yuan-ma-pian-suo/</url>
+    <content><![CDATA[​	jdk中AQS实现类相关源码解析。包括 ReentrantLock，Condition，CountDownLatch，Semaphore，ReentrantReadWriteLock
+
+
+锁1 ReentrantLock​		基于AQS实现的一种可重入互斥锁，所以只允许一个线程获取到锁。获取到锁时state设为1，当获取到锁的线程尝试重入时，便会增加state，同理需要将state减到0才会释放锁
+1.1 非公平锁（NonfairSync）lock
+
+java.util.concurrent.locks.ReentrantLock.Sync#nonfairTryAcquire：利用CAS尝试设置state，能设置成功，代表获取到锁，成功返回。设置失败，代表已经被其他线程获取了锁，返回失败
+返回失败后将当前线程构造为Node节点，设置到同步队列的链表中进入到java.util.concurrent.locks.AbstractQueuedSynchronizer#acquireQueued方法：死循环获取当前Node的前一个节点（同步队列的首节点是成功获取到锁的节点），如果前驱结点为首节点，当前Node才有资格获取锁。如果还是获取不到，就调用java.util.concurrent.locks.LockSupport#park(java.lang.Object)方法阻塞当前线程，等待其他线程唤醒再去竞争锁
+
+
+unlock
+
+java.util.concurrent.locks.ReentrantLock.Sync#tryRelease：复原state（将其归0），exclusiveOwnerThread设为null
+java.util.concurrent.locks.AbstractQueuedSynchronizer#release：在tryRelease成功后，使用java.util.concurrent.locks.LockSupport#unpark方法唤醒同步队列首节点的下一个节点里的线程，让他再去尝试获取锁
+
+
+1.2 公平锁（FairSync）lock
+​		和非公平锁很像，不同的部分就在覆盖了java.util.concurrent.locks.AbstractQueuedSynchronizer#tryAcquire这个方法和非公平锁略有不同。在新的线程获取锁失败，并将自己构造为Node节点并放入同步队列链表后，还会通过调用java.util.concurrent.locks.AbstractQueuedSynchronizer#hasQueuedPredecessors方法
+
+unlock：和非公平锁一样核心代码
+// ReentrantLock的公平锁第一次尝试获取锁
+protected final boolean tryAcquire(int acquires) {
+        final Thread current = Thread.currentThread();
+        int c = getState();
+        if (c == 0) {
+            if (!hasQueuedPredecessors() &amp;&amp; // 测试当前线程是否是等待最久的线程
+                compareAndSetState(0, acquires)) {
+                setExclusiveOwnerThread(current);
+                return true;
+            }
+        }
+        else if (current == getExclusiveOwnerThread()) {
+            int nextc = c + acquires;
+            if (nextc &lt; 0)
+                throw new Error("Maximum lock count exceeded");
+            setState(nextc);
+            return true;
+        }
+        return false;
+    }
+} 
+
+/** 
+ * 查询是否有线程等待获取的时间长于当前线程
+ * 判断是否存在队列中第二个Node(因为首节点是个空节点)，且第二个节点中的线程是否是当前线程
+ * 也就是说：判断同步队列中当前节点是否有前驱结点
+ * true:代表当前线程不是等待最久的线程或压根就没有等待的线程
+ * false:在代表当前线程已经是等待最久的线程（毕竟队列越前面，则代表进去的越久）&lt;p/>
+ * 只有公平锁才需要用到这个方法，来判断当前线程是否等待时间最长
+ */
+public final boolean hasQueuedPredecessors() {
+    Node t = tail; 
+    Node h = head;
+    Node s;
+    // 用 h != t 来做判断是因为调用这个方法的线程此时还没有进入等待队列
+    // 如果 h != t，则代表队列中有线程在等待获取锁
+    return h != t &amp;&amp;
+        ((s = h.next) == null || s.thread != Thread.currentThread());
+}
+
+1.3 总结1.3.1 为什么叫公平锁和非公平锁​	根据上面的分析，公平锁在获取锁是总是会先判断当前线程是否是等待最久的线程。所以，就算是同步队列存在大量Node，且有线程第一次在获取锁，那么，下一次获取到锁的线程也一定是同步队列的首节点的下一个节点，即必须排队。（首节点就是当前获取到锁的节点，只有获取成功了，同步才会更新首节点）
+​	非公平锁中：对于已经进入同步队列的线程来说，也只能首节点的下一个节点里的线程能尝试获取锁。但对于还未构造成Node加入到同步队列的线程来说，这个线程和首节点的下一个节点里的线程能竞争获取锁，所以非公平。但对于已经进入同步队列的线程来说，前驱结点是一定比后面的节点先获取到锁的
+1.3.2 各自优势
+公平锁：防止线程饥饿，分散性很好，适合线程等待时间敏感的场景
+非公平锁：更快。一是获取锁是不用判断当前线程是否是等待最久的线程。二是上下文交换没有公平锁频繁。在存在大量锁竞争的前提下，可以肯定，公平锁上下文切换很频繁，获取锁后的线程再次获取锁时是一定会阻塞的。而非公平锁则不一样，下一次获取到锁的线程仍可能是上一次获取到锁的线程，没有上下文切换
+
+2 Condition等待通知接口，代替Object原生的wait和notify，其具体实现为AQS里的ConditionObject（定义在AQS里的非静态内部类，所以使用了AQS部分方法来实现其功能）。只有获取到锁的线程才能调用Condition的阻塞和唤醒方法。三个核心组件如下
+
+等待队列：使用 Node 节点串联，与 AQS 同步队列共用 Node 结构 
+状态转换：Node 在等待队列和同步队列之间的转换 
+线程控制：包括阻塞、唤醒、中断处理等机制
+
+主要字段
+// 等待队列中的首节点
+private transient Node firstWaiter;
+// 等待队列中的尾节点
+private transient Node lastWaiter;
+
+2.1 Condition#await流程
+
+首先将当前线程构造为等待节点，并加入到等待队列的末尾
+其次释放锁资源（能够await的线程一定是获取到锁的），同时唤醒同步队列的第二个节点，让其尝试获取锁
+死循环判断当前节点是否为同步节点（等待节点在等待队列里，是一定要阻塞的。同步节点在同步队列里，是可以并被唤醒并尝试获取锁的），await到这里线程就阻塞了
+当被唤醒后，当前节点一定被加入了同步队列，再尝试获取锁，如果能获取到，代表就可以返回了。如果获取不到，就表示当前同步块被其他线程暂用了，也还是阻塞。不过下一次被唤醒后就会通过同步队列的唤醒方式来尝试获取锁
+
+
+代码public final void await() throws InterruptedException {
+    if (Thread.interrupted()) // 响应中断
+        throw new InterruptedException();
+    // 构建等待节点并加入等待队列
+    Node node = addConditionWaiter();
+    // 先检查当前线程是否已获取到锁，否则抛异常。然后完全释放锁并且唤醒同步队列中的第二个节点
+    int savedState = fullyRelease(node);
+    int interruptMode = 0;
+    // 死循环判断当前节点是否在等待队列中
+    // 等待队列中的节点一定要阻塞，而同步队列中的节点是可以被唤醒的
+    while (!isOnSyncQueue(node)) {
+        LockSupport.park(this);
+        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+            break;
+    }
+    // 当signal后，需要重新获取锁，要复原现场，需要重新持有上一次所持有的所有的state值
+    if (acquireQueued(node, savedState) &amp;&amp; interruptMode != THROW_IE)
+        interruptMode = REINTERRUPT;
+    if (node.nextWaiter != null) // clean up if cancelled
+        unlinkCancelledWaiters();
+    if (interruptMode != 0) // 当前节点有中断
+        reportInterruptAfterWait(interruptMode);
+}
+/**
+ *   将当前线程构造为一个等待节点，并加入到等待队列的尾部，并通过nextWaiter字段建立联系 &lt;br/>
+ *  注意：等待队列建立关联用的是nextWaiter字段，不是prev和next字段
+ */
+private Node addConditionWaiter() {
+    Node lastW = lastWaiter; // 尾节点
+    // If lastWaiter is cancelled, clean out.
+    if (lastW != null &amp;&amp; lastW.waitStatus != Node.CONDITION) {
+        unlinkCancelledWaiters();
+        lastW = lastWaiter;
+    }
+    Node node = new Node(Thread.currentThread(), Node.CONDITION);
+    if (lastW == null)
+        firstWaiter = node;
+    else
+        lastW.nextWaiter = node;
+    lastWaiter = node;
+    return node;
+}
+
+// ====================以下为AQS中的方法===================
+// 判断这个节点是否在同步队列上
+// false -> 这个节点在等待队列上
+// true -> 这个节点在同步队列上
+final boolean isOnSyncQueue(Node node) {
+    if (node.waitStatus == Node.CONDITION || node.prev == null)
+        return false;
+    if (node.next != null) // If has successor, it must be on queue
+        return true;
+    return findNodeFromTail(node);
+}
+/**
+* 当前节点尝试获取锁
+* 返回true -> 获取锁的过程有中断
+*/
+final boolean acquireQueued(final Node node, int arg) {
+    boolean failed = true;
+    try {
+        boolean interrupted = false;
+        for (;;) {
+            final Node prevNode = node.predecessor();
+            // 只有当前节点的前驱结点为首节点，当前节点里的线程才有资格获取锁
+            // 只可能有一个线程获取成功（即获取锁），所以设置首节点不需要同步了
+            if (prevNode == head &amp;&amp; tryAcquire(arg)) {
+                setHead(node);
+                prevNode.next = null; // help GC
+                failed = false;
+                return interrupted;
+            }
+            if (shouldParkAfterFailedAcquire(prevNode, node) &amp;&amp;
+                parkAndCheckInterrupt())
+                interrupted = true;
+        }
+    } finally {
+        if (failed)
+            cancelAcquire(node);
+    }
+}
+
+2.2 Condition#signal和signalAll分析singal的目的很简单，就是将等待队列的首节点转移到同步队列的尾节点，signalAll则是将等待队列中的所有节点都转移到同步节点。signal方法本身不能唤醒线程，只是让这些节点里的线程有资格被唤醒，可以将signal和排队买票做类比
+
+等待队列相当于候补区
+signal 相当于叫号，让候补区的人去正式排队区（同步队列）
+但叫号本身并不会直接让人拿到票，还需要排队区的人按顺序获取票（锁）
+
+代码private void doSignal(Node first) {
+    do {
+        // 将首节点的nextWaiter转移到首节点，如果nextWaiter为空，则表示队列中只有一个节点，且首尾相同
+        if ( (firstWaiter = first.nextWaiter) == null)
+            lastWaiter = null;
+        first.nextWaiter = null; // gc处理
+    } while (!transferForSignal(first) &amp;&amp;
+             (first = firstWaiter) != null);
+}
+// 将当前的等待节点转换为同步节点，并加入到同步队列的末尾
+final boolean transferForSignal(Node node) {
+    if (!compareAndSetWaitStatus(node, Node.CONDITION, 0))
+        return false;
+    Node p = enq(node);
+    int ws = p.waitStatus;
+    if (ws > 0 || !compareAndSetWaitStatus(p, ws, Node.SIGNAL))
+        LockSupport.unpark(node.thread); // 前驱节点被取消了，或者设置为SIGNAL失败
+    return true;
+}
+
+2.3 总结​		Condition实现了等待通知，当一个线程进入同步块后，就可以调用await，释放自己获取的锁资源，将自己阻塞。内部实现是首先将当前线程构造成一个等待节点，加入ConditionObject的等待队列的末尾，再释放锁资源，之后唤醒同步队列的第二个节点让其尝试获取锁。而当其他进入同步块的线程调用signal后，会将等待队列的首节点转移到同步队列，并将其变成同步节点，最后再使用同步队列的唤醒机制等待被唤醒。
+​		所以signal并不能直接唤醒一个await的线程，最佳使用案例就是消费者发送者机制，比如阻塞队列。
+3 CountDownLatchCountDownLatch为共享锁实现，只能使用一次。用来“卡点”，阻塞的线程需要等待其他线程准备好了后（countDown直到AQS里的state为0），才继续被唤醒执行后面的代码。
+在CountDownLatch中，AQS里的state值并不表示可获取到锁的次数，而是java.util.concurrent.CountDownLatch#countDown state值的次数后会释放所有调用了**java.util.concurrent.CountDownLatch#await()**的线程
+内部的同步器Sync主要方法
+/**
+    获取共享锁，只有AQS的state为0才能获取到
+    通过这个接口就可以猜到，当state为0时（拉下了所有门闩），总会返回1，代表获取锁成功。
+    并依次传播下去递归调用这个方法，直到同步队列的所有Node里的线程全部唤醒，这就是CountDownLatch的原理
+*/
+protected int tryAcquireShared(int acquires) {
+    return (getState() == 0) ? 1 : -1;
+}
+
+// 释放共享锁，state第一次被减为0才释放成功，也就表示了CountDownLatch只能用一次
+protected boolean tryReleaseShared(int releases) {
+    // Decrement count; signal when transition to zero
+    for (;;) {
+        int c = getState();
+        if (c == 0)
+            return false;
+        int nextc = c-1;
+        if (compareAndSetState(c, nextc))
+            return nextc == 0;
+    }
+}
+
+await方法会阻塞当前线程，直到其他线程“拉下所有门闩”。阻塞的线程会构造为共享节点加入同步队列，只有队首节点的下一个节点才有资格尝试获取锁，获取不到就LockSupport#park
+countDown会将state值减小1，当state将为0时，释放同步队列里的第二个共享节点里的线程。当这个线程释放后，就能成功获取到锁了，将这个事件传播下去，一次唤醒同步队列里的所有共享节点。至此，所有被阻塞的线程都被唤醒且会成功获取到锁，最终从await方法里返回
+4 Semaphore信号量，共享锁实现。可以利用构造器指定令牌（permits）的数量。当线程到达时，获取（acquire）指定数量的令牌，当没有可用令牌（premits为0）时，阻塞线程，等待令牌的释放（release）再被唤醒后继续执行。基于此，即可实现共享锁（permits大于1），也可实现不可重入的互斥锁（permits为1）
+也分为公平锁和分公平锁，其判断方式完全和ReentrantLock一致。
+​		非公平锁允许准备进入同步块的线程（还未加入同步队列）和同步队列中的第二个节点竞争获取锁。而公平锁则只允许同步队列中第二个节点里的线程能尝试获取锁。
+​		其实现方式就是将state设为我们允许并发运行的线程数量，每当一个线程获取到锁后，将state - 1，如果state为0则阻塞所有准备进入同步块的线程，并将其构造为共享节点加入同步队列。每当有线程从同步块退出时，将state + 1，并根据是否非公平来唤醒同步队列的第二个节点来尝试获取锁
+5 ReentrantReadWriteLock​		读写锁，支持并发的读或互斥的写。读写锁分别各自实现，读锁使用共享锁，写锁使用互斥锁。ReentrantReadWriteLock内部的ReadLock和WriteLock都使用了内部同一个Sync对象来实现读写加锁的功能，在Sync内，他将AQS的state转换为二进制，高十六位表示读状态位，低十六位表示写状态位。由于读是共享的，所以state的高十六位表示了当前有多少个线程在读，在此期间写锁是禁用的。而低十六位是写锁，所以只可能有一个线程，但可能数字大于1（这是就表示写锁重入了）。当写锁被占用是，读是不允许的
+static final int SHARED_SHIFT= 16;                     //   读状态位            写状态位
+static final int SHARED_UNIT  = (1 &lt;&lt; SHARED_SHIFT); // 0000000000000001 0000000000000000
+static final int MAX_COUNT = (1 &lt;&lt; SHARED_SHIFT) - 1;//0000000000000000 1111111111111111
+static final int EXCLUSIVE_MASK = (1 &lt;&lt; SHARED_SHIFT) - 1;//0000000000000000 1111111111111111
+// 获取共享锁冲入次数（读锁专用）
+static int sharedCount(int c)    { return c >>> SHARED_SHIFT; }
+// 获取排他锁冲入次数（写锁专用）
+static int exclusiveCount(int c) { return c &amp; EXCLUSIVE_MASK; }
+
+
+读写锁都支持重入，但写锁只能让当前线程重入，并且要解锁时需要unlock重入的次数。
+
+支持锁降级但不支持锁升级
+
+ 锁降级：即一个线程在持有写锁的情况下，可以继续获取读锁，然后释放写锁，从而将写锁降级为读锁。在某些场景下很有用，比如
+
+在写操作完成后，仍然需要保持对数据的读访问权限
+避免其他线程在写锁释放后立即获取写锁，导致数据不一致
+
+
+
+
+]]></content>
+      <categories>
+        <category>jdk</category>
+      </categories>
+      <tags>
+        <tag>AQS实现类</tag>
+      </tags>
   </entry>
   <entry>
     <title>Spring-Bean初始化</title>
@@ -3346,6 +3810,272 @@ Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（th
       </categories>
       <tags>
         <tag>ThreadLocal</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Spring-Bean的字段填充阶段处理</title>
+    <url>/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</url>
+    <content><![CDATA[
+​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程
+ 
+
+Spring-Bean的字段填充阶段相关处理器CommonAnnotationBeanPostProcessor​	专用来处理非Srping官方提供，而是javax的通用如下注解：
+
+@javax.annotation.Resource
+@javax.annotation.PostConstruct
+@javax.annotation.PreDestroy
+@javax.ejb.EJB
+@javax.xml.ws.WebServiceRef
+
+其主要有两个重要过程，一是提取这些注解所在字段或方法的元数据。之后才是使用这些注解
+其架构如下图所示。1被用在解析注解所在字段的元数据，2则是使用这些注解的处理器接口，3则表示它也具备Init和Destory注解解析的功能
+
+CommonAnnotationBeanPostProcessor架构
+
+解析Field和方法
+public void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class&lt;?> beanType, String beanName) {
+      // 调用父接口，解析@PostConstruct和@PreDestroy相关方法
+    super.postProcessMergedBeanDefinition(beanDefinition, beanType, beanName);
+        // 解析其余的注解
+    InjectionMetadata metadata = findResourceMetadata(beanName, beanType, null);
+    metadata.checkConfigMembers(beanDefinition);
+}
+
+private InjectionMetadata findResourceMetadata(String beanName, final Class&lt;?> clazz, @Nullable PropertyValues pvs) {
+    // 构建当前bean的缓存key，用于存放这个bean的所有依赖
+        String cacheKey = (StringUtils.hasLength(beanName) ? beanName : clazz.getName());
+        // 先从injectionMetadataCache缓存中拿，没有再构造，最后放入缓存
+        InjectionMetadata metadata = this.injectionMetadataCache.get(cacheKey);
+        if (InjectionMetadata.needsRefresh(metadata, clazz)) {
+            synchronized (this.injectionMetadataCache) {
+                metadata = this.injectionMetadataCache.get(cacheKey);
+                if (InjectionMetadata.needsRefresh(metadata, clazz)) {
+                    if (metadata != null) {
+                        metadata.clear(pvs);
+                    }
+                    metadata = buildResourceMetadata(clazz);
+                    this.injectionMetadataCache.put(cacheKey, metadata);
+                }
+            }
+        }
+        return metadata;
+    }
+// 开始解析@WebServiceRef，@EJB和@Resource
+// 这里面任意一个解析后都会进行Modifier.isStatic判断。可知静态字段或方法不支持自动注入，直接抛出了异常
+private InjectionMetadata buildResourceMetadata(final Class&lt;?> clazz) {
+        List&lt;InjectionMetadata.InjectedElement> elements = new ArrayList&lt;>();
+        Class&lt;?> targetClass = clazz;
+
+        do {
+            final List&lt;InjectionMetadata.InjectedElement> currElements = new ArrayList&lt;>();
+
+      // 遍历这个class的所有field，依次对每个field进行处理
+            ReflectionUtils.doWithLocalFields(targetClass, field -> {
+                // @WebServiceRef注解处理
+                if (webServiceRefClass != null &amp;&amp; field.isAnnotationPresent(webServiceRefClass)) {
+                    if (Modifier.isStatic(field.getModifiers())) {
+                        throw new IllegalStateException("@WebServiceRef annotation is not supported on static fields");
+                    }
+                    currElements.add(new WebServiceRefElement(field, field, null));
+                }
+                // @EJB注解处理
+                else if (ejbRefClass != null &amp;&amp; field.isAnnotationPresent(ejbRefClass)) {
+                    if (Modifier.isStatic(field.getModifiers())) {
+                        throw new IllegalStateException("@EJB annotation is not supported on static fields");
+                    }
+                    currElements.add(new EjbRefElement(field, field, null));
+                }
+                // @Resource注解处理
+                else if (field.isAnnotationPresent(Resource.class)) {
+                    if (Modifier.isStatic(field.getModifiers())) {
+                        throw new IllegalStateException("@Resource annotation is not supported on static fields");
+                    }
+                    if (!this.ignoredResourceTypes.contains(field.getType().getName())) {
+                        currElements.add(new ResourceElement(field, field, null));
+                    }
+                }
+            });
+
+      // 再遍历这个class的所有method，处理以set方法进行注入的方式
+            ReflectionUtils.doWithLocalMethods(targetClass, method -> {
+                Method bridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
+                if (!BridgeMethodResolver.isVisibilityBridgeMethodPair(method, bridgedMethod)) {
+                    return;
+                }
+                if (method.equals(ClassUtils.getMostSpecificMethod(method, clazz))) {
+                    if (webServiceRefClass != null &amp;&amp; bridgedMethod.isAnnotationPresent(webServiceRefClass)) {
+                        if (Modifier.isStatic(method.getModifiers())) {
+                            throw new IllegalStateException("@WebServiceRef annotation is not supported on static methods");
+                        }
+                        if (method.getParameterCount() != 1) {
+                            throw new IllegalStateException("@WebServiceRef annotation requires a single-arg method: " + method);
+                        }
+                        PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
+                        currElements.add(new WebServiceRefElement(method, bridgedMethod, pd));
+                    }
+                    else if (ejbRefClass != null &amp;&amp; bridgedMethod.isAnnotationPresent(ejbRefClass)) {
+                        if (Modifier.isStatic(method.getModifiers())) {
+                            throw new IllegalStateException("@EJB annotation is not supported on static methods");
+                        }
+                        if (method.getParameterCount() != 1) {
+                            throw new IllegalStateException("@EJB annotation requires a single-arg method: " + method);
+                        }
+                        PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
+                        currElements.add(new EjbRefElement(method, bridgedMethod, pd));
+                    }
+                    else if (bridgedMethod.isAnnotationPresent(Resource.class)) {
+                        if (Modifier.isStatic(method.getModifiers())) {
+                            throw new IllegalStateException("@Resource annotation is not supported on static methods");
+                        }
+                        Class&lt;?>[] paramTypes = method.getParameterTypes();
+                        if (paramTypes.length != 1) {
+                            throw new IllegalStateException("@Resource annotation requires a single-arg method: " + method);
+                        }
+                        if (!this.ignoredResourceTypes.contains(paramTypes[0].getName())) {
+                            PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
+                            currElements.add(new ResourceElement(method, bridgedMethod, pd));
+                        }
+                    }
+                }
+            });
+
+            elements.addAll(0, currElements);
+            targetClass = targetClass.getSuperclass();
+        }
+        while (targetClass != null &amp;&amp; targetClass != Object.class);
+
+        return new InjectionMetadata(clazz, elements);
+    }
+
+ResourceElement源码​	以@Resource注解解析后的数据ResourceElement为例，可以发现beanName默认为@Resource的name字段。如果没有则为field字段（注解在field上）。或者则去掉前面的set，再将下个字母变为小写作为beanName（注解在set方法上）
+private class ResourceElement extends LookupElement {
+
+    /**
+     * 存在@Lazy注解，且value为true，这个值就为true
+     */
+    private final boolean lazyLookup;
+
+    public ResourceElement(Member member, AnnotatedElement ae, @Nullable PropertyDescriptor pd) {
+       super(member, pd);
+       Resource resource = ae.getAnnotation(Resource.class);
+       // @Resource的name字段
+       String resourceName = resource.name();
+       Class&lt;?> resourceType = resource.type();
+       this.isDefaultName = !StringUtils.hasLength(resourceName);
+       if (this.isDefaultName) { // name字段为空
+          // 先获取这个字段名
+          resourceName = this.member.getName();
+          if (this.member instanceof Method &amp;&amp; resourceName.startsWith("set") &amp;&amp; resourceName.length() > 3) { // 注解在set方法上，则去掉前面的set，再将下个字母变为小写作为beanName
+             resourceName = Introspector.decapitalize(resourceName.substring(3));
+          }
+       }
+       else if (embeddedValueResolver != null) { // 支持占位符解析
+          resourceName = embeddedValueResolver.resolveStringValue(resourceName);
+       }
+       if (Object.class != resourceType) {
+          checkResourceType(resourceType);
+       }
+       else {
+          // No resource type specified... check field/method.
+          resourceType = getResourceType();
+       }
+       // 默认字段名
+       this.name = (resourceName != null ? resourceName : "");
+       // 默认当前字段的Class类型
+       this.lookupType = resourceType;
+       String lookupValue = resource.lookup();
+       this.mappedName = (StringUtils.hasLength(lookupValue) ? lookupValue : resource.mappedName());
+       Lazy lazy = ae.getAnnotation(Lazy.class);
+       this.lazyLookup = (lazy != null &amp;&amp; lazy.value());
+    }
+
+   /**
+           字段注入方法，如果需要懒加载，则会创建一个代理对象
+   */
+    @Override
+    protected Object getResourceToInject(Object target, @Nullable String requestingBeanName) {
+       return (this.lazyLookup ? buildLazyResourceProxy(this, requestingBeanName) :
+             getResource(this, requestingBeanName));
+    }
+}
+
+字段注入bean的populateBean调用了InstantiationAwareBeanPostProcessor#postProcessProperties方法，开始字段的注入
+CommonAnnotationBeanPostProcessor#postProcessPropertiespublic PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
+        // 找出上一步缓存的元数据
+    InjectionMetadata metadata = findResourceMetadata(beanName, bean.getClass(), pvs);
+    try {
+      // 开始注入
+       metadata.inject(bean, beanName, pvs);
+    }
+    catch (Throwable ex) {
+       throw new BeanCreationException(beanName, "Injection of resource dependencies failed", ex);
+    }
+    return pvs;
+}
+
+InjectionMetadata.InjectedElement#injectprotected void inject(Object target, @Nullable String requestingBeanName, @Nullable PropertyValues pvs)
+       throws Throwable {
+
+    if (this.isField) { // 字段注入
+       Field field = (Field) this.member;
+       ReflectionUtils.makeAccessible(field);
+       // 根据不同的子类getResourceToInject实现，获取对应的bean。会触发依赖bean的创建
+       // 依赖bean创建完毕并返回后，再将其赋予给field
+       field.set(target, getResourceToInject(target, requestingBeanName));
+    }
+    else { // set方法注入
+       if (checkPropertySkipping(pvs)) {
+          return;
+       }
+       try {
+          Method method = (Method) this.member;
+          ReflectionUtils.makeAccessible(method);
+          method.invoke(target, getResourceToInject(target, requestingBeanName));
+       }
+       catch (InvocationTargetException ex) {
+          throw ex.getTargetException();
+       }
+    }
+}
+
+总结CommonAnnotationBeanPostProcessor 是标准注解(@Resource/@PostConstruct/@PreDestroy)的解析者，通过元数据提前解析+生命周期钩子回调，实现了依赖注入和生命周期管理。
+
+CommonAnnotationBeanPostProcessor#postProcessMergedBeanDefinition：负责扫描 @Resource、@PostConstruct、@PreDestroy 注解，把解析结果封装成 InjectionMetadata（字段、方法对应的 ResourceElement 等），再缓存下来，等待后续注入或生命周期回调使用
+CommonAnnotationBeanPostProcessor#postProcessProperties：负责根据解析好的 InjectionMetadata 真正进行注入
+InitDestroyAnnotationBeanPostProcessor#postProcessBeforeInitialization： 在 Bean 初始化前，调用所有 @PostConstruct 标注的方法
+InitDestroyAnnotationBeanPostProcessor#postProcessBeforeDestruction：在 Bean 销毁前，调用所有 @PreDestroy 标注的方法。
+
+
+
+AutowiredAnnotationBeanPostProcessor根据构造方法可知，它专用来处理Spring提供的这些注解
+public AutowiredAnnotationBeanPostProcessor() {
+      // @Autowired支持
+    this.autowiredAnnotationTypes.add(Autowired.class);
+      // @Value支持
+    this.autowiredAnnotationTypes.add(Value.class);
+    try {
+       // javax提供的@Value支持
+       this.autowiredAnnotationTypes.add((Class&lt;? extends Annotation>)
+             ClassUtils.forName("javax.inject.Value", AutowiredAnnotationBeanPostProcessor.class.getClassLoader()));
+       logger.trace("JSR-330 'javax.inject.Inject' annotation found and supported for autowiring");
+    }
+    catch (ClassNotFoundException ex) {
+       // JSR-330 API not available - simply skip.
+    }
+}
+
+
+@org.springframework.beans.factory.annotation.Autowired
+@org.springframework.beans.factory.annotation.Value
+@javax.inject.Inject
+
+​		整体流程和上面的CommonAnnotationBeanPostProcessor差不多。都是在postProcessMergedBeanDefinition方法里进行bean内部有上诉3个注解的字段或方法进行解析并缓存。然后在postProcessProperties进行依赖注入
+]]></content>
+      <categories>
+        <category>spring</category>
+      </categories>
+      <tags>
+        <tag>BeanPostProcessor</tag>
       </tags>
   </entry>
 </search>
