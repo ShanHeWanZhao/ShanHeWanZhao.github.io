@@ -37,6 +37,26 @@
   </entry>
   
   <entry>
+    <title>Spring-Transactional</title>
+    <link href="https://blog.shanzhao.site/2021/02/23/spring-transactional/"/>
+    <id>https://blog.shanzhao.site/2021/02/23/spring-transactional/</id>
+    <published>2021-02-23T13:08:46.000Z</published>
+    <updated>2021-02-23T13:08:46.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	从&lt;strong&gt;源码分析了@Transactional的解析和切面使用流程&lt;/strong&gt;。Spring事物如此复杂是因为不同的PROPAGATION有不同的策略，特别是在嵌套的流程中，所以&lt;strong&gt;重点分析了PlatformTransactionManager的事物获取流程，深入了解了PROPAGATION的实现&lt;/strong&gt;&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
+    
+    
+    <category term="-@Transactional" scheme="https://blog.shanzhao.site/tags/Transactional/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Spring-AOP</title>
     <link href="https://blog.shanzhao.site/2021/02/08/spring-aop/"/>
     <id>https://blog.shanzhao.site/2021/02/08/spring-aop/</id>
