@@ -29,7 +29,8 @@
 <meta property="article:published_time" content="2021-02-23T13:08:46.000Z">
 <meta property="article:modified_time" content="2021-02-23T13:08:46.000Z">
 <meta property="article:author" content="reef">
-<meta property="article:tag" content="-@Transactional">
+<meta property="article:tag" content="BeanPostProcessor">
+<meta property="article:tag" content="Transactional注解">
 <meta name="twitter:card" content="summary">
 
 
@@ -175,7 +176,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">16</span>
+          <span class="site-state-item-count">17</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -1102,7 +1103,7 @@
 </thead>
 <tbody><tr>
 <td><code>PROPAGATION_NOT_SUPPORTED</code></td>
-<td>以非事务的方式运行（有事务就暂停事务，没有就啥也不做），实现和上面的差不多，只是这是不需要新建事务了</td>
+<td>以非事务的方式运行（<strong>有事务就暂停事务，重新获取一个没有事物的Connection使用</strong>。没有就啥也不做），实现和上面的差不多。<strong>但默认仍会注册事物同步器，让当前这个事物始终用同一个Connection</strong></td>
 </tr>
 <tr>
 <td><code>PROPAGATION_NEVER</code></td>
@@ -1155,10 +1156,13 @@
 <h2 id="DataSourceUtils"><a href="#DataSourceUtils" class="headerlink" title="DataSourceUtils"></a>DataSourceUtils</h2><p>​		前面我们分析了 Spring 事务的整体流程，但还有1个关键问题：<strong>在实际项目中，Spring 很少直接作为持久化框架，MyBatis、Hibernate 等才是执行数据库操作的主力</strong>。那么事务是 Spring 管的，数据库连接却是由 MyBatis 获取的，<strong>两者如何协同？</strong></p>
 <p>这就引出了 <code>DataSourceUtils</code> 的作用：<strong>为持久层框架提供“Spring 管控下的连接”</strong>，确保它们获取到的 <code>Connection</code> 是当前事务中绑定的那个，这样事务控制（包括 commit&#x2F;rollback）才能正确生效。</p>
 <h3 id="核心源码"><a href="#核心源码" class="headerlink" title="核心源码"></a>核心源码</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">DataSourceUtils</span> <span class="token punctuation">{</span>
+    
+
     <span class="token keyword">public</span> <span class="token keyword">static</span> Connection <span class="token function">doGetConnection</span><span class="token punctuation">(</span>DataSource dataSource<span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
         Assert<span class="token punctuation">.</span><span class="token function">notNull</span><span class="token punctuation">(</span>dataSource<span class="token punctuation">,</span> <span class="token string">"No DataSource specified"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-        <span class="token comment" spellcheck="true">// 1. 尝试从 TransactionSynchronizationManager 中获取线程绑定的 ConnectionHolder（如果当前线程处于事务中）</span>
+        <span class="token comment" spellcheck="true">// 1. 尝试从 TransactionSynchronizationManager 中获取线程绑定的 ConnectionHolder</span>
+        <span class="token comment" spellcheck="true">// 只要TransactionSynchronizationManager.isSynchronizationActive()，都应该获取的是同一个ConnectionHolder</span>
         ConnectionHolder conHolder <span class="token operator">=</span> <span class="token punctuation">(</span>ConnectionHolder<span class="token punctuation">)</span> TransactionSynchronizationManager<span class="token punctuation">.</span><span class="token function">getResource</span><span class="token punctuation">(</span>dataSource<span class="token punctuation">)</span><span class="token punctuation">;</span>
 
         <span class="token comment" spellcheck="true">// 2. 如果当前线程中存在已关联的 ConnectionHolder 且已经持有连接，或者它被事务标记为已同步</span>
@@ -1172,7 +1176,6 @@
                 conHolder<span class="token punctuation">.</span><span class="token function">setConnection</span><span class="token punctuation">(</span><span class="token function">fetchConnection</span><span class="token punctuation">(</span>dataSource<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
             <span class="token punctuation">}</span>
 
-            <span class="token comment" spellcheck="true">// 返回已绑定的 Connection（参与当前事务）</span>
             <span class="token keyword">return</span> conHolder<span class="token punctuation">.</span><span class="token function">getConnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
         <span class="token punctuation">}</span>
         <span class="token comment" spellcheck="true">// =============== 否则：没有事务，或没有绑定连接的事务 ==================</span>
@@ -1182,46 +1185,42 @@
         <span class="token comment" spellcheck="true">// 3. 获取一个新的物理连接（不在事务中或事务尚未绑定连接）</span>
         Connection con <span class="token operator">=</span> <span class="token function">fetchConnection</span><span class="token punctuation">(</span>dataSource<span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-        <span class="token comment" spellcheck="true">// 4. 如果当前事务同步处于激活状态（通常意味着外部有 PlatformTransactionManager 正在管理事务）</span>
+        <span class="token comment" spellcheck="true">// 如果当前事物的事物同步器被激活，则将上面获取的Connection也绑定到事物资源里。让当前事物始终用用一个Connection</span>
+        <span class="token comment" spellcheck="true">// 就算当前事物是NOT_SUPPORTED，默认也会缓存ConnectionHolder</span>
         <span class="token keyword">if</span> <span class="token punctuation">(</span>TransactionSynchronizationManager<span class="token punctuation">.</span><span class="token function">isSynchronizationActive</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
             <span class="token keyword">try</span> <span class="token punctuation">{</span>
                 ConnectionHolder holderToUse <span class="token operator">=</span> conHolder<span class="token punctuation">;</span>
 
-                <span class="token comment" spellcheck="true">// 若原来没有 ConnectionHolder，则创建一个</span>
                 <span class="token keyword">if</span> <span class="token punctuation">(</span>holderToUse <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
                     holderToUse <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ConnectionHolder</span><span class="token punctuation">(</span>con<span class="token punctuation">)</span><span class="token punctuation">;</span>
                 <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
-                    <span class="token comment" spellcheck="true">// 有 holder 但还未设置连接，补充设置</span>
                     holderToUse<span class="token punctuation">.</span><span class="token function">setConnection</span><span class="token punctuation">(</span>con<span class="token punctuation">)</span><span class="token punctuation">;</span>
                 <span class="token punctuation">}</span>
 
-                <span class="token comment" spellcheck="true">// 标记请求过</span>
                 holderToUse<span class="token punctuation">.</span><span class="token function">requested</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-                <span class="token comment" spellcheck="true">// 5. 向当前事务注册一个同步回调（在事务提交或回滚时会被触发）</span>
+                <span class="token comment" spellcheck="true">// 注册一个事物同步器用于hook</span>
                 TransactionSynchronizationManager<span class="token punctuation">.</span><span class="token function">registerSynchronization</span><span class="token punctuation">(</span>
                         <span class="token keyword">new</span> <span class="token class-name">ConnectionSynchronization</span><span class="token punctuation">(</span>holderToUse<span class="token punctuation">,</span> dataSource<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
                 <span class="token comment" spellcheck="true">// 标记该连接已参与事务同步</span>
                 holderToUse<span class="token punctuation">.</span><span class="token function">setSynchronizedWithTransaction</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 
-                <span class="token comment" spellcheck="true">// 6. 如果原来没有绑定资源，则现在进行绑定</span>
+                <span class="token comment" spellcheck="true">// 第一次调用时才绑定：DataSource -> ConnectionHolder</span>
                 <span class="token keyword">if</span> <span class="token punctuation">(</span>holderToUse <span class="token operator">!=</span> conHolder<span class="token punctuation">)</span> <span class="token punctuation">{</span>
                     TransactionSynchronizationManager<span class="token punctuation">.</span><span class="token function">bindResource</span><span class="token punctuation">(</span>dataSource<span class="token punctuation">,</span> holderToUse<span class="token punctuation">)</span><span class="token punctuation">;</span>
                 <span class="token punctuation">}</span>
 
             <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">RuntimeException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
-                <span class="token comment" spellcheck="true">// 出现异常则关闭刚刚新建的连接，避免泄露</span>
                 <span class="token function">releaseConnection</span><span class="token punctuation">(</span>con<span class="token punctuation">,</span> dataSource<span class="token punctuation">)</span><span class="token punctuation">;</span>
                 <span class="token keyword">throw</span> ex<span class="token punctuation">;</span>
             <span class="token punctuation">}</span>
         <span class="token punctuation">}</span>
 
-        <span class="token comment" spellcheck="true">// 7. 返回新获取的连接（可能是非事务性的）</span>
         <span class="token keyword">return</span> con<span class="token punctuation">;</span>
     <span class="token punctuation">}</span>
 <span class="token punctuation">}</span>
-<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
 
     </div>
 
@@ -1231,7 +1230,8 @@
 
     <footer class="post-footer">
           <div class="post-tags">
-              <a href="/tags/Transactional/" rel="tag"># -@Transactional</a>
+              <a href="/tags/BeanPostProcessor/" rel="tag"># BeanPostProcessor</a>
+              <a href="/tags/Transactional%E6%B3%A8%E8%A7%A3/" rel="tag"># Transactional注解</a>
           </div>
 
         
@@ -1243,8 +1243,8 @@
                 </a>
             </div>
             <div class="post-nav-item">
-                <a href="/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/" rel="next" title="CloudFlare-CDN缓存清除">
-                  CloudFlare-CDN缓存清除 <i class="fa fa-angle-right"></i>
+                <a href="/2022/03/03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="next" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  Spring-事物NOT_SUPPORTED策略下多数据源切换的问题 <i class="fa fa-angle-right"></i>
                 </a>
             </div>
           </div>
@@ -1277,14 +1277,14 @@
       <i class="fa fa-chart-line"></i>
     </span>
       <span>站点总字数：</span>
-    <span title="站点总字数">147k</span>
+    <span title="站点总字数">150k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">4:27</span>
+    <span title="站点阅读时长">4:33</span>
   </span>
 </div>
 

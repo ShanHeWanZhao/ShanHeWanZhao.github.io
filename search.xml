@@ -105,6 +105,170 @@ CMS 是一种低停顿老年代收集器，适合延迟敏感型系统。
       </tags>
   </entry>
   <entry>
+    <title>CloudFlare-CDN缓存清除</title>
+    <url>/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/</url>
+    <content><![CDATA[
+​	给出了一些api用于清除Cloudflare的CDN缓存方式
+ 
+
+CloudFlare-CDN缓存清除​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
+1 purgeUrl
+2 使用ApiKey清除（不推荐）
+ZONE_ID：区域id，即你在CF上托管的根域名id
+EMAIL：你的邮箱
+API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
+
+2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{"purge_everything": true}'
+
+2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
+
+3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
+
+3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+     -H "Authorization: Bearer $API_TOKEN" \
+     -H "Content-Type:application/json"
+
+3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{"purge_everything": true}'
+
+3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
+
+4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
+5 参考链接
+官方清除缓存文档
+cloudflare dashboard创建token和查看ApiKey
+ZoneId获取
+
+]]></content>
+      <categories>
+        <category>cloudflare</category>
+      </categories>
+      <tags>
+        <tag>cdn缓存清除</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>G1</title>
+    <url>/2020/11/25/g1/</url>
+    <content><![CDATA[
+​	简单总结了G1和其常用参数，并分析了的G1日志
+
+
+G1​	G1（Garbage First）是 JDK 7 引入，并在 JDK 9 默认启用的服务端垃圾回收器。它的核心理念是将整个 Java 堆划分为多个大小相等的 Region，打破了传统“新生代 &#x2F; 老年代”的物理分区模式，转而以 Region 为基本单位进行垃圾管理与回收。	
+
+整堆收集：G1 是一个真正的 整堆并行压缩收集器，新生代和老年代都可以并行回收。
+并发标记：采用 三色标记法 + SATB + 写屏障机制，保证并发标记期间的准确性。
+可预测的停顿时间：用户可设置 -XX:MaxGCPauseMillis 控制最大停顿时间，G1 会在这个目标下选择哪些 Region 进入回收集（CSet）。
+
+常用参数设置
+-XX:+UseG1GC
+-XX:G1HeapRegionSize&#x3D;2M：一个Region的大小
+-XX:MaxGCPauseMillis&#x3D;80：允许收集停顿的最大时常（毫秒）
+-XX:InitiatingHeapOccupancyPercent&#x3D;45 ：老年代占用到 45% 时触发并发标记周期（默认45）
+不要再设置-xmn和-XX:NewRatio
+
+Region划分
+整个堆被分成多个 Region（默认 2048 个），每个 Region 的大小为 1MB ~ 32MB，并且必须是 2 的幂次方。
+每个 Region 会被动态标记为不同用途：
+E：Eden 区（新生代分配对象）
+S：Survivor 区（新生代存活对象）
+O：Old 区（长生命周期对象）
+H：Humongous 区（大对象，直接分配在老年代）
+
+
+
+​	大对象（如数组、长字符串等）若超过一个 Region 一半大小，会被当作 Humongous 对象，分配连续的多个 Region。由于这些对象移动成本高，G1 默认不会移动 Humongous 对象，而是直接将它们标记为老年代区域。
+Remembered Set（RSet）​	由于 G1 会独立地对某些 Region 进行回收，它必须知道老年代是否引用了某个新生代对象。这正是 Remembered Set（记忆集） 的作用：
+
+每个 Region 都维护了一个对应的 RSet，记录有哪些其它 Region 的对象引用了自己。
+在回收某个 Region 时，G1 只需要扫描这个 RSet，而不必全堆扫描，大幅降低了跨代引用处理的成本。
+
+
+简单说：RSet 让分区式回收变得可能而高效。
+
+Card Table（卡表）RSet 的实现依赖于 Card Table + 写屏障：
+
+Java 堆被进一步划分为更小的单位：Card，默认每个 Card 是 512 字节。
+JVM 在写引用字段时会触发 写屏障（Write Barrier），将对应 Card 标记为 dirty，并记录引用变更。
+在 GC 时，这些 dirty Card 会被用于更新 RSet，确保引用信息完整。
+
+
+卡表是写屏障的基础，RSet 是分区引用追踪的核心，三者协同构成 G1 的并发收集体系。
+
+日志解析2020-11-23T11:40:46.167+0800: 1.503: [GC pause (G1 Evacuation Pause) (young), 0.0048336 secs]
+   // 下面的Min,Avg,Max,Diff,Sum分别表示GC线程最小启动或耗时时间（后面的也是），平均，最大，最大差值，和总耗时，单位都为ms
+   [Parallel Time: 3.1 ms, GC Workers: 6] // 本次YGC共6个GC线程，总耗时3.1ms
+      [GC Worker Start (ms): Min: 1503.0, Avg: 1504.5, Max: 1506.1, Diff: 3.0] // 本次GC线程启动（相对于JVM的启动）
+      [Ext Root Scanning (ms): Min: 0.0, Avg: 0.2, Max: 0.7, Diff: 0.7, Sum: 1.1] // 本次GC线程的GC Roots扫描时间
+      [Update RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0] // 更新Remember Sets 的耗时统计信息（记忆集一般使用来解决跨Region的引用）
+         [Processed Buffers: Min: 0, Avg: 0.0, Max: 0, Diff: 0, Sum: 0]
+      [Scan RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0] // 每个Region都会有一个RSet，RSet又包含指向这个Region的Cards引用，这个阶段就是扫描RSet中的Cards，从而分辨出Eden哪些对象被老年代引用，从而这些不会被GC
+      [Code Root Scanning (ms): Min: 0.0, Avg: 0.0, Max: 0.2, Diff: 0.2, Sum: 0.2] // 扫描代码中的root节点（局部变量）
+      [Object Copy (ms): Min: 0.0, Avg: 1.3, Max: 2.7, Diff: 2.7, Sum: 7.6] // 对象copy，将存活的对象copy到目标Region中
+      [Termination (ms): Min: 0.0, Avg: 0.0, Max: 0.1, Diff: 0.1, Sum: 0.3]
+         [Termination Attempts: Min: 1, Avg: 1.2, Max: 2, Diff: 1, Sum: 7]
+      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.2] // GC线程完成其他任务的时间
+      [GC Worker Total (ms): Min: 0.0, Avg: 1.6, Max: 3.1, Diff: 3.1, Sum: 9.4] // GC线程整个生命周期总计消耗时间
+      [GC Worker End (ms): Min: 1506.1, Avg: 1506.1, Max: 1506.1, Diff: 0.0] // GC线程完成任务的停止时间（相对于JVM）
+   [Code Root Fixup: 0.0 ms]
+   [Code Root Purge: 0.0 ms]
+   [Clear CT: 0.1 ms] // 清理Card Table（卡表）
+   [Other: 1.6 ms]
+      [Choose CSet: 0.0 ms] // 选择要回收的Region放入CSet（会根据停顿时间来决定）
+      [Ref Proc: 1.4 ms] // 处理引用对象耗时时间（Weak、Soft、Phantom、JNI等等）
+      [Ref Enq: 0.0 ms] // 遍历所有引用，将不能回收的放入pending列表
+      [Redirty Cards: 0.0 ms] // 重置card为dirty
+      // 大型对象的回收
+      [Humongous Register: 0.0 ms] 
+      [Humongous Reclaim: 0.0 ms]
+      [Free CSet: 0.0 ms] // 释放CSet中Region占用的内存空间所耗时间
+   [Eden: 51.0M(51.0M)->0.0B(46.0M) Survivors: 0.0B->5120.0K Heap: 51.0M(1024.0M)->4815.7K(1024.0M)]
+ [Times: user=0.05 sys=0.00, real=0.01 secs] 
+
+总结
+G1 不再物理区分年轻代和老年代，转而统一使用多个 Region 管理整个堆。
+
+支持 并发标记 + 并发回收 + 可预测停顿，是整堆压缩收集器。
+
+使用 Remembered Set + Card Table + 写屏障 高效维护跨代引用关系。
+
+避免 Full GC 的目标是：通过周期性并发标记、预测性选择 CSet 来进行碎片整理。
+
+
+]]></content>
+      <categories>
+        <category>jvm</category>
+      </categories>
+      <tags>
+        <tag>G1</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Git</title>
     <url>/2020/02/07/git/</url>
     <content><![CDATA[​	Git常用命令总结
@@ -602,380 +766,514 @@ static final class Node {
       </tags>
   </entry>
   <entry>
-    <title>G1</title>
-    <url>/2020/11/25/g1/</url>
-    <content><![CDATA[
-​	简单总结了G1和其常用参数，并分析了的G1日志
-
-
-G1​	G1（Garbage First）是 JDK 7 引入，并在 JDK 9 默认启用的服务端垃圾回收器。它的核心理念是将整个 Java 堆划分为多个大小相等的 Region，打破了传统“新生代 &#x2F; 老年代”的物理分区模式，转而以 Region 为基本单位进行垃圾管理与回收。	
-
-整堆收集：G1 是一个真正的 整堆并行压缩收集器，新生代和老年代都可以并行回收。
-并发标记：采用 三色标记法 + SATB + 写屏障机制，保证并发标记期间的准确性。
-可预测的停顿时间：用户可设置 -XX:MaxGCPauseMillis 控制最大停顿时间，G1 会在这个目标下选择哪些 Region 进入回收集（CSet）。
-
-常用参数设置
--XX:+UseG1GC
--XX:G1HeapRegionSize&#x3D;2M：一个Region的大小
--XX:MaxGCPauseMillis&#x3D;80：允许收集停顿的最大时常（毫秒）
--XX:InitiatingHeapOccupancyPercent&#x3D;45 ：老年代占用到 45% 时触发并发标记周期（默认45）
-不要再设置-xmn和-XX:NewRatio
-
-Region划分
-整个堆被分成多个 Region（默认 2048 个），每个 Region 的大小为 1MB ~ 32MB，并且必须是 2 的幂次方。
-每个 Region 会被动态标记为不同用途：
-E：Eden 区（新生代分配对象）
-S：Survivor 区（新生代存活对象）
-O：Old 区（长生命周期对象）
-H：Humongous 区（大对象，直接分配在老年代）
-
-
-
-​	大对象（如数组、长字符串等）若超过一个 Region 一半大小，会被当作 Humongous 对象，分配连续的多个 Region。由于这些对象移动成本高，G1 默认不会移动 Humongous 对象，而是直接将它们标记为老年代区域。
-Remembered Set（RSet）​	由于 G1 会独立地对某些 Region 进行回收，它必须知道老年代是否引用了某个新生代对象。这正是 Remembered Set（记忆集） 的作用：
-
-每个 Region 都维护了一个对应的 RSet，记录有哪些其它 Region 的对象引用了自己。
-在回收某个 Region 时，G1 只需要扫描这个 RSet，而不必全堆扫描，大幅降低了跨代引用处理的成本。
-
-
-简单说：RSet 让分区式回收变得可能而高效。
-
-Card Table（卡表）RSet 的实现依赖于 Card Table + 写屏障：
-
-Java 堆被进一步划分为更小的单位：Card，默认每个 Card 是 512 字节。
-JVM 在写引用字段时会触发 写屏障（Write Barrier），将对应 Card 标记为 dirty，并记录引用变更。
-在 GC 时，这些 dirty Card 会被用于更新 RSet，确保引用信息完整。
-
-
-卡表是写屏障的基础，RSet 是分区引用追踪的核心，三者协同构成 G1 的并发收集体系。
-
-日志解析2020-11-23T11:40:46.167+0800: 1.503: [GC pause (G1 Evacuation Pause) (young), 0.0048336 secs]
-   // 下面的Min,Avg,Max,Diff,Sum分别表示GC线程最小启动或耗时时间（后面的也是），平均，最大，最大差值，和总耗时，单位都为ms
-   [Parallel Time: 3.1 ms, GC Workers: 6] // 本次YGC共6个GC线程，总耗时3.1ms
-      [GC Worker Start (ms): Min: 1503.0, Avg: 1504.5, Max: 1506.1, Diff: 3.0] // 本次GC线程启动（相对于JVM的启动）
-      [Ext Root Scanning (ms): Min: 0.0, Avg: 0.2, Max: 0.7, Diff: 0.7, Sum: 1.1] // 本次GC线程的GC Roots扫描时间
-      [Update RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0] // 更新Remember Sets 的耗时统计信息（记忆集一般使用来解决跨Region的引用）
-         [Processed Buffers: Min: 0, Avg: 0.0, Max: 0, Diff: 0, Sum: 0]
-      [Scan RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0] // 每个Region都会有一个RSet，RSet又包含指向这个Region的Cards引用，这个阶段就是扫描RSet中的Cards，从而分辨出Eden哪些对象被老年代引用，从而这些不会被GC
-      [Code Root Scanning (ms): Min: 0.0, Avg: 0.0, Max: 0.2, Diff: 0.2, Sum: 0.2] // 扫描代码中的root节点（局部变量）
-      [Object Copy (ms): Min: 0.0, Avg: 1.3, Max: 2.7, Diff: 2.7, Sum: 7.6] // 对象copy，将存活的对象copy到目标Region中
-      [Termination (ms): Min: 0.0, Avg: 0.0, Max: 0.1, Diff: 0.1, Sum: 0.3]
-         [Termination Attempts: Min: 1, Avg: 1.2, Max: 2, Diff: 1, Sum: 7]
-      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.2] // GC线程完成其他任务的时间
-      [GC Worker Total (ms): Min: 0.0, Avg: 1.6, Max: 3.1, Diff: 3.1, Sum: 9.4] // GC线程整个生命周期总计消耗时间
-      [GC Worker End (ms): Min: 1506.1, Avg: 1506.1, Max: 1506.1, Diff: 0.0] // GC线程完成任务的停止时间（相对于JVM）
-   [Code Root Fixup: 0.0 ms]
-   [Code Root Purge: 0.0 ms]
-   [Clear CT: 0.1 ms] // 清理Card Table（卡表）
-   [Other: 1.6 ms]
-      [Choose CSet: 0.0 ms] // 选择要回收的Region放入CSet（会根据停顿时间来决定）
-      [Ref Proc: 1.4 ms] // 处理引用对象耗时时间（Weak、Soft、Phantom、JNI等等）
-      [Ref Enq: 0.0 ms] // 遍历所有引用，将不能回收的放入pending列表
-      [Redirty Cards: 0.0 ms] // 重置card为dirty
-      // 大型对象的回收
-      [Humongous Register: 0.0 ms] 
-      [Humongous Reclaim: 0.0 ms]
-      [Free CSet: 0.0 ms] // 释放CSet中Region占用的内存空间所耗时间
-   [Eden: 51.0M(51.0M)->0.0B(46.0M) Survivors: 0.0B->5120.0K Heap: 51.0M(1024.0M)->4815.7K(1024.0M)]
- [Times: user=0.05 sys=0.00, real=0.01 secs] 
-
-总结
-G1 不再物理区分年轻代和老年代，转而统一使用多个 Region 管理整个堆。
-
-支持 并发标记 + 并发回收 + 可预测停顿，是整堆压缩收集器。
-
-使用 Remembered Set + Card Table + 写屏障 高效维护跨代引用关系。
-
-避免 Full GC 的目标是：通过周期性并发标记、预测性选择 CSet 来进行碎片整理。
-
-
-]]></content>
-      <categories>
-        <category>jvm</category>
-      </categories>
-      <tags>
-        <tag>G1</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Java源码篇-Future</title>
-    <url>/2020/05/09/java-yuan-ma-pian-future/</url>
-    <content><![CDATA[
-​	jdk中Future接口实现类相关源码解析。包括FutureTask和 ScheduledFutureTask
+    <title>Java源码篇-Map</title>
+    <url>/2020/04/09/java-yuan-ma-pian-map/</url>
+    <content><![CDATA[​	jdk中常用Map实现类相关源码解析。包括 HashMap，LinkedHashMap，ConcurrentHashMap
  
 
-1 FutureFuture接口表示一个异步操作的结果，即未来的结果，同时实现了 Runnable 和 Future 接口。提供了如下的一些基础方法可获取、判断和取消等操作
+Java源码篇-Map1 HashMap1.1 重点字段 
+/**
+ * 数组默认长度
+ */
+static final int DEFAULT_INITIAL_CAPACITY = 1 &lt;&lt; 4; // aka 16
 
-get()：阻塞直到计算完成并返回结果（支持超时设置）
+/**
+ * 最大容量（即数组最大长度）
+ */
+static final int MAXIMUM_CAPACITY = 1 &lt;&lt; 30;
 
-isDone()：非阻塞检查任务是否完成（成功&#x2F;失败&#x2F;取消）
+/**
+ * 默认加载因子
+ * 加载因子（loadFactor）是哈希表中用于控制数组存放数据疏密程度的参数。
+ * 当loadFactor越趋近于1时，数组中存放的数据（entry）越多，哈希冲突的概率增加，
+ * 导致单个桶中的链表长度可能增加，进而影响查找元素的效率。反之，当loadFactor越小，
+ * 数组中存放的数据越少，数据分布越稀疏，数组的利用率降低。
+ *
+ * 默认的loadFactor值为0.75f，是官方经过权衡后给出的一个较为理想的平衡点，
+ * 旨在兼顾查找效率和空间利用率。
+ */
+static final float DEFAULT_LOAD_FACTOR = 0.75f;
 
-cancel(boolean mayInterruptIfRunning)：尝试取消任务，参数决定是否中断执行中的线程
+/**
+ * 树化阈值。当桶(bucket)上的结点数大于这个值时会转成红黑树
+ */
+static final int TREEIFY_THRESHOLD = 8;
 
-isCancelled()：判断任务是否被取消
+/**
+ * 链表化阈值（当桶(bucket)上的结点数小于这个值时树转链表）
+ */
+static final int UNTREEIFY_THRESHOLD = 6;
+
+/**
+ * 桶中结构树化对应的table的最小长度
+ */
+static final int MIN_TREEIFY_CAPACITY = 64;
+
+/**
+ * 扩容阈值（threshold）
+ * threshold = loadFactor * 数组长度
+ * 当HashMap中元素的数量超过threshold时，会触发数组的扩容操作。
+ * 扩容是为了减少哈希冲突，保持查找效率。
+ */
+int threshold;
+
+1.2 核心方法1.2.1 put1 初始化数组
+如果是第一次添加元素，先初始化数组（即分配内存空间）。
+计算键的哈希值并确定索引位置，然后将键值对放入对应的桶（bucket）中。
+
+2 目标桶为空
+如果计算索引后，数组中对应的桶为空，则直接将键值对放入该桶中。
+
+3 目标桶不为空
+根节点匹配：
+如果桶中的根节点（第一个节点）与待插入节点的键 equals，则直接替换根节点的值。
 
 
-其实现类为FutureTask，就是用它来实现Callable接口的功能
-
-1.1 FutureTask1.1.1 重点字段和方法public class FutureTask&lt;V> implements RunnableFuture&lt;V> {
-    // state字段，表示了当前Future的状态，取值为如下字段
-    private volatile int state;
-
-    private static final int NEW          = 0; // 初始状态，新建
-    private static final int COMPLETING   = 1; // 正在结束
-    private static final int NORMAL       = 2; // 正常执行完毕
-    private static final int EXCEPTIONAL  = 3; // 异常执行完毕
-    private static final int CANCELLED    = 4; // 前一个状态必须是NEW，已取消（未中断）
-    private static final int INTERRUPTING = 5; // 前一个状态必须是NEW，正在中断（中断）
-    private static final int INTERRUPTED  = 6; // 取消成功的才可以设置，中断完成（中断）
-
-    // 待运行的Callable任务
-    private Callable&lt;V> callable;
-    // Callable执行的结果。如果出现执行的过程中异常，则保存的是异常对象
-    private Object outcome;
-    // 运行Callable#call方法的线程（也即是运行业务代码的线程）
-    private volatile Thread runner;
-    // 当这里面的Callable还未执行完，却有其他线程调用Future#get()方法，
-    // 	会将其他线程阻塞并构造为等待节点，维持一个链表结构，以便在Callable执行完毕后唤醒并回调
-    private volatile WaitNode waiters;
+树化节点：
+如果根节点是树形节点（即红黑树节点），则调用红黑树的插入方法将节点放入树中。
 
 
-    public void run() {
-        if (state != NEW ||
-            !UNSAFE.compareAndSwapObject(this, runnerOffset,
-                                         null, Thread.currentThread()))
-            return;
-        try {
-            Callable&lt;V> c = callable;
-            if (c != null &amp;&amp; state == NEW) {
-                V result;
-                boolean ran;
-                try {
-                    // 执行业务方法
-                    result = c.call();
-                    ran = true;
-                } catch (Throwable ex) {
-                    result = null;
-                    ran = false;
-                    setException(ex); // 异常结束，将状态设为EXCEPTIONAL，如果等待队列有节点，则唤醒对应的线程
-                }
-                if (ran)
-                    set(result); // 正常结束，将状态设为NORMAL，如果等待队列有节点，则唤醒对应的线程
-            }
-        } finally {
-            runner = null;
-            int s = state;
-            if (s >= INTERRUPTING)
-                handlePossibleCancellationInterrupt(s);
-        }
-    }
-    // 阻塞获取
-    public V get() throws InterruptedException, ExecutionException {
-        int s = state;
-        if (s &lt;= COMPLETING) // 还未完全结束Callabke，进入等待
-            s = awaitDone(false, 0L);
-        return report(s);
-    }
-    // 根据state判断是否需要阻塞并做对于的事
-    private int awaitDone(boolean timed, long nanos)
-        throws InterruptedException {
-        final long deadline = timed ? System.nanoTime() + nanos : 0L;
-        WaitNode q = null;
-        boolean queued = false;
-        for (;;) {
-            if (Thread.interrupted()) { // 当前线程支持响应中断
-                removeWaiter(q);
-                throw new InterruptedException();
-            }
+链表遍历：
+如果根节点是链表节点，则遍历链表：
+如果找到与待插入节点键 equals 的节点，则替换其值。
+如果遍历到链表末尾仍未找到匹配的节点，则将新节点插入链表末尾。
+树化条件：
+如果链表长度（包括待插入节点）达到 8 且数组长度大于等于 64，则将链表转换为红黑树。
+如果链表长度达到 8 但数组长度小于 64，则仅进行数组扩容，不进行树化。
 
-            int s = state;
-            if (s > COMPLETING) { // Callable运行完毕，且result已经设置完毕
-                if (q != null)
-                    q.thread = null;
-                return s;
-            }
-            // 进入到以下分支，就代表Callable还未完全执行完毕
 
-            else if (s == COMPLETING) // cannot time out yet  Callable运行完毕，但正在设置result，让出执行时间，等待下次判断
-                Thread.yield();
-            else if (q == null) // 第一次循环，构造等待节点
-                q = new WaitNode();
-            else if (!queued) // 还未加入等待队列，则将节点加入到等待队列中
-                queued = UNSAFE.compareAndSwapObject(this, waitersOffset,
-                                                     q.next = waiters, q);
-            else if (timed) { // 是否运行超时判断
-                nanos = deadline - System.nanoTime();
-                if (nanos &lt;= 0L) {
-                    removeWaiter(q);
-                    return state;
-                }
-                LockSupport.parkNanos(this, nanos);
-            }
-            else // 暂停当前线程，等待任务执行完毕的唤醒
-                LockSupport.park(this);
-        }
-    }
-    // 任务执行完毕，唤醒等待队列的所有节点
-    private void finishCompletion() {
-        // assert state > COMPLETING;
-        for (WaitNode q; (q = waiters) != null;) {
-            if (UNSAFE.compareAndSwapObject(this, waitersOffset, q, null)) {
-                for (;;) {
-                    Thread t = q.thread;
-                    if (t != null) {
-                        q.thread = null;
-                        LockSupport.unpark(t);
+
+
+
+
+
+1.2.2 resizeHashMap 数组的长度始终为 2 的次幂，且扩容时长度加倍。这样设计的主要目的是为了方便扩容时的索引计算。以下为具体的扩容过程
+1 创建新数组
+先创建一个长度为原数组 2 倍的新数组。
+
+2 迁移数据
+遍历原数组中的每个桶（bucket）：
+
+如果桶为空或只有一个元素：
+
+直接计算该元素在新数组中的索引，并将其放入新数组。
+
+
+如果桶中有链表结构：
+
+遍历链表中的每个节点（Node），计算其在新数组中的索引。
+
+由于新数组长度是原数组的 2 倍，且长度始终为 2 的次幂，因此新索引的计算方法为：
+newIndex = (key.hashCode() &amp; (newCapacity - 1))
+
+
+新索引的结果只有两种可能：
+
+与原索引相同：如果 key 的哈希值在高一位为 0。
+等于原索引加上原数组长度：如果 key 的哈希值在高一位为 1。
+
+
+根据计算结果，将节点放入新数组的对应位置。
+
+
+
+
+
+
+3 链表拆分
+如果原桶中的链表被拆分为两个链表（一个保持原索引，另一个为原索引加上原数组长度），则分别将它们放入新数组的对应位置。
+
+1.2.3 部分核心代码final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
+             boolean evict) {
+  Node&lt;K,V>[] tab; Node&lt;K,V> rootNode; int tableLength, index;
+  if ((tab = table) == null || (tableLength = tab.length) == 0) // 添加第一个元素
+      tableLength = (tab = resize()).length;
+  if ((rootNode = tab[index = (tableLength - 1) &amp; hash]) == null) // 数组上对于的索引为空，代表这个kv可以直接放到这
+      tab[index] = newNode(hash, key, value, null);
+  else {
+      Node&lt;K,V> e; K k;
+      if (rootNode.hash == hash &amp;&amp;
+          ((k = rootNode.key) == key || (key != null &amp;&amp; key.equals(k)))) // bucket上的元素equals要放进来的kv，直接覆盖
+          e = rootNode;
+      else if (rootNode instanceof TreeNode)  // bucket上已经是红黑树结构了，直接存放为红黑树结构
+          e = ((TreeNode&lt;K,V>)rootNode).putTreeVal(this, tab, hash, key, value);
+      else { // 向链表的末尾添加
+          for (int binCount = 0; ; ++binCount) {
+              if ((e = rootNode.next) == null) { // 到链表末尾了
+                  rootNode.next = newNode(hash, key, value, null);
+                  if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
+                  { // 链表的长度（算上bucket）已经大于等于了8，转换为红黑树
+                      treeifyBin(tab, hash);
+                  }
+                  break;
+              }
+              if (e.hash == hash &amp;&amp;
+                  ((k = e.key) == key || (key != null &amp;&amp; key.equals(k)))) { // 遍历链表时有equals，直接替换
+                  break;
+              }
+              rootNode = e;
+          }
+      }
+      if (e != null) { // existing mapping for key
+          // e不为空，代表是覆盖的情况，不是新增
+          V oldValue = e.value;
+          if (!onlyIfAbsent || oldValue == null)
+              e.value = value;
+          afterNodeAccess(e);
+          return oldValue;
+      }
+  }
+  ++modCount;
+  if (++size > threshold)
+      resize();
+  afterNodeInsertion(evict);
+  return null;
+}
+
+/**
+ * resize方法，只展示了部分核心代码
+ * 数组的初始化或扩容，扩容是加倍的
+ */
+final Node&lt;K,V>[] resize() {
+    if (oldTab != null) { // 旧数组存在元素
+        for (int j = 0; j &lt; oldCap; ++j) {
+            Node&lt;K,V> e;
+            if ((e = oldTab[j]) != null) { // bucket存在元素
+                oldTab[j] = null;
+                if (e.next == null) // 这个bucket没有链表，只需要将它重新计算下在新数组的索引，并放入对于的bucket中
+                    newTab[e.hash &amp; (newCap - 1)] = e;
+                else if (e instanceof TreeNode) // 红黑树结构
+                    ((TreeNode&lt;K,V>)e).split(this, newTab, j, oldCap);
+                else { // preserve order
+                    /* 旧数组的桶在新数组的索引位的节点 */
+                    // 索引大小没有变化
+                    Node&lt;K,V> loHead = null, loTail = null;
+                    // 索引扩大了旧数组的长度（即新索引位：旧索引位+旧数组长度）
+                    Node&lt;K,V> hiHead = null, hiTail = null;
+                    Node&lt;K,V> next;
+                    do {
+                        next = e.next;
+                        // e.hash &amp; oldCap == 0 就代表e的hash值（转换为2进制）高一位为0，
+                        // 与（新的容量-1）相与后，其在数组的索引位置不变
+                        if ((e.hash &amp; oldCap) == 0) {
+                            if (loTail == null)
+                                loHead = e;
+                            else
+                                loTail.next = e;
+                            loTail = e;
+                        }
+                        else { // 这里则高一位为1，与新的容量 &amp; 后，
+                             // 其在新数组的索引位置会增加新容量的扩大值（即原容量的大小）
+                            if (hiTail == null)
+                                hiHead = e;
+                            else
+                                hiTail.next = e;
+                            hiTail = e;
+                        }
+                    } while ((e = next) != null);
+                    if (loTail != null) {
+                        loTail.next = null;
+                        newTab[j] = loHead;
                     }
-                    WaitNode next = q.next;
-                    if (next == null)
-                        break;
-                    q.next = null; // unlink to help gc
-                    q = next;
+                    if (hiTail != null) {
+                        hiTail.next = null;
+                        newTab[j + oldCap] = hiHead;
+                    }
                 }
-                break;
             }
         }
+    }
+    return newTab;
+}
 
-        done();
+1.3 线程不安全
 
-        callable = null;        // to reduce footprint
+当两个线程同时put数据时，且被put的两个数据能定位到HashMap数组的相同那个bucket位置上，就可能产生一个覆盖掉另一个的可能，造成一个数据消失。
+多个线程同时修改 HashMap的结构时（如插入、删除或扩容），可能会导致部分数据丢失。比如线程A插入，而线程B正在扩容，最终导致A线程插入的数据丢失
+没有volatile或锁的同步机制，会导致一个线程的修改对另一个线程不可见
+
+
+2 LinkedHashMapLinkedHashMap 是 HashMap 的子类，它不仅实现了 Map 接口，还具有排序功能。其排序行为由 accessOrder 字段控制
+2.1 核心字段
+head：链表的头节点，指向最早插入或访问的节点。
+tail：链表的尾节点，指向最近插入或访问的节点。
+accessOrder（默认 false）：
+false：按照插入顺序排序，越晚插入的元素越排在链表末尾。
+true：按照访问顺序排序，最近访问的元素会被移动到链表末尾。可用于实现 LRU 缓存。
+
+
+
+2.2 排序实现原理2.2.1 双向链表// 继承了HashMap.Node的Entry内部结构
+static class Entry&lt;K,V> extends HashMap.Node&lt;K,V> { // 具有链表结构的Entry
+    // 前驱节点和后继节点
+    Entry&lt;K,V> before, after;
+    Entry(int hash, K key, V value, Node&lt;K,V> next) {
+        super(hash, key, value, next);
     }
 }
 
-1.1.2 总结
-FutureTask根据内部的state字段来判断当前任务运行到了哪个阶段并作出对于的抉择，也使用volatile修饰保证它在多线程环境下的可见性。
-state状态流转：
-NEW→COMPLETING→NORMAL（成功）
-NEW→COMPLETING→EXCEPTIONAL（失败）
-NEW→CANCELLED&#x2F;INTERRUPTED（取消）
+2.2.2 添加元素// 重写了HashMap的newNode方法，在构造新节点时将其添加到链表末尾
+Node&lt;K,V> newNode(int hash, K key, V value, Node&lt;K,V> e) {
+    Entry&lt;K,V> p = new Entry&lt;>(hash, key, value, e);
+    // 将新节点链接到链表末尾
+    linkNodeLast(p);
+    return p;
+}
 
-
-
-
-如果想获取任务执行的结果，要使用get来获取结果，get是个阻塞的方法。当任务还未执行完毕时，会将调用get的方法阻塞并构造成WaitNode，再通过内部的next字段链接下一个WaitNode，形成一个链表结构。当任务执行完毕后，内部调用的finishCompletion方法会判断等待链表是否为空，不为空就代表有线程在获取结果时被阻塞了，这时唤醒阻塞队列的所有线程，最终，调用get方法的线程返回结果。即使用 WaitNode 链表 + CAS 操作管理阻塞线程，避免显式锁开销
-只会允许任务执行一次，状态不可逆转
-
-1.2 ScheduledFutureTask​	ScheduledFutureTask继承了FutureTask，当向定时任务线程池投递任务时（Runnable或Callable），都会将其封装为ScheduledFutureTask
-1.2.1 重点字段和方法 private class ScheduledFutureTask&lt;V>
-            extends FutureTask&lt;V> implements RunnableScheduledFuture&lt;V> {
-     /** 
-     * 当前任务的id（自增的），代表了进入队列的顺序 &lt;br/>
-     * 当两个定时任务下次执行时间一致时，sequenceNumber越小就会越早执行
-     */
-    private final long sequenceNumber;
-    // 下次执行当前任务的纳秒时间戳
-    private long time;
-
-    /**
-     * 执行定时任务的纳秒间隔时间
-     * 大于0：代表固定的频率，不受任务的执行所花费的时间影响
-     * 等于0：代表不是一个重复的任务（只会执行一次
-     * 小于0：代表固定的时间间隔，基于任务执行完毕后的时间计算。（任务执行完后再基于当前时间计算下次执行时间）
-     */
-    private final long period;
-    // 当前任务在数组中的索引
-    int heapIndex;
-
-    public long getDelay(TimeUnit unit) {
-        return unit.convert(time - now(), NANOSECONDS);
-    }
-    // 比较方法，决定了放入数组的位置
-    public int compareTo(Delayed other) {
-        if (other == this) // compare zero if same object
-            return 0;
-        if (other instanceof ScheduledFutureTask) {
-            ScheduledFutureTask&lt;?> x = (ScheduledFutureTask&lt;?>)other;
-            long diff = time - x.time;
-            if (diff &lt; 0)
-                return -1;
-            else if (diff > 0) // 当前任务的下次执行时间更长，返回正数
-                return 1;
-            else if (sequenceNumber &lt; x.sequenceNumber)
-                return -1;
-            else
-                return 1;
+2.2.3 访问节点移动到末尾如果 accessOrder 为 true，LinkedHashMap 会在访问节点时（如调用 get 方法）触发 afterNodeAccess 方法，将最近访问的节点移动到链表末尾，基于此可以实现LRU缓存
+// 重写的HashMap#afterNodeAccess方法，
+void afterNodeAccess(Node&lt;K,V> e) {
+    LinkedHashMap.Entry&lt;K,V> last;
+    if (accessOrder &amp;&amp; (last = tail) != e) { // accessOrder为true，e不为tail
+        // 重排序当前元素，将当前节点设为新的tail（保持最近一次被访问的节点在最后面）
+        LinkedHashMap.Entry&lt;K,V> p =
+            (LinkedHashMap.Entry&lt;K,V>)e, b = p.before, a = p.after;
+        p.after = null;
+        if (b == null) // e为head，更新头节点
+            head = a;
+        else
+            b.after = a;
+        if (a != null) // e不为tail
+            a.before = b;
+        else
+            last = b;
+        if (last == null)
+            head = p;
+        else {
+            p.before = last;
+            last.after = p;
         }
-        long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS);
-        return (diff &lt; 0) ? -1 : (diff > 0) ? 1 : 0;
+        tail = p;
+        ++modCount;
     }
+}
 
-    /**
-     * false: 代表当前任务为一次性任务
-     * true: 定时任务
-     */
-    public boolean isPeriodic() {
-        return period != 0;
-    }
-    // 当前任务执行完毕后，用来计算下次执行时间
-    private void setNextRunTime() {
-        long p = period;
-        // p为两次执行时间的时间间隔的纳秒值
-        if (p > 0) // p大于0，即为固定时间执行的任务，基于初始运行时间计算下一次的执行时间
-            time += p;
-        else // p小于0，为基于完成任务的时间来执行，基于任务运行完的时间，来计算出下一次的执行时间
-            time = triggerTime(-p);
-    }
-    // 主方法，运行当前定时任务
-    public void run() {
-        boolean periodic = isPeriodic();
-        if (!canRunInCurrentRunState(periodic))
-            cancel(false);
-        else if (!periodic) // 非定时任务，当作普通任务直接调用FutureTask的run方法运行
-            ScheduledFutureTask.super.run();
-        else if (ScheduledFutureTask.super.runAndReset()) { // 运行定时任务，且运行成功（没抛异常）
-            setNextRunTime(); // 设置下一次执行时间
-            reExecutePeriodic(outerTask); // 再把当前任务重新入队列
-        }
-    }
-    /**
-      父类的FutureTask中的方法，运行并重置状态，用于任务的多次执行 
-         * 正常执行时：不会修改运行状态（也就是说这个操作不会修改state字段值，保持初始值，以支持重复执行）。
-         * 出现异常时：还是将state设为EXCEPTIONAL，也就是说一个定时任务要是抛出了异常，之后就不会再执行它了
-         */
-    protected boolean runAndReset() {
-        if (state != NEW || // 不为NEW状态的都不执行
-            !UNSAFE.compareAndSwapObject(this, runnerOffset,
-                                         null, Thread.currentThread()))
-            return false;
-        boolean ran = false;
-        int s = state;
+3 ConcurrentHashMapConcurrentHashMap 是一个线程安全的 Map 实现，通过 **CAS 和 分段锁 机制实现高效的并发操作。其数据结构与 HashMap 类似，采用 数组 + 链表 + 红黑树 的形式：
+
+当链表长度超过 8 时，链表会转换为红黑树。
+当红黑树节点数小于 6 时，红黑树会退化为链表。
+
+3.1 put方法死循环put元素，直到操作成功才退出
+
+数组还没初始化，开始数组的初始化
+数组的bucket还未被占用，CAS占用（成功了就break，失败了就代表已经被其他节点占用了，进行下一次循环进入其他if分支）
+当前桶为ForwardingNode，表示有线程正在进行扩容操作，则先帮助扩容，等扩容完毕在继续put
+bucket被占用，锁住根节点，开始构造到链表的为尾节点。添加到尾节点后，在判断当前链表长度是否超过8，否则就转换为红黑树
+
+3.2 扩容（重点）​		核心是通过 多线程协作 和 分段迁移 的方式进行高效的数据迁移，同时尽量减少对读写操作的影响
+3.2.1 扩容触发时机
+当 ConcurrentHashMap 中的元素数量超过 阈值（threshold） 时触发
+阈值计算公式：阈值 = 数组长度 * 负载因子（loadFactor，默认 0.75）。
+
+3.2.2 具体步骤
+首先创建一个新的数据，为元素组大小的2倍。将其设置到nextTable字段
+
+通过CAS设置transferIndex（初始设为旧数组的长度，即是从旧数组末尾开始向前遍历转移数据的）
+
+每个线程通过CAS从transferIndex获取一段连续长度为stride（步长）的桶，stride计算如下
+
+// 计算步长：即扩容时每个线程每次最小处理的数组连续长度
+// cpu为1，则由这个线程全部处理；cpu数量大于1，每个核心负责的步长为 数组长度/(8 * cpu核数) ，不过如果计算出步长小于16，则会被设置为16。确保线程的工作量均衡
+if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) &lt; MIN_TRANSFER_STRIDE){
+  stride = MIN_TRANSFER_STRIDE;
+} 
+
+
+
+
+开始迁移数据，到这一步了每个线程就只会迁移自己所负责的步长索引数据，不会冲突
+
+空桶：则放置一个 ForwardingNode，表示该桶已迁移
+桶为ForwardingNode：当前桶已迁移。因为整体是从后向前迁移的，可推测当前线程负责的这段步长索引一定已处理完毕，即这段步长内这个桶后面的所有桶也都已经被处理完成了，需要重新计算它下一次该负责的新步长索引
+桶未迁移：则操作加锁，对桶中的链表或红黑树进行迁移，迁移完成后，再将当前桶放置为ForwardingNode节点
+
+
+当最后一个线程迁移完毕后，则更新table为新数据和sizeCtl，表示扩容完成
+
+
+3.2.3 相关思考
+步长计算安全嘛？
+
+​		安全，通过CAS设置公共变量transferIndex（初始值为table.length），同时该变量为volatile，它的变化能立马被其他线程感知到，可以保证每个线程处理的步长索引不会重复和交叉
+
+
+其他线程如何感知并帮助扩容？
+
+​		通过判断桶节点为ForwardingNode，则表示正在扩容，此时这个线程则帮助扩容，计算自己需要处理的步长索引来转移数据到新数组中。每处理完一个桶也将其设为ForwardingNode节点
+
+
+get方法并没有加锁，如果桶已被转移怎么获取到数据？
+
+​		首先扩容是读写分离的，扩容时不会对桶本身做任何修改（即不会修改Node的内部指针数据），所以如果拿到原桶数据，则能直接遍历获取数据。而如果拿到的是ForwardingNode，它本身也提供了find方法，会到新数组中去找到需要的数据
+
+
+扩容完成如何处理？
+
+​		每个线程完成自己负责区间的迁移后，会更新sizeCtl字段中的扩容线程数计数，判断确定最后一个完成迁移的线程会将新数组赋值给table并重新计算sizeCtl的阈值
+
+
+最后需要注意，在操作数组中的桶时，都会获取这个桶节点的锁（put和resize等等修改方法），锁是相同的，所以不必担心某一个桶的相关数据被多个线程同时处理（put，resize等）
+
+
+3.2.4 核心代码private final void transfer(Node&lt;K,V>[] tab, Node&lt;K,V>[] nextTab) {
+    int n = tab.length, stride;
+    // 计算步长：即扩容时每个线程每次最小处理的数组连续长度
+    // cpu为1，则由这个线程全部处理；cpu数量大于1，每个核心负责的步长为 数组长度/(8 * cpu核数) ，不过如何计算出步长小于16，则会被设置为16。确保线程的工作量均衡
+    if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) &lt; MIN_TRANSFER_STRIDE)
+        stride = MIN_TRANSFER_STRIDE; // subdivide range
+    if (nextTab == null) {            // initiating
         try {
-            Callable&lt;V> c = callable;
-            if (c != null &amp;&amp; s == NEW) {
-                try {
-                    c.call(); // 不设置返回结果。多次执行的任务就不该有执行结果
-                    ran = true;
-                } catch (Throwable ex) {
-                    setException(ex);  // 抛出异常，修改state为EXCEPTIONAL，以后也不在执行它
+            @SuppressWarnings("unchecked")
+            // 创建新数组，2次幂便于扩容计算新索引位置
+            Node&lt;K,V>[] nt = (Node&lt;K,V>[])new Node&lt;?,?>[n &lt;&lt; 1];
+            nextTab = nt;
+        } catch (Throwable ex) {      // try to cope with OOME
+            sizeCtl = Integer.MAX_VALUE;
+            return;
+        }
+        nextTable = nextTab;
+        // 表示从数组末尾开始分配迁移任务
+        transferIndex = n;
+    }
+    int nextn = nextTab.length;
+    ForwardingNode&lt;K,V> fwd = new ForwardingNode&lt;K,V>(nextTab);
+    // 当前线程是否需要继续在旧数组上截取一段桶来处理数据，默认是
+    boolean advance = true;
+    // 扩容完毕的标志
+    boolean finishing = false; // to ensure sweep before committing nextTab
+    for (int i = 0, bound = 0;;) { // i 是当前线程正在处理的桶的索引，bound 是当前线程负责的迁移任务的起始索引（也就是在处理中则 i>bound）
+        Node&lt;K,V> f; int fh;
+        // 检查当前线程负责的步长内的桶是否处理完毕。处理完毕，则选取下一段当前现场该处理的步长索引段
+        while (advance) {
+            int nextIndex, nextBound;
+            if (--i >= bound || finishing)
+                advance = false;
+            else if ((nextIndex = transferIndex) &lt;= 0) {
+                i = -1;
+                advance = false;
+            }
+            else if (U.compareAndSwapInt
+                     (this, TRANSFERINDEX, nextIndex,
+                      nextBound = (nextIndex > stride ?
+                                   nextIndex - stride : 0))) {
+                bound = nextBound;
+                // i初始化为旧数组最后一个索引位置
+                i = nextIndex - 1;
+                advance = false;
+            }
+        }
+        if (i &lt; 0 || i >= n || i + n >= nextn) { // 当前线程扩容完毕处理
+            int sc;
+            if (finishing) {
+                nextTable = null;
+                table = nextTab;
+                sizeCtl = (n &lt;&lt; 1) - (n >>> 1);
+                return;
+            }
+            if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
+                if ((sc - 2) != resizeStamp(n) &lt;&lt; RESIZE_STAMP_SHIFT)
+                    return;
+                finishing = advance = true;
+                i = n; // recheck before commit
+            }
+        }
+        else if ((f = tabAt(tab, i)) == null) // 空桶，CAS放置ForwardingNode，让其他线程可以感知到，以帮助扩容
+            advance = casTabAt(tab, i, null, fwd);
+        else if ((fh = f.hash) == MOVED) // 当前桶已被处理
+            // 到这了就说明这段步长索引处理完毕，需要重新计算新步长索引
+            advance = true; // already processed
+        else {
+            synchronized (f) { // 桶加锁，开始转移当前桶的链表或红黑树到新的数组里
+                if (tabAt(tab, i) == f) { // 获取成功，再次校验桶节点是否变化，未变才继续操作（避免被其他刚释放了这个锁的线程给修改了）
+                    // 桶数据转移到新数组去，和HashMap类似计算新数组中的索引
+                    Node&lt;K,V> ln, hn;
+                    if (fh >= 0) {
+                        int runBit = fh &amp; n;
+                        Node&lt;K,V> lastRun = f;
+                        for (Node&lt;K,V> p = f.next; p != null; p = p.next) {
+                            int b = p.hash &amp; n;
+                            if (b != runBit) {
+                                runBit = b;
+                                lastRun = p;
+                            }
+                        }
+                        if (runBit == 0) {
+                            ln = lastRun;
+                            hn = null;
+                        }
+                        else {
+                            hn = lastRun;
+                            ln = null;
+                        }
+                        for (Node&lt;K,V> p = f; p != lastRun; p = p.next) {
+                            int ph = p.hash; K pk = p.key; V pv = p.val;
+                            if ((ph &amp; n) == 0)
+                                ln = new Node&lt;K,V>(ph, pk, pv, ln);
+                            else
+                                hn = new Node&lt;K,V>(ph, pk, pv, hn);
+                        }
+                        setTabAt(nextTab, i, ln);
+                        setTabAt(nextTab, i + n, hn);
+                        // 转移完后，旧数组的桶放置ForwardingNode，表示当前桶已处理完毕并表示为扩容中
+                        setTabAt(tab, i, fwd);
+                        advance = true;
+                    }
+                    else if (f instanceof TreeBin) {
+                        TreeBin&lt;K,V> t = (TreeBin&lt;K,V>)f;
+                        TreeNode&lt;K,V> lo = null, loTail = null;
+                        TreeNode&lt;K,V> hi = null, hiTail = null;
+                        int lc = 0, hc = 0;
+                        for (Node&lt;K,V> e = t.first; e != null; e = e.next) {
+                            int h = e.hash;
+                            TreeNode&lt;K,V> p = new TreeNode&lt;K,V>
+                                (h, e.key, e.val, null, null);
+                            if ((h &amp; n) == 0) {
+                                if ((p.prev = loTail) == null)
+                                    lo = p;
+                                else
+                                    loTail.next = p;
+                                loTail = p;
+                                ++lc;
+                            }
+                            else {
+                                if ((p.prev = hiTail) == null)
+                                    hi = p;
+                                else
+                                    hiTail.next = p;
+                                hiTail = p;
+                                ++hc;
+                            }
+                        }
+                        ln = (lc &lt;= UNTREEIFY_THRESHOLD) ? untreeify(lo) :
+                            (hc != 0) ? new TreeBin&lt;K,V>(lo) : t;
+                        hn = (hc &lt;= UNTREEIFY_THRESHOLD) ? untreeify(hi) :
+                            (lc != 0) ? new TreeBin&lt;K,V>(hi) : t;
+                        setTabAt(nextTab, i, ln);
+                        setTabAt(nextTab, i + n, hn);
+                        // 转移完后，旧数组的桶放置ForwardingNode，表示当前桶已处理完毕并表示为扩容中
+                        setTabAt(tab, i, fwd);
+                        advance = true;
+                    }
                 }
             }
-        } finally {
-            // runner must be non-null until state is settled to
-            // prevent concurrent calls to run()
-            runner = null;
-            // state must be re-read after nulling runner to prevent
-            // leaked interrupts
-            s = state;
-            if (s >= INTERRUPTING)
-                handlePossibleCancellationInterrupt(s);
         }
-        return ran &amp;&amp; s == NEW;
     }
- }
+}
 
-1.2.2 总结ScheduledFutureTask 通过 period 字段判断任务类型：0 表示一次性任务，&gt;0 表示固定频率，&lt;0 表示固定延迟。
-在 run() 方法中，若任务为周期性任务，执行完当前任务后会计算下次执行时间，并将自身重新提交至基于小顶堆的 DelayedWorkQueue 中，以维持调度。
-
-基于纳秒时间精度，避免 System.currentTimeMillis() 的系统时间变动干扰。
-复用 FutureTask 的任务封装机制，增强任务调度能力。
-精简实现，不依赖额外锁，主要通过最小堆和 Delayed 接口实现调度。
+3.4 为什么key和value不允许为null，而HashMap可以呢？
+​		ConcurrentHashMap如果允许key和value为null，会产生二义性。即不能确定map里本身没有这个数据，还是说有这个数据，但这个数据存的是null值。
+​		为什么HashMap可以允许呢？因为它不会产生二义性，使用HashMap设计用于单线程下，假设我们获取key为A的数据返回了null，之后还马上可以通过containsKey来判断到底是不存在A还是A就为null（因为是单线程，不用担心其他线程会修改数据）
+​		但ConcurrentHashMap是线程安全的，也就是默认会在多线程下修改数据。假设ConcurrentHashMap支持设置null，这时线程A获取key为null的数据返回了null，此时我们不确定A在不在ConcurrentHashMap里，需要用containsKey来判断key为null是否存在于ConcurrentHashMap里。但多线程的情况下，B线程在A线程containsKey操作前添加了key为null的数据，导致A线程containsKey返回了true，导致和第一步预期不同（第一步可能是不存在key为null的数据）
+​		综上：ConcurrentHashMap，它是为并发而生的，它是要用在并发场景中的。假如允许使用 map.get(key)返回 null ，这时是没办法通过 map.containsKey来准确的检测，因为在检测过程中可能会被其他线程锁修改，而导致检测结果并不可靠。所以直接禁用了null，好处就是返回null一定能表示key不存在，而不是有其他的含义，让语义更明确了
+​		所以这个设计选择反映了并发编程的一个重要原则：通过适当的限制来换取更好的可靠性和简单性。虽然失去了存储null值的能力，但换来了更清晰的语义和更好的并发安全性。
 
 ]]></content>
       <categories>
         <category>jdk</category>
       </categories>
       <tags>
-        <tag>多线程</tag>
+        <tag>Map</tag>
+        <tag>ConcurrentHashMap</tag>
       </tags>
   </entry>
   <entry>
@@ -1477,6 +1775,287 @@ static class DelayedWorkQueue extends AbstractQueue&lt;Runnable>
       </categories>
       <tags>
         <tag>线程池</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Java源码篇-Future</title>
+    <url>/2020/05/09/java-yuan-ma-pian-future/</url>
+    <content><![CDATA[
+​	jdk中Future接口实现类相关源码解析。包括FutureTask和 ScheduledFutureTask
+ 
+
+1 FutureFuture接口表示一个异步操作的结果，即未来的结果，同时实现了 Runnable 和 Future 接口。提供了如下的一些基础方法可获取、判断和取消等操作
+
+get()：阻塞直到计算完成并返回结果（支持超时设置）
+
+isDone()：非阻塞检查任务是否完成（成功&#x2F;失败&#x2F;取消）
+
+cancel(boolean mayInterruptIfRunning)：尝试取消任务，参数决定是否中断执行中的线程
+
+isCancelled()：判断任务是否被取消
+
+
+其实现类为FutureTask，就是用它来实现Callable接口的功能
+
+1.1 FutureTask1.1.1 重点字段和方法public class FutureTask&lt;V> implements RunnableFuture&lt;V> {
+    // state字段，表示了当前Future的状态，取值为如下字段
+    private volatile int state;
+
+    private static final int NEW          = 0; // 初始状态，新建
+    private static final int COMPLETING   = 1; // 正在结束
+    private static final int NORMAL       = 2; // 正常执行完毕
+    private static final int EXCEPTIONAL  = 3; // 异常执行完毕
+    private static final int CANCELLED    = 4; // 前一个状态必须是NEW，已取消（未中断）
+    private static final int INTERRUPTING = 5; // 前一个状态必须是NEW，正在中断（中断）
+    private static final int INTERRUPTED  = 6; // 取消成功的才可以设置，中断完成（中断）
+
+    // 待运行的Callable任务
+    private Callable&lt;V> callable;
+    // Callable执行的结果。如果出现执行的过程中异常，则保存的是异常对象
+    private Object outcome;
+    // 运行Callable#call方法的线程（也即是运行业务代码的线程）
+    private volatile Thread runner;
+    // 当这里面的Callable还未执行完，却有其他线程调用Future#get()方法，
+    // 	会将其他线程阻塞并构造为等待节点，维持一个链表结构，以便在Callable执行完毕后唤醒并回调
+    private volatile WaitNode waiters;
+
+
+    public void run() {
+        if (state != NEW ||
+            !UNSAFE.compareAndSwapObject(this, runnerOffset,
+                                         null, Thread.currentThread()))
+            return;
+        try {
+            Callable&lt;V> c = callable;
+            if (c != null &amp;&amp; state == NEW) {
+                V result;
+                boolean ran;
+                try {
+                    // 执行业务方法
+                    result = c.call();
+                    ran = true;
+                } catch (Throwable ex) {
+                    result = null;
+                    ran = false;
+                    setException(ex); // 异常结束，将状态设为EXCEPTIONAL，如果等待队列有节点，则唤醒对应的线程
+                }
+                if (ran)
+                    set(result); // 正常结束，将状态设为NORMAL，如果等待队列有节点，则唤醒对应的线程
+            }
+        } finally {
+            runner = null;
+            int s = state;
+            if (s >= INTERRUPTING)
+                handlePossibleCancellationInterrupt(s);
+        }
+    }
+    // 阻塞获取
+    public V get() throws InterruptedException, ExecutionException {
+        int s = state;
+        if (s &lt;= COMPLETING) // 还未完全结束Callabke，进入等待
+            s = awaitDone(false, 0L);
+        return report(s);
+    }
+    // 根据state判断是否需要阻塞并做对于的事
+    private int awaitDone(boolean timed, long nanos)
+        throws InterruptedException {
+        final long deadline = timed ? System.nanoTime() + nanos : 0L;
+        WaitNode q = null;
+        boolean queued = false;
+        for (;;) {
+            if (Thread.interrupted()) { // 当前线程支持响应中断
+                removeWaiter(q);
+                throw new InterruptedException();
+            }
+
+            int s = state;
+            if (s > COMPLETING) { // Callable运行完毕，且result已经设置完毕
+                if (q != null)
+                    q.thread = null;
+                return s;
+            }
+            // 进入到以下分支，就代表Callable还未完全执行完毕
+
+            else if (s == COMPLETING) // cannot time out yet  Callable运行完毕，但正在设置result，让出执行时间，等待下次判断
+                Thread.yield();
+            else if (q == null) // 第一次循环，构造等待节点
+                q = new WaitNode();
+            else if (!queued) // 还未加入等待队列，则将节点加入到等待队列中
+                queued = UNSAFE.compareAndSwapObject(this, waitersOffset,
+                                                     q.next = waiters, q);
+            else if (timed) { // 是否运行超时判断
+                nanos = deadline - System.nanoTime();
+                if (nanos &lt;= 0L) {
+                    removeWaiter(q);
+                    return state;
+                }
+                LockSupport.parkNanos(this, nanos);
+            }
+            else // 暂停当前线程，等待任务执行完毕的唤醒
+                LockSupport.park(this);
+        }
+    }
+    // 任务执行完毕，唤醒等待队列的所有节点
+    private void finishCompletion() {
+        // assert state > COMPLETING;
+        for (WaitNode q; (q = waiters) != null;) {
+            if (UNSAFE.compareAndSwapObject(this, waitersOffset, q, null)) {
+                for (;;) {
+                    Thread t = q.thread;
+                    if (t != null) {
+                        q.thread = null;
+                        LockSupport.unpark(t);
+                    }
+                    WaitNode next = q.next;
+                    if (next == null)
+                        break;
+                    q.next = null; // unlink to help gc
+                    q = next;
+                }
+                break;
+            }
+        }
+
+        done();
+
+        callable = null;        // to reduce footprint
+    }
+}
+
+1.1.2 总结
+FutureTask根据内部的state字段来判断当前任务运行到了哪个阶段并作出对于的抉择，也使用volatile修饰保证它在多线程环境下的可见性。
+state状态流转：
+NEW→COMPLETING→NORMAL（成功）
+NEW→COMPLETING→EXCEPTIONAL（失败）
+NEW→CANCELLED&#x2F;INTERRUPTED（取消）
+
+
+
+
+如果想获取任务执行的结果，要使用get来获取结果，get是个阻塞的方法。当任务还未执行完毕时，会将调用get的方法阻塞并构造成WaitNode，再通过内部的next字段链接下一个WaitNode，形成一个链表结构。当任务执行完毕后，内部调用的finishCompletion方法会判断等待链表是否为空，不为空就代表有线程在获取结果时被阻塞了，这时唤醒阻塞队列的所有线程，最终，调用get方法的线程返回结果。即使用 WaitNode 链表 + CAS 操作管理阻塞线程，避免显式锁开销
+只会允许任务执行一次，状态不可逆转
+
+1.2 ScheduledFutureTask​	ScheduledFutureTask继承了FutureTask，当向定时任务线程池投递任务时（Runnable或Callable），都会将其封装为ScheduledFutureTask
+1.2.1 重点字段和方法 private class ScheduledFutureTask&lt;V>
+            extends FutureTask&lt;V> implements RunnableScheduledFuture&lt;V> {
+     /** 
+     * 当前任务的id（自增的），代表了进入队列的顺序 &lt;br/>
+     * 当两个定时任务下次执行时间一致时，sequenceNumber越小就会越早执行
+     */
+    private final long sequenceNumber;
+    // 下次执行当前任务的纳秒时间戳
+    private long time;
+
+    /**
+     * 执行定时任务的纳秒间隔时间
+     * 大于0：代表固定的频率，不受任务的执行所花费的时间影响
+     * 等于0：代表不是一个重复的任务（只会执行一次
+     * 小于0：代表固定的时间间隔，基于任务执行完毕后的时间计算。（任务执行完后再基于当前时间计算下次执行时间）
+     */
+    private final long period;
+    // 当前任务在数组中的索引
+    int heapIndex;
+
+    public long getDelay(TimeUnit unit) {
+        return unit.convert(time - now(), NANOSECONDS);
+    }
+    // 比较方法，决定了放入数组的位置
+    public int compareTo(Delayed other) {
+        if (other == this) // compare zero if same object
+            return 0;
+        if (other instanceof ScheduledFutureTask) {
+            ScheduledFutureTask&lt;?> x = (ScheduledFutureTask&lt;?>)other;
+            long diff = time - x.time;
+            if (diff &lt; 0)
+                return -1;
+            else if (diff > 0) // 当前任务的下次执行时间更长，返回正数
+                return 1;
+            else if (sequenceNumber &lt; x.sequenceNumber)
+                return -1;
+            else
+                return 1;
+        }
+        long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS);
+        return (diff &lt; 0) ? -1 : (diff > 0) ? 1 : 0;
+    }
+
+    /**
+     * false: 代表当前任务为一次性任务
+     * true: 定时任务
+     */
+    public boolean isPeriodic() {
+        return period != 0;
+    }
+    // 当前任务执行完毕后，用来计算下次执行时间
+    private void setNextRunTime() {
+        long p = period;
+        // p为两次执行时间的时间间隔的纳秒值
+        if (p > 0) // p大于0，即为固定时间执行的任务，基于初始运行时间计算下一次的执行时间
+            time += p;
+        else // p小于0，为基于完成任务的时间来执行，基于任务运行完的时间，来计算出下一次的执行时间
+            time = triggerTime(-p);
+    }
+    // 主方法，运行当前定时任务
+    public void run() {
+        boolean periodic = isPeriodic();
+        if (!canRunInCurrentRunState(periodic))
+            cancel(false);
+        else if (!periodic) // 非定时任务，当作普通任务直接调用FutureTask的run方法运行
+            ScheduledFutureTask.super.run();
+        else if (ScheduledFutureTask.super.runAndReset()) { // 运行定时任务，且运行成功（没抛异常）
+            setNextRunTime(); // 设置下一次执行时间
+            reExecutePeriodic(outerTask); // 再把当前任务重新入队列
+        }
+    }
+    /**
+      父类的FutureTask中的方法，运行并重置状态，用于任务的多次执行 
+         * 正常执行时：不会修改运行状态（也就是说这个操作不会修改state字段值，保持初始值，以支持重复执行）。
+         * 出现异常时：还是将state设为EXCEPTIONAL，也就是说一个定时任务要是抛出了异常，之后就不会再执行它了
+         */
+    protected boolean runAndReset() {
+        if (state != NEW || // 不为NEW状态的都不执行
+            !UNSAFE.compareAndSwapObject(this, runnerOffset,
+                                         null, Thread.currentThread()))
+            return false;
+        boolean ran = false;
+        int s = state;
+        try {
+            Callable&lt;V> c = callable;
+            if (c != null &amp;&amp; s == NEW) {
+                try {
+                    c.call(); // 不设置返回结果。多次执行的任务就不该有执行结果
+                    ran = true;
+                } catch (Throwable ex) {
+                    setException(ex);  // 抛出异常，修改state为EXCEPTIONAL，以后也不在执行它
+                }
+            }
+        } finally {
+            // runner must be non-null until state is settled to
+            // prevent concurrent calls to run()
+            runner = null;
+            // state must be re-read after nulling runner to prevent
+            // leaked interrupts
+            s = state;
+            if (s >= INTERRUPTING)
+                handlePossibleCancellationInterrupt(s);
+        }
+        return ran &amp;&amp; s == NEW;
+    }
+ }
+
+1.2.2 总结ScheduledFutureTask 通过 period 字段判断任务类型：0 表示一次性任务，&gt;0 表示固定频率，&lt;0 表示固定延迟。
+在 run() 方法中，若任务为周期性任务，执行完当前任务后会计算下次执行时间，并将自身重新提交至基于小顶堆的 DelayedWorkQueue 中，以维持调度。
+
+基于纳秒时间精度，避免 System.currentTimeMillis() 的系统时间变动干扰。
+复用 FutureTask 的任务封装机制，增强任务调度能力。
+精简实现，不依赖额外锁，主要通过最小堆和 Delayed 接口实现调度。
+
+]]></content>
+      <categories>
+        <category>jdk</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
       </tags>
   </entry>
   <entry>
@@ -2085,1267 +2664,8 @@ protected Map&lt;String, Object> findAutowireCandidates(
       <categories>
         <category>Spring</category>
       </categories>
-  </entry>
-  <entry>
-    <title>Spring-Bean初始化</title>
-    <url>/2021/01/08/spring-bean-de-chu-shi-hua/</url>
-    <content><![CDATA[
-​	整体分析了BeanFactory和ApplicationContext的区别。并从Spring Bean创建流程源码分析了bean的创建流程并对其进行总结，并分析了三级缓存的作用
-
-
-Spring-Bean的初始化（5.1.x）BeanFactory​	BeanFactory 是 Spring 最基础的 IoC 容器接口，仅提供了 Bean 的获取与管理能力。而 DefaultListableBeanFactory 是其默认实现类，它通过实现多个关键接口，构建出完整的 IoC 容器功能体系。
-以下是 DefaultListableBeanFactory 实现的主要接口以及其对应的职责：
-
-
-
-主要接口
-主要功能
-
-
-
-AliasRegistry
-提供 Bean 的别名注册和解析能力。允许一个 Bean 在容器中有多个名字，是 Spring IoC 容器灵活命名机制的基础。
-
-
-BeanDefinitionRegistry
-管理 Bean 的定义信息（BeanDefinition），提供注册、删除、查询等能力。是容器启动期间加载和维护元数据的关键接口。
-
-
-SingletonBeanRegistry
-管理单例 Bean 的注册与缓存机制，控制 Bean 的生命周期。所有单例 Bean 都存储在 singletonObjects 缓存中。
-
-
-AutowireCapableBeanFactory
-提供创建 Bean 实例、属性注入、初始化回调、AOP 代理等高级功能。通常用于手动创建并管理 Bean 的生命周期，比如调用 createBean()、autowireBean() 等。
-
-
-ConfigurableListableBeanFactory
-是 BeanFactory 的高级配置接口，支持访问所有已注册的 BeanDefinition，还可以注册 BeanPostProcessor组件。常用于容器初始化后对 BeanFactory 进行增强或定制。
-
-
-HierarchicalBeanFactory
-支持父子容器结构，允许子容器从父容器中查找 Bean，提升模块化和隔离能力。 是实现 ApplicationContext 之间嵌套结构的基础。
-
-
-FactoryBeanRegistrySupport  （继承自 AbstractAutowireCapableBeanFactory）
-支持 FactoryBean 机制的关键实现类，负责识别并缓存 FactoryBean 创建的产品对象。 比如，当你定义了一个实现 FactoryBean&lt;T&gt; 的类时，容器最终会获取到 T 类型的对象，而不是工厂本身。
-
-
-ApplicationContextApplicationContext不仅实现了BeanFactory接口，还多了许多拓展接口，其余接口如下
-
-
-
-其他接口
-主要功能
-
-
-
-EnvironmentCapable
-获取Environment，可读取各种配置
-
-
-MessageSource
-国际化消息解析
-
-
-ApplicationEventPublisher
-支持事件发布&#x2F;监听机制
-
-
-ResourcePatternResolver
-支持资源加载，比如 classpath 等路径资源
-
-
-​	在注解驱动的环境下，常用的 ApplicationContext 实现类为 AnnotationConfigApplicationContext。该类内部封装了一个 DefaultListableBeanFactory 实例，作为底层的 Bean 注册与管理中心，从而继承了 BeanFactory 的全部能力。
-​	而其refresh方法更是容器启动流程的核心。Bean的解析、注册，各种后置处理器的准备、使用，国际化和事件发布、各种监听器均在这个方法中完成，可以说是整个Spring的核心
-bean创建流程源码（只保留了重要的部分）AbstractBeanFactory#doGetBeanorg.springframework.beans.factory.support.AbstractBeanFactory#doGetBean方法部分关键代码
-// 获取真实的beanName，参数name可能是bean的别名和FactoryBean格式（前面有&amp;）
-String beanName = transformedBeanName(name);
-Object bean;
-
-// Eagerly check singleton cache for manually registered singletons.
-// 为了解决循环引用，在这里就必须可以从二级或三级缓存中拿bean（尽管此时这个bean实例化了，还未填充数据和初始化）
-Object sharedInstance = getSingleton(beanName);
-if (sharedInstance != null &amp;&amp; args == null) {
-  bean = getObjectForBeanInstance(sharedInstance, name, beanName, null);
-}
-
-else {
-  // 循环创建多例bean抛出异常
-  if (isPrototypeCurrentlyInCreation(beanName)) {
-    throw new BeanCurrentlyInCreationException(beanName);
-  }
-
-  // 先获取父容器
-  BeanFactory parentBeanFactory = getParentBeanFactory();
-  // 父BeanFactory存在且当前的BeanFactory不存在BeanDefinition，就会去父BeanFactory递归查找
-  if (parentBeanFactory != null &amp;&amp; !containsBeanDefinition(beanName)) {
-    // 在父容器中获取bean，能获取到就直接返回了
-    ...
-  }
-
-  if (!typeCheckOnly) {
-    // 标记bean为已创建
-    markBeanAsCreated(beanName);
-  }
-
-  try {
-    RootBeanDefinition mbd = getMergedLocalBeanDefinition(beanName);
-    checkMergedBeanDefinition(mbd, beanName, args);
-
-    String[] dependsOn = mbd.getDependsOn();
-    if (dependsOn != null) {
-      // 有dependsOn的bean，则优先创建这些bean
-      ...
-    }
-
-    // Create bean instance.
-    if (mbd.isSingleton()) { // 单例bean的创建
-      sharedInstance = getSingleton(beanName, () -> {
-        try {
-          return createBean(beanName, mbd, args);
-        }
-        catch (BeansException ex) {
-                    // bean创建失败，执行destory相关方法并直接抛出异常
-          destroySingleton(beanName);
-          throw ex;
-        }
-      });
-      bean = getObjectForBeanInstance(sharedInstance, name, beanName, mbd);
-    }
-    else if (mbd.isPrototype()) { // 创建多例bean
-      Object prototypeInstance = null;
-      try {
-        beforePrototypeCreation(beanName);
-        prototypeInstance = createBean(beanName, mbd, args);
-      }
-      finally {
-        afterPrototypeCreation(beanName);
-      }
-      bean = getObjectForBeanInstance(prototypeInstance, name, beanName, mbd);
-    }
-
-    else { // 特殊的scope里bean的创建。创建在session，request等scope里面的bean
-      String scopeName = mbd.getScope();
-      Scope scope = this.scopes.get(scopeName);
-      }
-      // 获取并放入对应的Scope中，在返回bean
-      Object scopedInstance = scope.get(beanName, () -> {
-        beforePrototypeCreation(beanName);
-        try {
-          return createBean(beanName, mbd, args);
-        }
-        finally {
-          afterPrototypeCreation(beanName);
-        }
-      });
-      bean = getObjectForBeanInstance(scopedInstance, name, beanName, mbd);
-    }
-  }
-  catch (BeansException ex) {
-    cleanupAfterBeanCreationFailure(beanName);
-    throw ex;
-  }
-}
-
-// Check if required type matches the type of the actual bean instance.
-if (requiredType != null &amp;&amp; !requiredType.isInstance(bean)) {
-    T convertedBean = getTypeConverter().convertIfNecessary(bean, requiredType);
-    if (convertedBean == null) {
-      throw new BeanNotOfRequiredTypeException(name, requiredType, bean.getClass());
-    }
-    return convertedBean;
-}
-return (T) bean;
-
-DefaultSingletonBeanRegistry#getSingleton从三级缓存中获取bean
-protected Object getSingleton(String beanName, boolean allowEarlyReference) {
-        // 先从一级缓存中直接获取
-        Object singletonObject = this.singletonObjects.get(beanName);
-        // 单例bean还没创建好但是正在创建的情况（说明已经有循环引用了）
-        if (singletonObject == null &amp;&amp; isSingletonCurrentlyInCreation(beanName)) {
-            // 二级缓存中获取
-            singletonObject = this.earlySingletonObjects.get(beanName);
-            if (singletonObject == null &amp;&amp; allowEarlyReference) {
-                synchronized (this.singletonObjects) {
-                    singletonObject = this.singletonObjects.get(beanName);
-                    if (singletonObject == null) { // 一级缓存为空，从二级中取
-                        singletonObject = this.earlySingletonObjects.get(beanName);
-                        if (singletonObject == null) { // 二级缓存为空，再从三级缓存中获取
-                            ObjectFactory&lt;?> singletonFactory = this.singletonFactories.get(beanName);
-                            if (singletonFactory != null) {
-                                // 三级缓存不为空，取出该bean，放入二级缓存，同时从三级缓存中删除
-                                singletonObject = singletonFactory.getObject();
-                                this.earlySingletonObjects.put(beanName, singletonObject);
-                                this.singletonFactories.remove(beanName);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return singletonObject;
-    }
-
-AbstractAutowireCapableBeanFactory#doCreateBean// 实例化bean。先创建出一个空壳的bean，各种field和方法都没有填充和调用
-BeanWrapper instanceWrapper = null;
-if (mbd.isSingleton()) {
-  instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
-}
-if (instanceWrapper == null) {
-  instanceWrapper = createBeanInstance(beanName, mbd, args);
-}
-// 已实例化的bean
-Object bean = instanceWrapper.getWrappedInstance();
-// bean 的class type
-Class&lt;?> beanType = instanceWrapper.getWrappedClass();
-if (beanType != NullBean.class) {
-  mbd.resolvedTargetType = beanType;
-}
-
-// 单例+允许循环引用+当前bean正在创建。就需要将bean包装后放入三级缓存中
-boolean earlySingletonExposure = (mbd.isSingleton() &amp;&amp; this.allowCircularReferences &amp;&amp;
-    isSingletonCurrentlyInCreation(beanName));
-if (earlySingletonExposure) {
-  // 将已实例化但还未填充属性的bean放入三级缓存，供其他依赖此bean的bean使用
-  addSingletonFactory(beanName, () -> getEarlyBeanReference(beanName, mbd, bean));
-}
-
-//  准备初始化bean
-Object exposedObject = bean;
-try {
-  // 填充bean的字段（依赖的字段bean）
-  populateBean(beanName, mbd, instanceWrapper);
-  // bean完全填充好属性后，开始调用各种初始化方法和BeanPostProcessor接口
-  exposedObject = initializeBean(beanName, exposedObject, mbd);
-}
-    ... // 省略异常
-}
-... 
-// 注册destroy相关方法
-registerDisposableBeanIfNecessary(beanName, bean, mbd);
-return exposedObject;
-
-AbstractAutowireCapableBeanFactory#populateBean填充bean的字段
-
-PropertyValues pvs = (mbd.hasPropertyValues() ? mbd.getPropertyValues() : null);
-
-// 根据autowireMode来判断注入方式
-// 1. xml显示配置的autowire
-// 2. 配置了@Bean注解的autowire字段（这个字段默认不会走下面的代码注入）
-int resolvedAutowireMode = mbd.getResolvedAutowireMode();
-if (resolvedAutowireMode == AUTOWIRE_BY_NAME || resolvedAutowireMode == AUTOWIRE_BY_TYPE) {
-  MutablePropertyValues newPvs = new MutablePropertyValues(pvs);
-  // Add property values based on autowire by name if applicable.
-  if (resolvedAutowireMode == AUTOWIRE_BY_NAME) {
-    autowireByName(beanName, mbd, bw, newPvs);
-  }
-  // Add property values based on autowire by type if applicable.
-  if (resolvedAutowireMode == AUTOWIRE_BY_TYPE) {
-    autowireByType(beanName, mbd, bw, newPvs);
-  }
-  pvs = newPvs;
-}
-// ==================== 以下就是@Autowired和@Resource注入方式的处理
-// 是否存在InstantiationAwareBeanPostProcessor处理器（主要是注解解析PostProcessor）
-boolean hasInstAwareBpps = hasInstantiationAwareBeanPostProcessors();
-boolean needsDepCheck = (mbd.getDependencyCheck() != AbstractBeanDefinition.DEPENDENCY_CHECK_NONE);
-
-PropertyDescriptor[] filteredPds = null;
-if (hasInstAwareBpps) {
-  if (pvs == null) {
-    pvs = mbd.getPropertyValues();
-  }
-  // 获取InstantiationAwareBeanPostProcessor处理器，并调用其postProcessProperties方法
-  // 基于注解的依赖注入会用到
-  for (BeanPostProcessor bp : getBeanPostProcessors()) {
-    if (bp instanceof InstantiationAwareBeanPostProcessor) {
-      InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
-      // 注解相关的自动注入
-      PropertyValues pvsToUse = ibp.postProcessProperties(pvs, bw.getWrappedInstance(), beanName);
-      pvs = pvsToUse;
-    }
-  }
-}
-}
-
-AbstractAutowireCapableBeanFactory#initializeBean初始化bean
-
-// 三种aware(BeanName，BeanClassLoader，BeanFactory)
-invokeAwareMethods(beanName, bean);
-
-// 名叫wrappedBean，表示这些方法返回的bean可能是被包装后的，比如aop相关
-Object wrappedBean = bean;
-if (mbd == null || !mbd.isSynthetic()) {
-  // BeanPostProcessor接口实例回调（在bean的初始化方法调用之前调用）
-  // 例如：@PostConstruct注解的实现
-  wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
-}
-
-// InitializingBean方法和init-method方法
-invokeInitMethods(beanName, wrappedBean, mbd);
-
-if (mbd == null || !mbd.isSynthetic()) {
-  // BeanPostProcessor#postProcessAfterInitialization接口实例回调。
-  // 在bean的初始化方法调用完成之后调用，说明bean以及初始化完毕，可以实现其他扩展功能了
-  //比如AOP的实现、 @Scheduled注解实现等
-  wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
-}
-
-return wrappedBean;
-
-三级缓存
-一级缓存（DefaultSingletonBeanRegistry#singletonObjects）：存放的是完全初始化好的bean，包括已实例化、填充内部依赖的bean，运行完初始化方法（@PostConstruct、afterPropertiesSet方法、指定的init-method方法）
-二级缓存（DefaultSingletonBeanRegistry#earlySingletonObjects）：存放bean缓存（如果能被AOP，就是AOP对象），但还未填充属性和允许初始化方法
-三级缓存（DefaultSingletonBeanRegistry#singletonFactories）：存放bean的ObjectFactory工厂对象，使用这个工厂对象，可提前暴露出bean的引用（专用来提前暴露AOP对象的方法）
-
-为什么要使用三级缓存​	三级缓存专门来解决AOP对象的暴露问题。
-​	如果没用AOP是可以只用一级缓存和二级缓存就解决的。但如果使用了AOP且没有三级缓存，那么必须在实例化后就马上完成AOP代理，但这和spring的设计初衷不同，AOP代理的完成时使用了bean的后置处理器AnnotationAwareAspectJAutoProxyCreator来完成的，也就是在初始化bean后执行的bean后置处理器方法（AbstractAutowireCapableBeanFactory#initializeBean），就不可能再实例化bean后进行代理，所以才有了三级缓存，仅用来提前暴露AOP对象
-三层级缓存真能完美解决吗？如果有3个bean分别为A、B、C，A依赖B和C，B只依赖A，C什么都不依赖，但提供一个方法sayHello使用。
-​	当开始实例化A时，实例化A后将其工厂对象放入三级缓存中，开始填充A属性，发现了B需要填充，开始实例化B，实例化B对象过程中又需要填充其属性A，这时能从三级缓存中取出了A的引用（但此时A不完整），如果B对象有一个初始化方法（@PostConstruct），调用A对象里的C对象的sayHello方法，但由于A此时只是个空壳，就会抛出空指针异常。
-​	总的来说，就是在循环引用期间的调用初始化方法时，调用了尚未完全创建好的bean（空壳bean）的某个字段的方法，导致抛出NPE，导致服务启动失败
-关键流程总结
-实例化bean：创建bean的空壳对象
-将其工厂对象（ObjectFactory）放入三级缓存（根据AbstractAutowireCapableBeanFactory#allowCircularReferences字段决定）
-填充依赖bean（AbstractAutowireCapableBeanFactory#populateBean）：进行@Autowired和@Resource等注解的字段注入。如果这些依赖的 Bean 还没创建，会触发递归创建
-初始化bean（AbstractAutowireCapableBeanFactory#initializeBean）
-4.1 调用BeanPostProcessor#postProcessBeforeInitialization方法（初始化前的hook）
-4.2 调用各种初始化方法（**@PostConstruct、afterPropertiesSet方法、指定的init-method方法**）
-4.3 调用BeanPostProcessor#postProcessAfterInitialization（初始化后的hook，AOP相关实现）
-
-
-注册destory相关方法（AbstractBeanFactory#registerDisposableBeanIfNecessary）
-完成创建，放入一级缓存。同时移除三级缓存和二级缓存中的相关对象
-
-]]></content>
-      <categories>
-        <category>spring</category>
-      </categories>
-      <tags>
-        <tag>spring三级缓存</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Java源码篇-Map</title>
-    <url>/2020/04/09/java-yuan-ma-pian-map/</url>
-    <content><![CDATA[​	jdk中常用Map实现类相关源码解析。包括 HashMap，LinkedHashMap，ConcurrentHashMap
- 
-
-Java源码篇-Map1 HashMap1.1 重点字段 
-/**
- * 数组默认长度
- */
-static final int DEFAULT_INITIAL_CAPACITY = 1 &lt;&lt; 4; // aka 16
-
-/**
- * 最大容量（即数组最大长度）
- */
-static final int MAXIMUM_CAPACITY = 1 &lt;&lt; 30;
-
-/**
- * 默认加载因子
- * 加载因子（loadFactor）是哈希表中用于控制数组存放数据疏密程度的参数。
- * 当loadFactor越趋近于1时，数组中存放的数据（entry）越多，哈希冲突的概率增加，
- * 导致单个桶中的链表长度可能增加，进而影响查找元素的效率。反之，当loadFactor越小，
- * 数组中存放的数据越少，数据分布越稀疏，数组的利用率降低。
- *
- * 默认的loadFactor值为0.75f，是官方经过权衡后给出的一个较为理想的平衡点，
- * 旨在兼顾查找效率和空间利用率。
- */
-static final float DEFAULT_LOAD_FACTOR = 0.75f;
-
-/**
- * 树化阈值。当桶(bucket)上的结点数大于这个值时会转成红黑树
- */
-static final int TREEIFY_THRESHOLD = 8;
-
-/**
- * 链表化阈值（当桶(bucket)上的结点数小于这个值时树转链表）
- */
-static final int UNTREEIFY_THRESHOLD = 6;
-
-/**
- * 桶中结构树化对应的table的最小长度
- */
-static final int MIN_TREEIFY_CAPACITY = 64;
-
-/**
- * 扩容阈值（threshold）
- * threshold = loadFactor * 数组长度
- * 当HashMap中元素的数量超过threshold时，会触发数组的扩容操作。
- * 扩容是为了减少哈希冲突，保持查找效率。
- */
-int threshold;
-
-1.2 核心方法1.2.1 put1 初始化数组
-如果是第一次添加元素，先初始化数组（即分配内存空间）。
-计算键的哈希值并确定索引位置，然后将键值对放入对应的桶（bucket）中。
-
-2 目标桶为空
-如果计算索引后，数组中对应的桶为空，则直接将键值对放入该桶中。
-
-3 目标桶不为空
-根节点匹配：
-如果桶中的根节点（第一个节点）与待插入节点的键 equals，则直接替换根节点的值。
-
-
-树化节点：
-如果根节点是树形节点（即红黑树节点），则调用红黑树的插入方法将节点放入树中。
-
-
-链表遍历：
-如果根节点是链表节点，则遍历链表：
-如果找到与待插入节点键 equals 的节点，则替换其值。
-如果遍历到链表末尾仍未找到匹配的节点，则将新节点插入链表末尾。
-树化条件：
-如果链表长度（包括待插入节点）达到 8 且数组长度大于等于 64，则将链表转换为红黑树。
-如果链表长度达到 8 但数组长度小于 64，则仅进行数组扩容，不进行树化。
-
-
-
-
-
-
-
-1.2.2 resizeHashMap 数组的长度始终为 2 的次幂，且扩容时长度加倍。这样设计的主要目的是为了方便扩容时的索引计算。以下为具体的扩容过程
-1 创建新数组
-先创建一个长度为原数组 2 倍的新数组。
-
-2 迁移数据
-遍历原数组中的每个桶（bucket）：
-
-如果桶为空或只有一个元素：
-
-直接计算该元素在新数组中的索引，并将其放入新数组。
-
-
-如果桶中有链表结构：
-
-遍历链表中的每个节点（Node），计算其在新数组中的索引。
-
-由于新数组长度是原数组的 2 倍，且长度始终为 2 的次幂，因此新索引的计算方法为：
-newIndex = (key.hashCode() &amp; (newCapacity - 1))
-
-
-新索引的结果只有两种可能：
-
-与原索引相同：如果 key 的哈希值在高一位为 0。
-等于原索引加上原数组长度：如果 key 的哈希值在高一位为 1。
-
-
-根据计算结果，将节点放入新数组的对应位置。
-
-
-
-
-
-
-3 链表拆分
-如果原桶中的链表被拆分为两个链表（一个保持原索引，另一个为原索引加上原数组长度），则分别将它们放入新数组的对应位置。
-
-1.2.3 部分核心代码final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
-             boolean evict) {
-  Node&lt;K,V>[] tab; Node&lt;K,V> rootNode; int tableLength, index;
-  if ((tab = table) == null || (tableLength = tab.length) == 0) // 添加第一个元素
-      tableLength = (tab = resize()).length;
-  if ((rootNode = tab[index = (tableLength - 1) &amp; hash]) == null) // 数组上对于的索引为空，代表这个kv可以直接放到这
-      tab[index] = newNode(hash, key, value, null);
-  else {
-      Node&lt;K,V> e; K k;
-      if (rootNode.hash == hash &amp;&amp;
-          ((k = rootNode.key) == key || (key != null &amp;&amp; key.equals(k)))) // bucket上的元素equals要放进来的kv，直接覆盖
-          e = rootNode;
-      else if (rootNode instanceof TreeNode)  // bucket上已经是红黑树结构了，直接存放为红黑树结构
-          e = ((TreeNode&lt;K,V>)rootNode).putTreeVal(this, tab, hash, key, value);
-      else { // 向链表的末尾添加
-          for (int binCount = 0; ; ++binCount) {
-              if ((e = rootNode.next) == null) { // 到链表末尾了
-                  rootNode.next = newNode(hash, key, value, null);
-                  if (binCount >= TREEIFY_THRESHOLD - 1) // -1 for 1st
-                  { // 链表的长度（算上bucket）已经大于等于了8，转换为红黑树
-                      treeifyBin(tab, hash);
-                  }
-                  break;
-              }
-              if (e.hash == hash &amp;&amp;
-                  ((k = e.key) == key || (key != null &amp;&amp; key.equals(k)))) { // 遍历链表时有equals，直接替换
-                  break;
-              }
-              rootNode = e;
-          }
-      }
-      if (e != null) { // existing mapping for key
-          // e不为空，代表是覆盖的情况，不是新增
-          V oldValue = e.value;
-          if (!onlyIfAbsent || oldValue == null)
-              e.value = value;
-          afterNodeAccess(e);
-          return oldValue;
-      }
-  }
-  ++modCount;
-  if (++size > threshold)
-      resize();
-  afterNodeInsertion(evict);
-  return null;
-}
-
-/**
- * resize方法，只展示了部分核心代码
- * 数组的初始化或扩容，扩容是加倍的
- */
-final Node&lt;K,V>[] resize() {
-    if (oldTab != null) { // 旧数组存在元素
-        for (int j = 0; j &lt; oldCap; ++j) {
-            Node&lt;K,V> e;
-            if ((e = oldTab[j]) != null) { // bucket存在元素
-                oldTab[j] = null;
-                if (e.next == null) // 这个bucket没有链表，只需要将它重新计算下在新数组的索引，并放入对于的bucket中
-                    newTab[e.hash &amp; (newCap - 1)] = e;
-                else if (e instanceof TreeNode) // 红黑树结构
-                    ((TreeNode&lt;K,V>)e).split(this, newTab, j, oldCap);
-                else { // preserve order
-                    /* 旧数组的桶在新数组的索引位的节点 */
-                    // 索引大小没有变化
-                    Node&lt;K,V> loHead = null, loTail = null;
-                    // 索引扩大了旧数组的长度（即新索引位：旧索引位+旧数组长度）
-                    Node&lt;K,V> hiHead = null, hiTail = null;
-                    Node&lt;K,V> next;
-                    do {
-                        next = e.next;
-                        // e.hash &amp; oldCap == 0 就代表e的hash值（转换为2进制）高一位为0，
-                        // 与（新的容量-1）相与后，其在数组的索引位置不变
-                        if ((e.hash &amp; oldCap) == 0) {
-                            if (loTail == null)
-                                loHead = e;
-                            else
-                                loTail.next = e;
-                            loTail = e;
-                        }
-                        else { // 这里则高一位为1，与新的容量 &amp; 后，
-                             // 其在新数组的索引位置会增加新容量的扩大值（即原容量的大小）
-                            if (hiTail == null)
-                                hiHead = e;
-                            else
-                                hiTail.next = e;
-                            hiTail = e;
-                        }
-                    } while ((e = next) != null);
-                    if (loTail != null) {
-                        loTail.next = null;
-                        newTab[j] = loHead;
-                    }
-                    if (hiTail != null) {
-                        hiTail.next = null;
-                        newTab[j + oldCap] = hiHead;
-                    }
-                }
-            }
-        }
-    }
-    return newTab;
-}
-
-1.3 线程不安全
-
-当两个线程同时put数据时，且被put的两个数据能定位到HashMap数组的相同那个bucket位置上，就可能产生一个覆盖掉另一个的可能，造成一个数据消失。
-多个线程同时修改 HashMap的结构时（如插入、删除或扩容），可能会导致部分数据丢失。比如线程A插入，而线程B正在扩容，最终导致A线程插入的数据丢失
-没有volatile或锁的同步机制，会导致一个线程的修改对另一个线程不可见
-
-
-2 LinkedHashMapLinkedHashMap 是 HashMap 的子类，它不仅实现了 Map 接口，还具有排序功能。其排序行为由 accessOrder 字段控制
-2.1 核心字段
-head：链表的头节点，指向最早插入或访问的节点。
-tail：链表的尾节点，指向最近插入或访问的节点。
-accessOrder（默认 false）：
-false：按照插入顺序排序，越晚插入的元素越排在链表末尾。
-true：按照访问顺序排序，最近访问的元素会被移动到链表末尾。可用于实现 LRU 缓存。
-
-
-
-2.2 排序实现原理2.2.1 双向链表// 继承了HashMap.Node的Entry内部结构
-static class Entry&lt;K,V> extends HashMap.Node&lt;K,V> { // 具有链表结构的Entry
-    // 前驱节点和后继节点
-    Entry&lt;K,V> before, after;
-    Entry(int hash, K key, V value, Node&lt;K,V> next) {
-        super(hash, key, value, next);
-    }
-}
-
-2.2.2 添加元素// 重写了HashMap的newNode方法，在构造新节点时将其添加到链表末尾
-Node&lt;K,V> newNode(int hash, K key, V value, Node&lt;K,V> e) {
-    Entry&lt;K,V> p = new Entry&lt;>(hash, key, value, e);
-    // 将新节点链接到链表末尾
-    linkNodeLast(p);
-    return p;
-}
-
-2.2.3 访问节点移动到末尾如果 accessOrder 为 true，LinkedHashMap 会在访问节点时（如调用 get 方法）触发 afterNodeAccess 方法，将最近访问的节点移动到链表末尾，基于此可以实现LRU缓存
-// 重写的HashMap#afterNodeAccess方法，
-void afterNodeAccess(Node&lt;K,V> e) {
-    LinkedHashMap.Entry&lt;K,V> last;
-    if (accessOrder &amp;&amp; (last = tail) != e) { // accessOrder为true，e不为tail
-        // 重排序当前元素，将当前节点设为新的tail（保持最近一次被访问的节点在最后面）
-        LinkedHashMap.Entry&lt;K,V> p =
-            (LinkedHashMap.Entry&lt;K,V>)e, b = p.before, a = p.after;
-        p.after = null;
-        if (b == null) // e为head，更新头节点
-            head = a;
-        else
-            b.after = a;
-        if (a != null) // e不为tail
-            a.before = b;
-        else
-            last = b;
-        if (last == null)
-            head = p;
-        else {
-            p.before = last;
-            last.after = p;
-        }
-        tail = p;
-        ++modCount;
-    }
-}
-
-3 ConcurrentHashMapConcurrentHashMap 是一个线程安全的 Map 实现，通过 **CAS 和 分段锁 机制实现高效的并发操作。其数据结构与 HashMap 类似，采用 数组 + 链表 + 红黑树 的形式：
-
-当链表长度超过 8 时，链表会转换为红黑树。
-当红黑树节点数小于 6 时，红黑树会退化为链表。
-
-3.1 put方法死循环put元素，直到操作成功才退出
-
-数组还没初始化，开始数组的初始化
-数组的bucket还未被占用，CAS占用（成功了就break，失败了就代表已经被其他节点占用了，进行下一次循环进入其他if分支）
-当前桶为ForwardingNode，表示有线程正在进行扩容操作，则先帮助扩容，等扩容完毕在继续put
-bucket被占用，锁住根节点，开始构造到链表的为尾节点。添加到尾节点后，在判断当前链表长度是否超过8，否则就转换为红黑树
-
-3.2 扩容（重点）​		核心是通过 多线程协作 和 分段迁移 的方式进行高效的数据迁移，同时尽量减少对读写操作的影响
-3.2.1 扩容触发时机
-当 ConcurrentHashMap 中的元素数量超过 阈值（threshold） 时触发
-阈值计算公式：阈值 = 数组长度 * 负载因子（loadFactor，默认 0.75）。
-
-3.2.2 具体步骤
-首先创建一个新的数据，为元素组大小的2倍。将其设置到nextTable字段
-
-通过CAS设置transferIndex（初始设为旧数组的长度，即是从旧数组末尾开始向前遍历转移数据的）
-
-每个线程通过CAS从transferIndex获取一段连续长度为stride（步长）的桶，stride计算如下
-
-// 计算步长：即扩容时每个线程每次最小处理的数组连续长度
-// cpu为1，则由这个线程全部处理；cpu数量大于1，每个核心负责的步长为 数组长度/(8 * cpu核数) ，不过如果计算出步长小于16，则会被设置为16。确保线程的工作量均衡
-if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) &lt; MIN_TRANSFER_STRIDE){
-  stride = MIN_TRANSFER_STRIDE;
-} 
-
-
-
-
-开始迁移数据，到这一步了每个线程就只会迁移自己所负责的步长索引数据，不会冲突
-
-空桶：则放置一个 ForwardingNode，表示该桶已迁移
-桶为ForwardingNode：当前桶已迁移。因为整体是从后向前迁移的，可推测当前线程负责的这段步长索引一定已处理完毕，即这段步长内这个桶后面的所有桶也都已经被处理完成了，需要重新计算它下一次该负责的新步长索引
-桶未迁移：则操作加锁，对桶中的链表或红黑树进行迁移，迁移完成后，再将当前桶放置为ForwardingNode节点
-
-
-当最后一个线程迁移完毕后，则更新table为新数据和sizeCtl，表示扩容完成
-
-
-3.2.3 相关思考
-步长计算安全嘛？
-
-​		安全，通过CAS设置公共变量transferIndex（初始值为table.length），同时该变量为volatile，它的变化能立马被其他线程感知到，可以保证每个线程处理的步长索引不会重复和交叉
-
-
-其他线程如何感知并帮助扩容？
-
-​		通过判断桶节点为ForwardingNode，则表示正在扩容，此时这个线程则帮助扩容，计算自己需要处理的步长索引来转移数据到新数组中。每处理完一个桶也将其设为ForwardingNode节点
-
-
-get方法并没有加锁，如果桶已被转移怎么获取到数据？
-
-​		首先扩容是读写分离的，扩容时不会对桶本身做任何修改（即不会修改Node的内部指针数据），所以如果拿到原桶数据，则能直接遍历获取数据。而如果拿到的是ForwardingNode，它本身也提供了find方法，会到新数组中去找到需要的数据
-
-
-扩容完成如何处理？
-
-​		每个线程完成自己负责区间的迁移后，会更新sizeCtl字段中的扩容线程数计数，判断确定最后一个完成迁移的线程会将新数组赋值给table并重新计算sizeCtl的阈值
-
-
-最后需要注意，在操作数组中的桶时，都会获取这个桶节点的锁（put和resize等等修改方法），锁是相同的，所以不必担心某一个桶的相关数据被多个线程同时处理（put，resize等）
-
-
-3.2.4 核心代码private final void transfer(Node&lt;K,V>[] tab, Node&lt;K,V>[] nextTab) {
-    int n = tab.length, stride;
-    // 计算步长：即扩容时每个线程每次最小处理的数组连续长度
-    // cpu为1，则由这个线程全部处理；cpu数量大于1，每个核心负责的步长为 数组长度/(8 * cpu核数) ，不过如何计算出步长小于16，则会被设置为16。确保线程的工作量均衡
-    if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) &lt; MIN_TRANSFER_STRIDE)
-        stride = MIN_TRANSFER_STRIDE; // subdivide range
-    if (nextTab == null) {            // initiating
-        try {
-            @SuppressWarnings("unchecked")
-            // 创建新数组，2次幂便于扩容计算新索引位置
-            Node&lt;K,V>[] nt = (Node&lt;K,V>[])new Node&lt;?,?>[n &lt;&lt; 1];
-            nextTab = nt;
-        } catch (Throwable ex) {      // try to cope with OOME
-            sizeCtl = Integer.MAX_VALUE;
-            return;
-        }
-        nextTable = nextTab;
-        // 表示从数组末尾开始分配迁移任务
-        transferIndex = n;
-    }
-    int nextn = nextTab.length;
-    ForwardingNode&lt;K,V> fwd = new ForwardingNode&lt;K,V>(nextTab);
-    // 当前线程是否需要继续在旧数组上截取一段桶来处理数据，默认是
-    boolean advance = true;
-    // 扩容完毕的标志
-    boolean finishing = false; // to ensure sweep before committing nextTab
-    for (int i = 0, bound = 0;;) { // i 是当前线程正在处理的桶的索引，bound 是当前线程负责的迁移任务的起始索引（也就是在处理中则 i>bound）
-        Node&lt;K,V> f; int fh;
-        // 检查当前线程负责的步长内的桶是否处理完毕。处理完毕，则选取下一段当前现场该处理的步长索引段
-        while (advance) {
-            int nextIndex, nextBound;
-            if (--i >= bound || finishing)
-                advance = false;
-            else if ((nextIndex = transferIndex) &lt;= 0) {
-                i = -1;
-                advance = false;
-            }
-            else if (U.compareAndSwapInt
-                     (this, TRANSFERINDEX, nextIndex,
-                      nextBound = (nextIndex > stride ?
-                                   nextIndex - stride : 0))) {
-                bound = nextBound;
-                // i初始化为旧数组最后一个索引位置
-                i = nextIndex - 1;
-                advance = false;
-            }
-        }
-        if (i &lt; 0 || i >= n || i + n >= nextn) { // 当前线程扩容完毕处理
-            int sc;
-            if (finishing) {
-                nextTable = null;
-                table = nextTab;
-                sizeCtl = (n &lt;&lt; 1) - (n >>> 1);
-                return;
-            }
-            if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
-                if ((sc - 2) != resizeStamp(n) &lt;&lt; RESIZE_STAMP_SHIFT)
-                    return;
-                finishing = advance = true;
-                i = n; // recheck before commit
-            }
-        }
-        else if ((f = tabAt(tab, i)) == null) // 空桶，CAS放置ForwardingNode，让其他线程可以感知到，以帮助扩容
-            advance = casTabAt(tab, i, null, fwd);
-        else if ((fh = f.hash) == MOVED) // 当前桶已被处理
-            // 到这了就说明这段步长索引处理完毕，需要重新计算新步长索引
-            advance = true; // already processed
-        else {
-            synchronized (f) { // 桶加锁，开始转移当前桶的链表或红黑树到新的数组里
-                if (tabAt(tab, i) == f) { // 获取成功，再次校验桶节点是否变化，未变才继续操作（避免被其他刚释放了这个锁的线程给修改了）
-                    // 桶数据转移到新数组去，和HashMap类似计算新数组中的索引
-                    Node&lt;K,V> ln, hn;
-                    if (fh >= 0) {
-                        int runBit = fh &amp; n;
-                        Node&lt;K,V> lastRun = f;
-                        for (Node&lt;K,V> p = f.next; p != null; p = p.next) {
-                            int b = p.hash &amp; n;
-                            if (b != runBit) {
-                                runBit = b;
-                                lastRun = p;
-                            }
-                        }
-                        if (runBit == 0) {
-                            ln = lastRun;
-                            hn = null;
-                        }
-                        else {
-                            hn = lastRun;
-                            ln = null;
-                        }
-                        for (Node&lt;K,V> p = f; p != lastRun; p = p.next) {
-                            int ph = p.hash; K pk = p.key; V pv = p.val;
-                            if ((ph &amp; n) == 0)
-                                ln = new Node&lt;K,V>(ph, pk, pv, ln);
-                            else
-                                hn = new Node&lt;K,V>(ph, pk, pv, hn);
-                        }
-                        setTabAt(nextTab, i, ln);
-                        setTabAt(nextTab, i + n, hn);
-                        // 转移完后，旧数组的桶放置ForwardingNode，表示当前桶已处理完毕并表示为扩容中
-                        setTabAt(tab, i, fwd);
-                        advance = true;
-                    }
-                    else if (f instanceof TreeBin) {
-                        TreeBin&lt;K,V> t = (TreeBin&lt;K,V>)f;
-                        TreeNode&lt;K,V> lo = null, loTail = null;
-                        TreeNode&lt;K,V> hi = null, hiTail = null;
-                        int lc = 0, hc = 0;
-                        for (Node&lt;K,V> e = t.first; e != null; e = e.next) {
-                            int h = e.hash;
-                            TreeNode&lt;K,V> p = new TreeNode&lt;K,V>
-                                (h, e.key, e.val, null, null);
-                            if ((h &amp; n) == 0) {
-                                if ((p.prev = loTail) == null)
-                                    lo = p;
-                                else
-                                    loTail.next = p;
-                                loTail = p;
-                                ++lc;
-                            }
-                            else {
-                                if ((p.prev = hiTail) == null)
-                                    hi = p;
-                                else
-                                    hiTail.next = p;
-                                hiTail = p;
-                                ++hc;
-                            }
-                        }
-                        ln = (lc &lt;= UNTREEIFY_THRESHOLD) ? untreeify(lo) :
-                            (hc != 0) ? new TreeBin&lt;K,V>(lo) : t;
-                        hn = (hc &lt;= UNTREEIFY_THRESHOLD) ? untreeify(hi) :
-                            (lc != 0) ? new TreeBin&lt;K,V>(hi) : t;
-                        setTabAt(nextTab, i, ln);
-                        setTabAt(nextTab, i + n, hn);
-                        // 转移完后，旧数组的桶放置ForwardingNode，表示当前桶已处理完毕并表示为扩容中
-                        setTabAt(tab, i, fwd);
-                        advance = true;
-                    }
-                }
-            }
-        }
-    }
-}
-
-3.4 为什么key和value不允许为null，而HashMap可以呢？
-​		ConcurrentHashMap如果允许key和value为null，会产生二义性。即不能确定map里本身没有这个数据，还是说有这个数据，但这个数据存的是null值。
-​		为什么HashMap可以允许呢？因为它不会产生二义性，使用HashMap设计用于单线程下，假设我们获取key为A的数据返回了null，之后还马上可以通过containsKey来判断到底是不存在A还是A就为null（因为是单线程，不用担心其他线程会修改数据）
-​		但ConcurrentHashMap是线程安全的，也就是默认会在多线程下修改数据。假设ConcurrentHashMap支持设置null，这时线程A获取key为null的数据返回了null，此时我们不确定A在不在ConcurrentHashMap里，需要用containsKey来判断key为null是否存在于ConcurrentHashMap里。但多线程的情况下，B线程在A线程containsKey操作前添加了key为null的数据，导致A线程containsKey返回了true，导致和第一步预期不同（第一步可能是不存在key为null的数据）
-​		综上：ConcurrentHashMap，它是为并发而生的，它是要用在并发场景中的。假如允许使用 map.get(key)返回 null ，这时是没办法通过 map.containsKey来准确的检测，因为在检测过程中可能会被其他线程锁修改，而导致检测结果并不可靠。所以直接禁用了null，好处就是返回null一定能表示key不存在，而不是有其他的含义，让语义更明确了
-​		所以这个设计选择反映了并发编程的一个重要原则：通过适当的限制来换取更好的可靠性和简单性。虽然失去了存储null值的能力，但换来了更清晰的语义和更好的并发安全性。
-
-]]></content>
-      <categories>
-        <category>jdk</category>
-      </categories>
-      <tags>
-        <tag>Map</tag>
-        <tag>ConcurrentHashMap</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Spring-Bean的字段填充阶段处理</title>
-    <url>/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</url>
-    <content><![CDATA[
-​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程
- 
-
-Spring-Bean的字段填充阶段相关处理器CommonAnnotationBeanPostProcessor​	专用来处理非Srping官方提供，而是javax的通用如下注解：
-
-@javax.annotation.Resource
-@javax.annotation.PostConstruct
-@javax.annotation.PreDestroy
-@javax.ejb.EJB
-@javax.xml.ws.WebServiceRef
-
-其主要有两个重要过程，一是提取这些注解所在字段或方法的元数据。之后才是使用这些注解
-其架构如下图所示。1被用在解析注解所在字段的元数据，2则是使用这些注解的处理器接口，3则表示它也具备Init和Destory注解解析的功能
-
-CommonAnnotationBeanPostProcessor架构
-
-解析Field和方法
-public void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class&lt;?> beanType, String beanName) {
-      // 调用父接口，解析@PostConstruct和@PreDestroy相关方法
-    super.postProcessMergedBeanDefinition(beanDefinition, beanType, beanName);
-        // 解析其余的注解
-    InjectionMetadata metadata = findResourceMetadata(beanName, beanType, null);
-    metadata.checkConfigMembers(beanDefinition);
-}
-
-private InjectionMetadata findResourceMetadata(String beanName, final Class&lt;?> clazz, @Nullable PropertyValues pvs) {
-    // 构建当前bean的缓存key，用于存放这个bean的所有依赖
-        String cacheKey = (StringUtils.hasLength(beanName) ? beanName : clazz.getName());
-        // 先从injectionMetadataCache缓存中拿，没有再构造，最后放入缓存
-        InjectionMetadata metadata = this.injectionMetadataCache.get(cacheKey);
-        if (InjectionMetadata.needsRefresh(metadata, clazz)) {
-            synchronized (this.injectionMetadataCache) {
-                metadata = this.injectionMetadataCache.get(cacheKey);
-                if (InjectionMetadata.needsRefresh(metadata, clazz)) {
-                    if (metadata != null) {
-                        metadata.clear(pvs);
-                    }
-                    metadata = buildResourceMetadata(clazz);
-                    this.injectionMetadataCache.put(cacheKey, metadata);
-                }
-            }
-        }
-        return metadata;
-    }
-// 开始解析@WebServiceRef，@EJB和@Resource
-// 这里面任意一个解析后都会进行Modifier.isStatic判断。可知静态字段或方法不支持自动注入，直接抛出了异常
-private InjectionMetadata buildResourceMetadata(final Class&lt;?> clazz) {
-        List&lt;InjectionMetadata.InjectedElement> elements = new ArrayList&lt;>();
-        Class&lt;?> targetClass = clazz;
-
-        do {
-            final List&lt;InjectionMetadata.InjectedElement> currElements = new ArrayList&lt;>();
-
-      // 遍历这个class的所有field，依次对每个field进行处理
-            ReflectionUtils.doWithLocalFields(targetClass, field -> {
-                // @WebServiceRef注解处理
-                if (webServiceRefClass != null &amp;&amp; field.isAnnotationPresent(webServiceRefClass)) {
-                    if (Modifier.isStatic(field.getModifiers())) {
-                        throw new IllegalStateException("@WebServiceRef annotation is not supported on static fields");
-                    }
-                    currElements.add(new WebServiceRefElement(field, field, null));
-                }
-                // @EJB注解处理
-                else if (ejbRefClass != null &amp;&amp; field.isAnnotationPresent(ejbRefClass)) {
-                    if (Modifier.isStatic(field.getModifiers())) {
-                        throw new IllegalStateException("@EJB annotation is not supported on static fields");
-                    }
-                    currElements.add(new EjbRefElement(field, field, null));
-                }
-                // @Resource注解处理
-                else if (field.isAnnotationPresent(Resource.class)) {
-                    if (Modifier.isStatic(field.getModifiers())) {
-                        throw new IllegalStateException("@Resource annotation is not supported on static fields");
-                    }
-                    if (!this.ignoredResourceTypes.contains(field.getType().getName())) {
-                        currElements.add(new ResourceElement(field, field, null));
-                    }
-                }
-            });
-
-      // 再遍历这个class的所有method，处理以set方法进行注入的方式
-            ReflectionUtils.doWithLocalMethods(targetClass, method -> {
-                Method bridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
-                if (!BridgeMethodResolver.isVisibilityBridgeMethodPair(method, bridgedMethod)) {
-                    return;
-                }
-                if (method.equals(ClassUtils.getMostSpecificMethod(method, clazz))) {
-                    if (webServiceRefClass != null &amp;&amp; bridgedMethod.isAnnotationPresent(webServiceRefClass)) {
-                        if (Modifier.isStatic(method.getModifiers())) {
-                            throw new IllegalStateException("@WebServiceRef annotation is not supported on static methods");
-                        }
-                        if (method.getParameterCount() != 1) {
-                            throw new IllegalStateException("@WebServiceRef annotation requires a single-arg method: " + method);
-                        }
-                        PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
-                        currElements.add(new WebServiceRefElement(method, bridgedMethod, pd));
-                    }
-                    else if (ejbRefClass != null &amp;&amp; bridgedMethod.isAnnotationPresent(ejbRefClass)) {
-                        if (Modifier.isStatic(method.getModifiers())) {
-                            throw new IllegalStateException("@EJB annotation is not supported on static methods");
-                        }
-                        if (method.getParameterCount() != 1) {
-                            throw new IllegalStateException("@EJB annotation requires a single-arg method: " + method);
-                        }
-                        PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
-                        currElements.add(new EjbRefElement(method, bridgedMethod, pd));
-                    }
-                    else if (bridgedMethod.isAnnotationPresent(Resource.class)) {
-                        if (Modifier.isStatic(method.getModifiers())) {
-                            throw new IllegalStateException("@Resource annotation is not supported on static methods");
-                        }
-                        Class&lt;?>[] paramTypes = method.getParameterTypes();
-                        if (paramTypes.length != 1) {
-                            throw new IllegalStateException("@Resource annotation requires a single-arg method: " + method);
-                        }
-                        if (!this.ignoredResourceTypes.contains(paramTypes[0].getName())) {
-                            PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
-                            currElements.add(new ResourceElement(method, bridgedMethod, pd));
-                        }
-                    }
-                }
-            });
-
-            elements.addAll(0, currElements);
-            targetClass = targetClass.getSuperclass();
-        }
-        while (targetClass != null &amp;&amp; targetClass != Object.class);
-
-        return new InjectionMetadata(clazz, elements);
-    }
-
-ResourceElement源码​	以@Resource注解解析后的数据ResourceElement为例，可以发现beanName默认为@Resource的name字段。如果没有则为field字段（注解在field上）。或者则去掉前面的set，再将下个字母变为小写作为beanName（注解在set方法上）
-private class ResourceElement extends LookupElement {
-
-    /**
-     * 存在@Lazy注解，且value为true，这个值就为true
-     */
-    private final boolean lazyLookup;
-
-    public ResourceElement(Member member, AnnotatedElement ae, @Nullable PropertyDescriptor pd) {
-       super(member, pd);
-       Resource resource = ae.getAnnotation(Resource.class);
-       // @Resource的name字段
-       String resourceName = resource.name();
-       Class&lt;?> resourceType = resource.type();
-       this.isDefaultName = !StringUtils.hasLength(resourceName);
-       if (this.isDefaultName) { // name字段为空
-          // 先获取这个字段名
-          resourceName = this.member.getName();
-          if (this.member instanceof Method &amp;&amp; resourceName.startsWith("set") &amp;&amp; resourceName.length() > 3) { // 注解在set方法上，则去掉前面的set，再将下个字母变为小写作为beanName
-             resourceName = Introspector.decapitalize(resourceName.substring(3));
-          }
-       }
-       else if (embeddedValueResolver != null) { // 支持占位符解析
-          resourceName = embeddedValueResolver.resolveStringValue(resourceName);
-       }
-       if (Object.class != resourceType) {
-          checkResourceType(resourceType);
-       }
-       else {
-          // No resource type specified... check field/method.
-          resourceType = getResourceType();
-       }
-       // 默认字段名
-       this.name = (resourceName != null ? resourceName : "");
-       // 默认当前字段的Class类型
-       this.lookupType = resourceType;
-       String lookupValue = resource.lookup();
-       this.mappedName = (StringUtils.hasLength(lookupValue) ? lookupValue : resource.mappedName());
-       Lazy lazy = ae.getAnnotation(Lazy.class);
-       this.lazyLookup = (lazy != null &amp;&amp; lazy.value());
-    }
-
-   /**
-           字段注入方法，如果需要懒加载，则会创建一个代理对象
-   */
-    @Override
-    protected Object getResourceToInject(Object target, @Nullable String requestingBeanName) {
-       return (this.lazyLookup ? buildLazyResourceProxy(this, requestingBeanName) :
-             getResource(this, requestingBeanName));
-    }
-}
-
-字段注入bean的populateBean调用了InstantiationAwareBeanPostProcessor#postProcessProperties方法，开始字段的注入
-CommonAnnotationBeanPostProcessor#postProcessPropertiespublic PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
-        // 找出上一步缓存的元数据
-    InjectionMetadata metadata = findResourceMetadata(beanName, bean.getClass(), pvs);
-    try {
-      // 开始注入
-       metadata.inject(bean, beanName, pvs);
-    }
-    catch (Throwable ex) {
-       throw new BeanCreationException(beanName, "Injection of resource dependencies failed", ex);
-    }
-    return pvs;
-}
-
-InjectionMetadata.InjectedElement#injectprotected void inject(Object target, @Nullable String requestingBeanName, @Nullable PropertyValues pvs)
-       throws Throwable {
-
-    if (this.isField) { // 字段注入
-       Field field = (Field) this.member;
-       ReflectionUtils.makeAccessible(field);
-       // 根据不同的子类getResourceToInject实现，获取对应的bean。会触发依赖bean的创建
-       // 依赖bean创建完毕并返回后，再将其赋予给field
-       field.set(target, getResourceToInject(target, requestingBeanName));
-    }
-    else { // set方法注入
-       if (checkPropertySkipping(pvs)) {
-          return;
-       }
-       try {
-          Method method = (Method) this.member;
-          ReflectionUtils.makeAccessible(method);
-          method.invoke(target, getResourceToInject(target, requestingBeanName));
-       }
-       catch (InvocationTargetException ex) {
-          throw ex.getTargetException();
-       }
-    }
-}
-
-总结CommonAnnotationBeanPostProcessor 是标准注解(@Resource/@PostConstruct/@PreDestroy)的解析者，通过元数据提前解析+生命周期钩子回调，实现了依赖注入和生命周期管理。
-
-CommonAnnotationBeanPostProcessor#postProcessMergedBeanDefinition：负责扫描 @Resource、@PostConstruct、@PreDestroy 注解，把解析结果封装成 InjectionMetadata（字段、方法对应的 ResourceElement 等），再缓存下来，等待后续注入或生命周期回调使用
-CommonAnnotationBeanPostProcessor#postProcessProperties：负责根据解析好的 InjectionMetadata 真正进行注入
-InitDestroyAnnotationBeanPostProcessor#postProcessBeforeInitialization： 在 Bean 初始化前，调用所有 @PostConstruct 标注的方法
-InitDestroyAnnotationBeanPostProcessor#postProcessBeforeDestruction：在 Bean 销毁前，调用所有 @PreDestroy 标注的方法。
-
-
-
-AutowiredAnnotationBeanPostProcessor根据构造方法可知，它专用来处理Spring提供的这些注解
-public AutowiredAnnotationBeanPostProcessor() {
-      // @Autowired支持
-    this.autowiredAnnotationTypes.add(Autowired.class);
-      // @Value支持
-    this.autowiredAnnotationTypes.add(Value.class);
-    try {
-       // javax提供的@Value支持
-       this.autowiredAnnotationTypes.add((Class&lt;? extends Annotation>)
-             ClassUtils.forName("javax.inject.Value", AutowiredAnnotationBeanPostProcessor.class.getClassLoader()));
-       logger.trace("JSR-330 'javax.inject.Inject' annotation found and supported for autowiring");
-    }
-    catch (ClassNotFoundException ex) {
-       // JSR-330 API not available - simply skip.
-    }
-}
-
-
-@org.springframework.beans.factory.annotation.Autowired
-@org.springframework.beans.factory.annotation.Value
-@javax.inject.Inject
-
-​		整体流程和上面的CommonAnnotationBeanPostProcessor差不多。都是在postProcessMergedBeanDefinition方法里进行bean内部有上诉3个注解的字段或方法进行解析并缓存。然后在postProcessProperties进行依赖注入
-]]></content>
-      <categories>
-        <category>spring</category>
-      </categories>
       <tags>
         <tag>BeanPostProcessor</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>CloudFlare-CDN缓存清除</title>
-    <url>/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/</url>
-    <content><![CDATA[
-​	给出了一些api用于清除Cloudflare的CDN缓存方式
- 
-
-CloudFlare-CDN缓存清除​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
-1 purgeUrl
-2 使用ApiKey清除（不推荐）
-ZONE_ID：区域id，即你在CF上托管的根域名id
-EMAIL：你的邮箱
-API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
-
-2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{"purge_everything": true}'
-
-2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
-
-3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
-
-3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
-     -H "Authorization: Bearer $API_TOKEN" \
-     -H "Content-Type:application/json"
-
-3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{"purge_everything": true}'
-
-3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
-
-4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
-5 参考链接
-官方清除缓存文档
-cloudflare dashboard创建token和查看ApiKey
-ZoneId获取
-
-]]></content>
-      <categories>
-        <category>cloudflare</category>
-      </categories>
-      <tags>
-        <tag>cdn缓存清除</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>谈谈ThreadLocal为什么被设计为弱引用</title>
-    <url>/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</url>
-    <content><![CDATA[
-分析了ThreadLocal为什么要被设计为弱引用，并给出了ThreadLocal的建议使用方法
-
-
-谈谈ThreadLocal为什么被设计为弱引用​	ThreadLocal在用作ThreadLocalMap的key时，是被设计为弱引用的。
-​	ThreadLocalMap的内部类Entry被设计为实现了WeakReference，Entry用来存放数据。在构造Entry对象时，将传进来的ThreadLocal对象包装成了真正的弱引用对象，而Entry对象和内部的value对象本身是强引用的。
-弱引用的解释：
-
-​		只具有弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。
-
-​	简单理解就是当垃圾回收时，该对象只被WeakReference对象的弱引用字段（T reference）所引用，而未被任何强类型的对象引用，那么，该弱引用的对象就会被回收。
-​	注意：WeakReference引用本身是强引用，它内部的（T reference）才是真正的弱引用字段，WeakReference就是一个装弱引用的容器而已。
-1 回收测试示例public class ThreadLocalDemo {
-    public static void main(String[] args) throws InterruptedException {
-        firstStack();
-        System.gc();
-        TimeUnit.SECONDS.sleep(1);
-        Thread thread = Thread.currentThread();
-        System.out.println(thread); // 在这里打断点，观察thread对象里的ThreadLocalMap数据
-
-    }
-    // 通过是否获取返回值观察A对象里的local对象是否被回收
-    private static A firstStack(){
-        A a = new A();
-        System.out.println("value: "+ a.get());
-        return a;
-    }
-    private static class A{
-        private ThreadLocal&lt;String> local = ThreadLocal.withInitial(() -> "in class A");
-
-        public String get(){
-            return local.get();
-        }
-        public void set(String str){
-            local.set(str);
-        }
-
-    }
-}
-
-
-ThreadLocal 被强引用持有，不会被回收
-
-
-ThreadLocal只被弱引用持有，gc后被回收了
-
-​	如上面的代码，当构造一个A对象时，内部的local对象也构造了，之后调用get和set方法对local对象取值和设置值，当A对象不可达时，垃圾收集器就会回收A。
-​	现在我们假设ThreadLocalMap的Entey里的key（ThreadLocal对象）不是弱引用的，且已经调用了A的对象的get或set方法，那么垃圾收集器回收A对象时，一定不会回收里面的local对象，为什么？
-
-因为Entey已近持有了local对象的引用，我们没有设置引用类型，那这个引用就默认是个强引用。
-Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（threadLocal对象）和value
-
-​	引用链如上面所示，这个引用链全是强引用，当这个线程还未结束时，他持有的强引用，包括递归下去的所有强引用都不会被垃圾回收器回收。
-​	那么回到正常情况，ThreadLocalMap里Entey的key是弱引用，在本例中也就是local对象在这里是弱引用，当对象A回收时，由于local对象只剩下被弱引用key所引用，所以local对象也会被回收。
-2 重点来了，key为什么被设计为弱引用？？​	回归本质，ThreadLocalMap是用来存放对象的，在一次线程的执行栈中，存放数据后方便我们在任意的地方取得我们想要的值而不被其他线程干扰。ThreadLocalMap本身并没有为外界提供取出和存放数据的API，我们所能获得数据的方式只有通过ThreadLocal类提供的API来间接的从ThreadLocalMap取出数据，所以，当我们用不了key（ThreadLocal对象）的API也就无法从ThreadLocalMap里取出指定的数据。
-​	在上面的例子中，A对象被回收了，这些get和set方法也访问不到了，也就没法从ThreadLocalMap里取出数据了。没法利用API取出数据，那这个Entry对象还有用吗？？所以最好的方法是在A对象被回收后，系统自动回收对应的Entry对象，但是让Entry对象或其中的value对象做为弱引用都是非常不合理的（这两个要是使用弱引用，都可能造成数据意外丢失）。所以，让key（threadLocal对象）为弱引用，自动被垃圾回收，key就变为null了，下次，我们就可以通过Entry不为null，而key为null来判断该Entry对象该被清理掉了。
-​	至于ThreadLocalMap为什么不给外界提供API来操作数据，我觉得是因为这个Map对于一个线程只有一份，任何地方都在用，为了提供更方便的API和为了我们不破换其他框架保存到里面的数据（数据不被污染），所以才用ThreadLocal作为key和API来操作数据。
-3 总结​	综上，Entry的key被设计为弱引用就是为了让程序自动的对访问不到的数据进行回收提醒。所以，在访问不到的数据被回收之前，内存泄漏确实是存在的，但是我们不用担心，就算我们不调用remove，ThreadLocalMap在内部的set，get和扩容时都会清理掉泄漏的Entry，内存泄漏完全没必要过于担心
-所以，ThreadLocal的建议使用方法：
-
-设计为static的，被class对象给强引用，线程存活期间就不会被回收，也不用remove，完全不用担心内存泄漏
-
-非static的，放置在长对象（比如被spring管理的对象）的内部，也不会被回收
-
-
-​	个人也觉得没必要让创建的ThreadLocal对象生命周期过短，ThreadLocal被设计出来本身就是用来跨方法栈获取当前线程的数据或者无锁的获取线程安全的数据，空间交换了线程安全的上锁时间。只要让ThreadLocal具有线程的生命周期，就完全没必要使用remove方法，也完全不用担心内存泄漏的问题。
-​	另外说一点，HashMap是使用拉链法解决hash冲突的，ThreadLocalMap是使用线性探测解决hash冲突的（内部只维护Entey数组，没有链表）。所以，源码中在清除泄漏的Entry时，会进行rehash，防止数组的当前位置为null后，有hash冲突的Entry访问不到的问题。
-]]></content>
-      <categories>
-        <category>jdk</category>
-      </categories>
-      <tags>
-        <tag>ThreadLocal</tag>
       </tags>
   </entry>
   <entry>
@@ -4067,8 +3387,677 @@ frozen：表示配置是否被冻结。默认为false，支持在运行时动态
         <category>Spring</category>
       </categories>
       <tags>
+        <tag>BeanPostProcessor</tag>
         <tag>AOP</tag>
       </tags>
+  </entry>
+  <entry>
+    <title>Spring-Bean的字段填充阶段处理</title>
+    <url>/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</url>
+    <content><![CDATA[
+​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程
+ 
+
+Spring-Bean的字段填充阶段相关处理器CommonAnnotationBeanPostProcessor​	专用来处理非Srping官方提供，而是javax的通用如下注解：
+
+@javax.annotation.Resource
+@javax.annotation.PostConstruct
+@javax.annotation.PreDestroy
+@javax.ejb.EJB
+@javax.xml.ws.WebServiceRef
+
+其主要有两个重要过程，一是提取这些注解所在字段或方法的元数据。之后才是使用这些注解
+其架构如下图所示。1被用在解析注解所在字段的元数据，2则是使用这些注解的处理器接口，3则表示它也具备Init和Destory注解解析的功能
+
+CommonAnnotationBeanPostProcessor架构
+
+解析Field和方法
+public void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class&lt;?> beanType, String beanName) {
+      // 调用父接口，解析@PostConstruct和@PreDestroy相关方法
+    super.postProcessMergedBeanDefinition(beanDefinition, beanType, beanName);
+        // 解析其余的注解
+    InjectionMetadata metadata = findResourceMetadata(beanName, beanType, null);
+    metadata.checkConfigMembers(beanDefinition);
+}
+
+private InjectionMetadata findResourceMetadata(String beanName, final Class&lt;?> clazz, @Nullable PropertyValues pvs) {
+    // 构建当前bean的缓存key，用于存放这个bean的所有依赖
+        String cacheKey = (StringUtils.hasLength(beanName) ? beanName : clazz.getName());
+        // 先从injectionMetadataCache缓存中拿，没有再构造，最后放入缓存
+        InjectionMetadata metadata = this.injectionMetadataCache.get(cacheKey);
+        if (InjectionMetadata.needsRefresh(metadata, clazz)) {
+            synchronized (this.injectionMetadataCache) {
+                metadata = this.injectionMetadataCache.get(cacheKey);
+                if (InjectionMetadata.needsRefresh(metadata, clazz)) {
+                    if (metadata != null) {
+                        metadata.clear(pvs);
+                    }
+                    metadata = buildResourceMetadata(clazz);
+                    this.injectionMetadataCache.put(cacheKey, metadata);
+                }
+            }
+        }
+        return metadata;
+    }
+// 开始解析@WebServiceRef，@EJB和@Resource
+// 这里面任意一个解析后都会进行Modifier.isStatic判断。可知静态字段或方法不支持自动注入，直接抛出了异常
+private InjectionMetadata buildResourceMetadata(final Class&lt;?> clazz) {
+        List&lt;InjectionMetadata.InjectedElement> elements = new ArrayList&lt;>();
+        Class&lt;?> targetClass = clazz;
+
+        do {
+            final List&lt;InjectionMetadata.InjectedElement> currElements = new ArrayList&lt;>();
+
+      // 遍历这个class的所有field，依次对每个field进行处理
+            ReflectionUtils.doWithLocalFields(targetClass, field -> {
+                // @WebServiceRef注解处理
+                if (webServiceRefClass != null &amp;&amp; field.isAnnotationPresent(webServiceRefClass)) {
+                    if (Modifier.isStatic(field.getModifiers())) {
+                        throw new IllegalStateException("@WebServiceRef annotation is not supported on static fields");
+                    }
+                    currElements.add(new WebServiceRefElement(field, field, null));
+                }
+                // @EJB注解处理
+                else if (ejbRefClass != null &amp;&amp; field.isAnnotationPresent(ejbRefClass)) {
+                    if (Modifier.isStatic(field.getModifiers())) {
+                        throw new IllegalStateException("@EJB annotation is not supported on static fields");
+                    }
+                    currElements.add(new EjbRefElement(field, field, null));
+                }
+                // @Resource注解处理
+                else if (field.isAnnotationPresent(Resource.class)) {
+                    if (Modifier.isStatic(field.getModifiers())) {
+                        throw new IllegalStateException("@Resource annotation is not supported on static fields");
+                    }
+                    if (!this.ignoredResourceTypes.contains(field.getType().getName())) {
+                        currElements.add(new ResourceElement(field, field, null));
+                    }
+                }
+            });
+
+      // 再遍历这个class的所有method，处理以set方法进行注入的方式
+            ReflectionUtils.doWithLocalMethods(targetClass, method -> {
+                Method bridgedMethod = BridgeMethodResolver.findBridgedMethod(method);
+                if (!BridgeMethodResolver.isVisibilityBridgeMethodPair(method, bridgedMethod)) {
+                    return;
+                }
+                if (method.equals(ClassUtils.getMostSpecificMethod(method, clazz))) {
+                    if (webServiceRefClass != null &amp;&amp; bridgedMethod.isAnnotationPresent(webServiceRefClass)) {
+                        if (Modifier.isStatic(method.getModifiers())) {
+                            throw new IllegalStateException("@WebServiceRef annotation is not supported on static methods");
+                        }
+                        if (method.getParameterCount() != 1) {
+                            throw new IllegalStateException("@WebServiceRef annotation requires a single-arg method: " + method);
+                        }
+                        PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
+                        currElements.add(new WebServiceRefElement(method, bridgedMethod, pd));
+                    }
+                    else if (ejbRefClass != null &amp;&amp; bridgedMethod.isAnnotationPresent(ejbRefClass)) {
+                        if (Modifier.isStatic(method.getModifiers())) {
+                            throw new IllegalStateException("@EJB annotation is not supported on static methods");
+                        }
+                        if (method.getParameterCount() != 1) {
+                            throw new IllegalStateException("@EJB annotation requires a single-arg method: " + method);
+                        }
+                        PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
+                        currElements.add(new EjbRefElement(method, bridgedMethod, pd));
+                    }
+                    else if (bridgedMethod.isAnnotationPresent(Resource.class)) {
+                        if (Modifier.isStatic(method.getModifiers())) {
+                            throw new IllegalStateException("@Resource annotation is not supported on static methods");
+                        }
+                        Class&lt;?>[] paramTypes = method.getParameterTypes();
+                        if (paramTypes.length != 1) {
+                            throw new IllegalStateException("@Resource annotation requires a single-arg method: " + method);
+                        }
+                        if (!this.ignoredResourceTypes.contains(paramTypes[0].getName())) {
+                            PropertyDescriptor pd = BeanUtils.findPropertyForMethod(bridgedMethod, clazz);
+                            currElements.add(new ResourceElement(method, bridgedMethod, pd));
+                        }
+                    }
+                }
+            });
+
+            elements.addAll(0, currElements);
+            targetClass = targetClass.getSuperclass();
+        }
+        while (targetClass != null &amp;&amp; targetClass != Object.class);
+
+        return new InjectionMetadata(clazz, elements);
+    }
+
+ResourceElement源码​	以@Resource注解解析后的数据ResourceElement为例，可以发现beanName默认为@Resource的name字段。如果没有则为field字段（注解在field上）。或者则去掉前面的set，再将下个字母变为小写作为beanName（注解在set方法上）
+private class ResourceElement extends LookupElement {
+
+    /**
+     * 存在@Lazy注解，且value为true，这个值就为true
+     */
+    private final boolean lazyLookup;
+
+    public ResourceElement(Member member, AnnotatedElement ae, @Nullable PropertyDescriptor pd) {
+       super(member, pd);
+       Resource resource = ae.getAnnotation(Resource.class);
+       // @Resource的name字段
+       String resourceName = resource.name();
+       Class&lt;?> resourceType = resource.type();
+       this.isDefaultName = !StringUtils.hasLength(resourceName);
+       if (this.isDefaultName) { // name字段为空
+          // 先获取这个字段名
+          resourceName = this.member.getName();
+          if (this.member instanceof Method &amp;&amp; resourceName.startsWith("set") &amp;&amp; resourceName.length() > 3) { // 注解在set方法上，则去掉前面的set，再将下个字母变为小写作为beanName
+             resourceName = Introspector.decapitalize(resourceName.substring(3));
+          }
+       }
+       else if (embeddedValueResolver != null) { // 支持占位符解析
+          resourceName = embeddedValueResolver.resolveStringValue(resourceName);
+       }
+       if (Object.class != resourceType) {
+          checkResourceType(resourceType);
+       }
+       else {
+          // No resource type specified... check field/method.
+          resourceType = getResourceType();
+       }
+       // 默认字段名
+       this.name = (resourceName != null ? resourceName : "");
+       // 默认当前字段的Class类型
+       this.lookupType = resourceType;
+       String lookupValue = resource.lookup();
+       this.mappedName = (StringUtils.hasLength(lookupValue) ? lookupValue : resource.mappedName());
+       Lazy lazy = ae.getAnnotation(Lazy.class);
+       this.lazyLookup = (lazy != null &amp;&amp; lazy.value());
+    }
+
+   /**
+           字段注入方法，如果需要懒加载，则会创建一个代理对象
+   */
+    @Override
+    protected Object getResourceToInject(Object target, @Nullable String requestingBeanName) {
+       return (this.lazyLookup ? buildLazyResourceProxy(this, requestingBeanName) :
+             getResource(this, requestingBeanName));
+    }
+}
+
+字段注入bean的populateBean调用了InstantiationAwareBeanPostProcessor#postProcessProperties方法，开始字段的注入
+CommonAnnotationBeanPostProcessor#postProcessPropertiespublic PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
+        // 找出上一步缓存的元数据
+    InjectionMetadata metadata = findResourceMetadata(beanName, bean.getClass(), pvs);
+    try {
+      // 开始注入
+       metadata.inject(bean, beanName, pvs);
+    }
+    catch (Throwable ex) {
+       throw new BeanCreationException(beanName, "Injection of resource dependencies failed", ex);
+    }
+    return pvs;
+}
+
+InjectionMetadata.InjectedElement#injectprotected void inject(Object target, @Nullable String requestingBeanName, @Nullable PropertyValues pvs)
+       throws Throwable {
+
+    if (this.isField) { // 字段注入
+       Field field = (Field) this.member;
+       ReflectionUtils.makeAccessible(field);
+       // 根据不同的子类getResourceToInject实现，获取对应的bean。会触发依赖bean的创建
+       // 依赖bean创建完毕并返回后，再将其赋予给field
+       field.set(target, getResourceToInject(target, requestingBeanName));
+    }
+    else { // set方法注入
+       if (checkPropertySkipping(pvs)) {
+          return;
+       }
+       try {
+          Method method = (Method) this.member;
+          ReflectionUtils.makeAccessible(method);
+          method.invoke(target, getResourceToInject(target, requestingBeanName));
+       }
+       catch (InvocationTargetException ex) {
+          throw ex.getTargetException();
+       }
+    }
+}
+
+总结CommonAnnotationBeanPostProcessor 是标准注解(@Resource/@PostConstruct/@PreDestroy)的解析者，通过元数据提前解析+生命周期钩子回调，实现了依赖注入和生命周期管理。
+
+CommonAnnotationBeanPostProcessor#postProcessMergedBeanDefinition：负责扫描 @Resource、@PostConstruct、@PreDestroy 注解，把解析结果封装成 InjectionMetadata（字段、方法对应的 ResourceElement 等），再缓存下来，等待后续注入或生命周期回调使用
+CommonAnnotationBeanPostProcessor#postProcessProperties：负责根据解析好的 InjectionMetadata 真正进行注入
+InitDestroyAnnotationBeanPostProcessor#postProcessBeforeInitialization： 在 Bean 初始化前，调用所有 @PostConstruct 标注的方法
+InitDestroyAnnotationBeanPostProcessor#postProcessBeforeDestruction：在 Bean 销毁前，调用所有 @PreDestroy 标注的方法。
+
+
+
+AutowiredAnnotationBeanPostProcessor根据构造方法可知，它专用来处理Spring提供的这些注解
+public AutowiredAnnotationBeanPostProcessor() {
+      // @Autowired支持
+    this.autowiredAnnotationTypes.add(Autowired.class);
+      // @Value支持
+    this.autowiredAnnotationTypes.add(Value.class);
+    try {
+       // javax提供的@Value支持
+       this.autowiredAnnotationTypes.add((Class&lt;? extends Annotation>)
+             ClassUtils.forName("javax.inject.Value", AutowiredAnnotationBeanPostProcessor.class.getClassLoader()));
+       logger.trace("JSR-330 'javax.inject.Inject' annotation found and supported for autowiring");
+    }
+    catch (ClassNotFoundException ex) {
+       // JSR-330 API not available - simply skip.
+    }
+}
+
+
+@org.springframework.beans.factory.annotation.Autowired
+@org.springframework.beans.factory.annotation.Value
+@javax.inject.Inject
+
+​		整体流程和上面的CommonAnnotationBeanPostProcessor差不多。都是在postProcessMergedBeanDefinition方法里进行bean内部有上诉3个注解的字段或方法进行解析并缓存。然后在postProcessProperties进行依赖注入
+]]></content>
+      <categories>
+        <category>spring</category>
+      </categories>
+      <tags>
+        <tag>BeanPostProcessor</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Spring-Bean初始化</title>
+    <url>/2021/01/08/spring-bean-de-chu-shi-hua/</url>
+    <content><![CDATA[
+​	整体分析了BeanFactory和ApplicationContext的区别。并从Spring Bean创建流程源码分析了bean的创建流程并对其进行总结，并分析了三级缓存的作用
+
+
+Spring-Bean的初始化（5.1.x）BeanFactory​	BeanFactory 是 Spring 最基础的 IoC 容器接口，仅提供了 Bean 的获取与管理能力。而 DefaultListableBeanFactory 是其默认实现类，它通过实现多个关键接口，构建出完整的 IoC 容器功能体系。
+以下是 DefaultListableBeanFactory 实现的主要接口以及其对应的职责：
+
+
+
+主要接口
+主要功能
+
+
+
+AliasRegistry
+提供 Bean 的别名注册和解析能力。允许一个 Bean 在容器中有多个名字，是 Spring IoC 容器灵活命名机制的基础。
+
+
+BeanDefinitionRegistry
+管理 Bean 的定义信息（BeanDefinition），提供注册、删除、查询等能力。是容器启动期间加载和维护元数据的关键接口。
+
+
+SingletonBeanRegistry
+管理单例 Bean 的注册与缓存机制，控制 Bean 的生命周期。所有单例 Bean 都存储在 singletonObjects 缓存中。
+
+
+AutowireCapableBeanFactory
+提供创建 Bean 实例、属性注入、初始化回调、AOP 代理等高级功能。通常用于手动创建并管理 Bean 的生命周期，比如调用 createBean()、autowireBean() 等。
+
+
+ConfigurableListableBeanFactory
+是 BeanFactory 的高级配置接口，支持访问所有已注册的 BeanDefinition，还可以注册 BeanPostProcessor组件。常用于容器初始化后对 BeanFactory 进行增强或定制。
+
+
+HierarchicalBeanFactory
+支持父子容器结构，允许子容器从父容器中查找 Bean，提升模块化和隔离能力。 是实现 ApplicationContext 之间嵌套结构的基础。
+
+
+FactoryBeanRegistrySupport  （继承自 AbstractAutowireCapableBeanFactory）
+支持 FactoryBean 机制的关键实现类，负责识别并缓存 FactoryBean 创建的产品对象。 比如，当你定义了一个实现 FactoryBean&lt;T&gt; 的类时，容器最终会获取到 T 类型的对象，而不是工厂本身。
+
+
+ApplicationContextApplicationContext不仅实现了BeanFactory接口，还多了许多拓展接口，其余接口如下
+
+
+
+其他接口
+主要功能
+
+
+
+EnvironmentCapable
+获取Environment，可读取各种配置
+
+
+MessageSource
+国际化消息解析
+
+
+ApplicationEventPublisher
+支持事件发布&#x2F;监听机制
+
+
+ResourcePatternResolver
+支持资源加载，比如 classpath 等路径资源
+
+
+​	在注解驱动的环境下，常用的 ApplicationContext 实现类为 AnnotationConfigApplicationContext。该类内部封装了一个 DefaultListableBeanFactory 实例，作为底层的 Bean 注册与管理中心，从而继承了 BeanFactory 的全部能力。
+​	而其refresh方法更是容器启动流程的核心。Bean的解析、注册，各种后置处理器的准备、使用，国际化和事件发布、各种监听器均在这个方法中完成，可以说是整个Spring的核心
+bean创建流程源码（只保留了重要的部分）AbstractBeanFactory#doGetBeanorg.springframework.beans.factory.support.AbstractBeanFactory#doGetBean方法部分关键代码
+// 获取真实的beanName，参数name可能是bean的别名和FactoryBean格式（前面有&amp;）
+String beanName = transformedBeanName(name);
+Object bean;
+
+// Eagerly check singleton cache for manually registered singletons.
+// 为了解决循环引用，在这里就必须可以从二级或三级缓存中拿bean（尽管此时这个bean实例化了，还未填充数据和初始化）
+Object sharedInstance = getSingleton(beanName);
+if (sharedInstance != null &amp;&amp; args == null) {
+  bean = getObjectForBeanInstance(sharedInstance, name, beanName, null);
+}
+
+else {
+  // 循环创建多例bean抛出异常
+  if (isPrototypeCurrentlyInCreation(beanName)) {
+    throw new BeanCurrentlyInCreationException(beanName);
+  }
+
+  // 先获取父容器
+  BeanFactory parentBeanFactory = getParentBeanFactory();
+  // 父BeanFactory存在且当前的BeanFactory不存在BeanDefinition，就会去父BeanFactory递归查找
+  if (parentBeanFactory != null &amp;&amp; !containsBeanDefinition(beanName)) {
+    // 在父容器中获取bean，能获取到就直接返回了
+    ...
+  }
+
+  if (!typeCheckOnly) {
+    // 标记bean为已创建
+    markBeanAsCreated(beanName);
+  }
+
+  try {
+    RootBeanDefinition mbd = getMergedLocalBeanDefinition(beanName);
+    checkMergedBeanDefinition(mbd, beanName, args);
+
+    String[] dependsOn = mbd.getDependsOn();
+    if (dependsOn != null) {
+      // 有dependsOn的bean，则优先创建这些bean
+      ...
+    }
+
+    // Create bean instance.
+    if (mbd.isSingleton()) { // 单例bean的创建
+      sharedInstance = getSingleton(beanName, () -> {
+        try {
+          return createBean(beanName, mbd, args);
+        }
+        catch (BeansException ex) {
+                    // bean创建失败，执行destory相关方法并直接抛出异常
+          destroySingleton(beanName);
+          throw ex;
+        }
+      });
+      bean = getObjectForBeanInstance(sharedInstance, name, beanName, mbd);
+    }
+    else if (mbd.isPrototype()) { // 创建多例bean
+      Object prototypeInstance = null;
+      try {
+        beforePrototypeCreation(beanName);
+        prototypeInstance = createBean(beanName, mbd, args);
+      }
+      finally {
+        afterPrototypeCreation(beanName);
+      }
+      bean = getObjectForBeanInstance(prototypeInstance, name, beanName, mbd);
+    }
+
+    else { // 特殊的scope里bean的创建。创建在session，request等scope里面的bean
+      String scopeName = mbd.getScope();
+      Scope scope = this.scopes.get(scopeName);
+      }
+      // 获取并放入对应的Scope中，在返回bean
+      Object scopedInstance = scope.get(beanName, () -> {
+        beforePrototypeCreation(beanName);
+        try {
+          return createBean(beanName, mbd, args);
+        }
+        finally {
+          afterPrototypeCreation(beanName);
+        }
+      });
+      bean = getObjectForBeanInstance(scopedInstance, name, beanName, mbd);
+    }
+  }
+  catch (BeansException ex) {
+    cleanupAfterBeanCreationFailure(beanName);
+    throw ex;
+  }
+}
+
+// Check if required type matches the type of the actual bean instance.
+if (requiredType != null &amp;&amp; !requiredType.isInstance(bean)) {
+    T convertedBean = getTypeConverter().convertIfNecessary(bean, requiredType);
+    if (convertedBean == null) {
+      throw new BeanNotOfRequiredTypeException(name, requiredType, bean.getClass());
+    }
+    return convertedBean;
+}
+return (T) bean;
+
+DefaultSingletonBeanRegistry#getSingleton从三级缓存中获取bean
+protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+        // 先从一级缓存中直接获取
+        Object singletonObject = this.singletonObjects.get(beanName);
+        // 单例bean还没创建好但是正在创建的情况（说明已经有循环引用了）
+        if (singletonObject == null &amp;&amp; isSingletonCurrentlyInCreation(beanName)) {
+            // 二级缓存中获取
+            singletonObject = this.earlySingletonObjects.get(beanName);
+            if (singletonObject == null &amp;&amp; allowEarlyReference) {
+                synchronized (this.singletonObjects) {
+                    singletonObject = this.singletonObjects.get(beanName);
+                    if (singletonObject == null) { // 一级缓存为空，从二级中取
+                        singletonObject = this.earlySingletonObjects.get(beanName);
+                        if (singletonObject == null) { // 二级缓存为空，再从三级缓存中获取
+                            ObjectFactory&lt;?> singletonFactory = this.singletonFactories.get(beanName);
+                            if (singletonFactory != null) {
+                                // 三级缓存不为空，取出该bean，放入二级缓存，同时从三级缓存中删除
+                                singletonObject = singletonFactory.getObject();
+                                this.earlySingletonObjects.put(beanName, singletonObject);
+                                this.singletonFactories.remove(beanName);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return singletonObject;
+    }
+
+AbstractAutowireCapableBeanFactory#doCreateBean// 实例化bean。先创建出一个空壳的bean，各种field和方法都没有填充和调用
+BeanWrapper instanceWrapper = null;
+if (mbd.isSingleton()) {
+  instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
+}
+if (instanceWrapper == null) {
+  instanceWrapper = createBeanInstance(beanName, mbd, args);
+}
+// 已实例化的bean
+Object bean = instanceWrapper.getWrappedInstance();
+// bean 的class type
+Class&lt;?> beanType = instanceWrapper.getWrappedClass();
+if (beanType != NullBean.class) {
+  mbd.resolvedTargetType = beanType;
+}
+
+// 单例+允许循环引用+当前bean正在创建。就需要将bean包装后放入三级缓存中
+boolean earlySingletonExposure = (mbd.isSingleton() &amp;&amp; this.allowCircularReferences &amp;&amp;
+    isSingletonCurrentlyInCreation(beanName));
+if (earlySingletonExposure) {
+  // 将已实例化但还未填充属性的bean放入三级缓存，供其他依赖此bean的bean使用
+  addSingletonFactory(beanName, () -> getEarlyBeanReference(beanName, mbd, bean));
+}
+
+//  准备初始化bean
+Object exposedObject = bean;
+try {
+  // 填充bean的字段（依赖的字段bean）
+  populateBean(beanName, mbd, instanceWrapper);
+  // bean完全填充好属性后，开始调用各种初始化方法和BeanPostProcessor接口
+  exposedObject = initializeBean(beanName, exposedObject, mbd);
+}
+    ... // 省略异常
+}
+... 
+// 注册destroy相关方法
+registerDisposableBeanIfNecessary(beanName, bean, mbd);
+return exposedObject;
+
+AbstractAutowireCapableBeanFactory#populateBean填充bean的字段
+
+PropertyValues pvs = (mbd.hasPropertyValues() ? mbd.getPropertyValues() : null);
+
+// 根据autowireMode来判断注入方式
+// 1. xml显示配置的autowire
+// 2. 配置了@Bean注解的autowire字段（这个字段默认不会走下面的代码注入）
+int resolvedAutowireMode = mbd.getResolvedAutowireMode();
+if (resolvedAutowireMode == AUTOWIRE_BY_NAME || resolvedAutowireMode == AUTOWIRE_BY_TYPE) {
+  MutablePropertyValues newPvs = new MutablePropertyValues(pvs);
+  // Add property values based on autowire by name if applicable.
+  if (resolvedAutowireMode == AUTOWIRE_BY_NAME) {
+    autowireByName(beanName, mbd, bw, newPvs);
+  }
+  // Add property values based on autowire by type if applicable.
+  if (resolvedAutowireMode == AUTOWIRE_BY_TYPE) {
+    autowireByType(beanName, mbd, bw, newPvs);
+  }
+  pvs = newPvs;
+}
+// ==================== 以下就是@Autowired和@Resource注入方式的处理
+// 是否存在InstantiationAwareBeanPostProcessor处理器（主要是注解解析PostProcessor）
+boolean hasInstAwareBpps = hasInstantiationAwareBeanPostProcessors();
+boolean needsDepCheck = (mbd.getDependencyCheck() != AbstractBeanDefinition.DEPENDENCY_CHECK_NONE);
+
+PropertyDescriptor[] filteredPds = null;
+if (hasInstAwareBpps) {
+  if (pvs == null) {
+    pvs = mbd.getPropertyValues();
+  }
+  // 获取InstantiationAwareBeanPostProcessor处理器，并调用其postProcessProperties方法
+  // 基于注解的依赖注入会用到
+  for (BeanPostProcessor bp : getBeanPostProcessors()) {
+    if (bp instanceof InstantiationAwareBeanPostProcessor) {
+      InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
+      // 注解相关的自动注入
+      PropertyValues pvsToUse = ibp.postProcessProperties(pvs, bw.getWrappedInstance(), beanName);
+      pvs = pvsToUse;
+    }
+  }
+}
+}
+
+AbstractAutowireCapableBeanFactory#initializeBean初始化bean
+
+// 三种aware(BeanName，BeanClassLoader，BeanFactory)
+invokeAwareMethods(beanName, bean);
+
+// 名叫wrappedBean，表示这些方法返回的bean可能是被包装后的，比如aop相关
+Object wrappedBean = bean;
+if (mbd == null || !mbd.isSynthetic()) {
+  // BeanPostProcessor接口实例回调（在bean的初始化方法调用之前调用）
+  // 例如：@PostConstruct注解的实现
+  wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
+}
+
+// InitializingBean方法和init-method方法
+invokeInitMethods(beanName, wrappedBean, mbd);
+
+if (mbd == null || !mbd.isSynthetic()) {
+  // BeanPostProcessor#postProcessAfterInitialization接口实例回调。
+  // 在bean的初始化方法调用完成之后调用，说明bean以及初始化完毕，可以实现其他扩展功能了
+  //比如AOP的实现、 @Scheduled注解实现等
+  wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
+}
+
+return wrappedBean;
+
+三级缓存
+一级缓存（DefaultSingletonBeanRegistry#singletonObjects）：存放的是完全初始化好的bean，包括已实例化、填充内部依赖的bean，运行完初始化方法（@PostConstruct、afterPropertiesSet方法、指定的init-method方法）
+二级缓存（DefaultSingletonBeanRegistry#earlySingletonObjects）：存放bean缓存（如果能被AOP，就是AOP对象），但还未填充属性和允许初始化方法
+三级缓存（DefaultSingletonBeanRegistry#singletonFactories）：存放bean的ObjectFactory工厂对象，使用这个工厂对象，可提前暴露出bean的引用（专用来提前暴露AOP对象的方法）
+
+为什么要使用三级缓存​	三级缓存专门来解决AOP对象的暴露问题。
+​	如果没用AOP是可以只用一级缓存和二级缓存就解决的。但如果使用了AOP且没有三级缓存，那么必须在实例化后就马上完成AOP代理，但这和spring的设计初衷不同，AOP代理的完成时使用了bean的后置处理器AnnotationAwareAspectJAutoProxyCreator来完成的，也就是在初始化bean后执行的bean后置处理器方法（AbstractAutowireCapableBeanFactory#initializeBean），就不可能再实例化bean后进行代理，所以才有了三级缓存，仅用来提前暴露AOP对象
+三层级缓存真能完美解决吗？如果有3个bean分别为A、B、C，A依赖B和C，B只依赖A，C什么都不依赖，但提供一个方法sayHello使用。
+​	当开始实例化A时，实例化A后将其工厂对象放入三级缓存中，开始填充A属性，发现了B需要填充，开始实例化B，实例化B对象过程中又需要填充其属性A，这时能从三级缓存中取出了A的引用（但此时A不完整），如果B对象有一个初始化方法（@PostConstruct），调用A对象里的C对象的sayHello方法，但由于A此时只是个空壳，就会抛出空指针异常。
+​	总的来说，就是在循环引用期间的调用初始化方法时，调用了尚未完全创建好的bean（空壳bean）的某个字段的方法，导致抛出NPE，导致服务启动失败
+关键流程总结
+实例化bean：创建bean的空壳对象
+将其工厂对象（ObjectFactory）放入三级缓存（根据AbstractAutowireCapableBeanFactory#allowCircularReferences字段决定）
+填充依赖bean（AbstractAutowireCapableBeanFactory#populateBean）：进行@Autowired和@Resource等注解的字段注入。如果这些依赖的 Bean 还没创建，会触发递归创建
+初始化bean（AbstractAutowireCapableBeanFactory#initializeBean）
+4.1 调用BeanPostProcessor#postProcessBeforeInitialization方法（初始化前的hook）
+4.2 调用各种初始化方法（**@PostConstruct、afterPropertiesSet方法、指定的init-method方法**）
+4.3 调用BeanPostProcessor#postProcessAfterInitialization（初始化后的hook，AOP相关实现）
+
+
+注册destory相关方法（AbstractBeanFactory#registerDisposableBeanIfNecessary）
+完成创建，放入一级缓存。同时移除三级缓存和二级缓存中的相关对象
+
+]]></content>
+      <categories>
+        <category>spring</category>
+      </categories>
+      <tags>
+        <tag>spring三级缓存</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
+    <url>/2022/03/03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</url>
+    <content><![CDATA[​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考
+
+
+Spring-事物NOT_SUPPORTED策略下多数据源切换的问题起因今天写代码时遇到一个多数据源的切换问题，框架为Spring和Mybatus-Plus。在完全没事物的情况下pgsql和mysql切换没问题，但在@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)下却切换不了。翻了以前的Spring-Transactional文章和代码，遂记录一下原因和解决思路，以及整体的思考
+​	在有事物的情况下多数据源切换不了这是很正常的，毕竟Connection绑定到ThreadLocal了。但我开始简单的认为只要使用Propagation.NOT_SUPPORTED传播策略，毕竟这都不支持事物了，应该就能进行数据源切换。实际就是代码报错了，还是切换不了
+伪代码ProductService#recommend被调用在一个事物里
+public class ProductService {
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void recommend(int i){
+
+        // pgsqlMapper这个mapper有注解 @DS("postgresql")，走pqsql库
+        pgsqlMapper.queryById(i);
+        
+        // 走mysql库
+        msyqlMapper.queryById(i);
+    }
+    
+}
+
+分析原因​	ProductService#recommend使用了@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)注解，它构造出来的DefaultTransactionStatus中有如下两个字段需要重点关注。
+public class DefaultTransactionStatus extends AbstractTransactionStatus {
+    // 是否开启了真实的物理事物
+    private final boolean newTransaction;
+    // 是否由当前事务初始化并管理事务同步器（如注册连接绑定、hook 回调）
+    private final boolean newSynchronization;
+}
+
+​	其中newTransaction&#x3D;false, newSynchronization&#x3D;true（受AbstractPlatformTransactionManager.transactionSynchronization字段控制）。
+
+表示尽管当前未开启物理事务，但事务管理器仍会初始化事务同步器（TransactionSynchronizationManager.initSynchronization()），并允许资源绑定（如 ConnectionHolder）与注册事务hook（TransactionSynchronization）。
+换句话说，“没有物理事务，但仍可进行事务性资源管理和 hook 回调”
+
+​	所以当触发pgsqlMapper.queryById(i)方法时，会绑定如下资源。（这一切必须要newSynchronization&#x3D;true）
+
+
+获取SqlSession时（SqlSessionUtils#getSqlSession）将SqlSessionFactory -&gt; SqlSessionHolder 给缓存到TransactionSynchronizationManager#resources中
+获取Connection时（DataSourceUtils#doGetConnection）将DataSource -&gt; ConnectionHolder 也缓存到TransactionSynchronizationManager#resources中
+
+
+​	所以，当走到第二个方法msyqlMapper.queryById(i)时，会拿到上一步中缓存的SqlSessionHolder，内部操作的是同一个Connection（具体为DefaultSqlSession.executor.transaction.connection），即pgsql的Connection，所以报错了
+解决办法​	将这个字段AbstractPlatformTransactionManager.transactionSynchronization由默认的SYNCHRONIZATION_ALWAYS改为SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。直接获取这个AbstractPlatformTransactionManager bean再进行改动有些不优雅，我翻了一遍发现有这个PlatformTransactionManagerCustomizer接口，可以对PlatformTransactionManager的子类进行定制化修改。所以可以添加如下的bean到容器中即可
+@Component
+public class TransactionSynchronizationCustomizer implements PlatformTransactionManagerCustomizer&lt;AbstractPlatformTransactionManager>{
+
+    @Override
+    public void customize(AbstractPlatformTransactionManager transactionManager) {
+        // 解决Propagation.NOT_SUPPORTED下多数据源不能切换动态切换的问题
+        transactionManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
+    }
+}
+
+思考（重点）​		在 Spring 的事务模型中，Propagation.NOT_SUPPORTED 虽然会挂起当前事务，但默认配置下（SYNCHRONIZATION_ALWAYS）仍会注册事务同步器。 这导致即使没有物理事务，依然会出现线程绑定连接的行为（如通过 DataSourceUtils.getConnection() 获得的 Connection 会复用）。
+​	所以如果希望这个方法在语义上和“非事务环境”（即不使用@Transactional等情况）一致，避免隐式连接绑定，应将 transactionSynchronization 设置为 SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。
+​	看样子应该是Spring 为了支持某些非事务性方法（Propagation.NOT_SUPPORTED）也能参与事务资源控制才这样设计的
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
   </entry>
   <entry>
     <title>Spring-Transactional</title>
@@ -4889,7 +4878,7 @@ PROPAGATION_SUPPORTS
 
 
 PROPAGATION_NOT_SUPPORTED
-以非事务的方式运行（有事务就暂停事务，没有就啥也不做），实现和上面的差不多，只是这是不需要新建事务了
+以非事务的方式运行（有事务就暂停事务，重新获取一个没有事物的Connection使用。没有就啥也不做），实现和上面的差不多。但默认仍会注册事物同步器，让当前这个事物始终用同一个Connection
 
 
 PROPAGATION_NEVER
@@ -4942,10 +4931,13 @@ Spring 的事务是通过 AOP 管理的跨方法事务逻辑。Spring 需要有�
 DataSourceUtils​		前面我们分析了 Spring 事务的整体流程，但还有1个关键问题：在实际项目中，Spring 很少直接作为持久化框架，MyBatis、Hibernate 等才是执行数据库操作的主力。那么事务是 Spring 管的，数据库连接却是由 MyBatis 获取的，两者如何协同？
 这就引出了 DataSourceUtils 的作用：为持久层框架提供“Spring 管控下的连接”，确保它们获取到的 Connection 是当前事务中绑定的那个，这样事务控制（包括 commit&#x2F;rollback）才能正确生效。
 核心源码public abstract class DataSourceUtils {
+    
+
     public static Connection doGetConnection(DataSource dataSource) throws SQLException {
         Assert.notNull(dataSource, "No DataSource specified");
 
-        // 1. 尝试从 TransactionSynchronizationManager 中获取线程绑定的 ConnectionHolder（如果当前线程处于事务中）
+        // 1. 尝试从 TransactionSynchronizationManager 中获取线程绑定的 ConnectionHolder
+        // 只要TransactionSynchronizationManager.isSynchronizationActive()，都应该获取的是同一个ConnectionHolder
         ConnectionHolder conHolder = (ConnectionHolder) TransactionSynchronizationManager.getResource(dataSource);
 
         // 2. 如果当前线程中存在已关联的 ConnectionHolder 且已经持有连接，或者它被事务标记为已同步
@@ -4959,7 +4951,6 @@ DataSourceUtils​		前面我们分析了 Spring 事务的整体流程，但还�
                 conHolder.setConnection(fetchConnection(dataSource));
             }
 
-            // 返回已绑定的 Connection（参与当前事务）
             return conHolder.getConnection();
         }
         // =============== 否则：没有事务，或没有绑定连接的事务 ==================
@@ -4969,42 +4960,38 @@ DataSourceUtils​		前面我们分析了 Spring 事务的整体流程，但还�
         // 3. 获取一个新的物理连接（不在事务中或事务尚未绑定连接）
         Connection con = fetchConnection(dataSource);
 
-        // 4. 如果当前事务同步处于激活状态（通常意味着外部有 PlatformTransactionManager 正在管理事务）
+        // 如果当前事物的事物同步器被激活，则将上面获取的Connection也绑定到事物资源里。让当前事物始终用用一个Connection
+        // 就算当前事物是NOT_SUPPORTED，默认也会缓存ConnectionHolder
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             try {
                 ConnectionHolder holderToUse = conHolder;
 
-                // 若原来没有 ConnectionHolder，则创建一个
                 if (holderToUse == null) {
                     holderToUse = new ConnectionHolder(con);
                 } else {
-                    // 有 holder 但还未设置连接，补充设置
                     holderToUse.setConnection(con);
                 }
 
-                // 标记请求过
                 holderToUse.requested();
 
-                // 5. 向当前事务注册一个同步回调（在事务提交或回滚时会被触发）
+                // 注册一个事物同步器用于hook
                 TransactionSynchronizationManager.registerSynchronization(
                         new ConnectionSynchronization(holderToUse, dataSource));
 
                 // 标记该连接已参与事务同步
                 holderToUse.setSynchronizedWithTransaction(true);
 
-                // 6. 如果原来没有绑定资源，则现在进行绑定
+                // 第一次调用时才绑定：DataSource -> ConnectionHolder
                 if (holderToUse != conHolder) {
                     TransactionSynchronizationManager.bindResource(dataSource, holderToUse);
                 }
 
             } catch (RuntimeException ex) {
-                // 出现异常则关闭刚刚新建的连接，避免泄露
                 releaseConnection(con, dataSource);
                 throw ex;
             }
         }
 
-        // 7. 返回新获取的连接（可能是非事务性的）
         return con;
     }
 }
@@ -5014,7 +5001,86 @@ DataSourceUtils​		前面我们分析了 Spring 事务的整体流程，但还�
         <category>Spring</category>
       </categories>
       <tags>
-        <tag>-@Transactional</tag>
+        <tag>BeanPostProcessor</tag>
+        <tag>Transactional注解</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>谈谈ThreadLocal为什么被设计为弱引用</title>
+    <url>/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</url>
+    <content><![CDATA[
+分析了ThreadLocal为什么要被设计为弱引用，并给出了ThreadLocal的建议使用方法
+
+
+谈谈ThreadLocal为什么被设计为弱引用​	ThreadLocal在用作ThreadLocalMap的key时，是被设计为弱引用的。
+​	ThreadLocalMap的内部类Entry被设计为实现了WeakReference，Entry用来存放数据。在构造Entry对象时，将传进来的ThreadLocal对象包装成了真正的弱引用对象，而Entry对象和内部的value对象本身是强引用的。
+弱引用的解释：
+
+​		只具有弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。
+
+​	简单理解就是当垃圾回收时，该对象只被WeakReference对象的弱引用字段（T reference）所引用，而未被任何强类型的对象引用，那么，该弱引用的对象就会被回收。
+​	注意：WeakReference引用本身是强引用，它内部的（T reference）才是真正的弱引用字段，WeakReference就是一个装弱引用的容器而已。
+1 回收测试示例public class ThreadLocalDemo {
+    public static void main(String[] args) throws InterruptedException {
+        firstStack();
+        System.gc();
+        TimeUnit.SECONDS.sleep(1);
+        Thread thread = Thread.currentThread();
+        System.out.println(thread); // 在这里打断点，观察thread对象里的ThreadLocalMap数据
+
+    }
+    // 通过是否获取返回值观察A对象里的local对象是否被回收
+    private static A firstStack(){
+        A a = new A();
+        System.out.println("value: "+ a.get());
+        return a;
+    }
+    private static class A{
+        private ThreadLocal&lt;String> local = ThreadLocal.withInitial(() -> "in class A");
+
+        public String get(){
+            return local.get();
+        }
+        public void set(String str){
+            local.set(str);
+        }
+
+    }
+}
+
+
+ThreadLocal 被强引用持有，不会被回收
+
+
+ThreadLocal只被弱引用持有，gc后被回收了
+
+​	如上面的代码，当构造一个A对象时，内部的local对象也构造了，之后调用get和set方法对local对象取值和设置值，当A对象不可达时，垃圾收集器就会回收A。
+​	现在我们假设ThreadLocalMap的Entey里的key（ThreadLocal对象）不是弱引用的，且已经调用了A的对象的get或set方法，那么垃圾收集器回收A对象时，一定不会回收里面的local对象，为什么？
+
+因为Entey已近持有了local对象的引用，我们没有设置引用类型，那这个引用就默认是个强引用。
+Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（threadLocal对象）和value
+
+​	引用链如上面所示，这个引用链全是强引用，当这个线程还未结束时，他持有的强引用，包括递归下去的所有强引用都不会被垃圾回收器回收。
+​	那么回到正常情况，ThreadLocalMap里Entey的key是弱引用，在本例中也就是local对象在这里是弱引用，当对象A回收时，由于local对象只剩下被弱引用key所引用，所以local对象也会被回收。
+2 重点来了，key为什么被设计为弱引用？？​	回归本质，ThreadLocalMap是用来存放对象的，在一次线程的执行栈中，存放数据后方便我们在任意的地方取得我们想要的值而不被其他线程干扰。ThreadLocalMap本身并没有为外界提供取出和存放数据的API，我们所能获得数据的方式只有通过ThreadLocal类提供的API来间接的从ThreadLocalMap取出数据，所以，当我们用不了key（ThreadLocal对象）的API也就无法从ThreadLocalMap里取出指定的数据。
+​	在上面的例子中，A对象被回收了，这些get和set方法也访问不到了，也就没法从ThreadLocalMap里取出数据了。没法利用API取出数据，那这个Entry对象还有用吗？？所以最好的方法是在A对象被回收后，系统自动回收对应的Entry对象，但是让Entry对象或其中的value对象做为弱引用都是非常不合理的（这两个要是使用弱引用，都可能造成数据意外丢失）。所以，让key（threadLocal对象）为弱引用，自动被垃圾回收，key就变为null了，下次，我们就可以通过Entry不为null，而key为null来判断该Entry对象该被清理掉了。
+​	至于ThreadLocalMap为什么不给外界提供API来操作数据，我觉得是因为这个Map对于一个线程只有一份，任何地方都在用，为了提供更方便的API和为了我们不破换其他框架保存到里面的数据（数据不被污染），所以才用ThreadLocal作为key和API来操作数据。
+3 总结​	综上，Entry的key被设计为弱引用就是为了让程序自动的对访问不到的数据进行回收提醒。所以，在访问不到的数据被回收之前，内存泄漏确实是存在的，但是我们不用担心，就算我们不调用remove，ThreadLocalMap在内部的set，get和扩容时都会清理掉泄漏的Entry，内存泄漏完全没必要过于担心
+所以，ThreadLocal的建议使用方法：
+
+设计为static的，被class对象给强引用，线程存活期间就不会被回收，也不用remove，完全不用担心内存泄漏
+
+非static的，放置在长对象（比如被spring管理的对象）的内部，也不会被回收
+
+
+​	个人也觉得没必要让创建的ThreadLocal对象生命周期过短，ThreadLocal被设计出来本身就是用来跨方法栈获取当前线程的数据或者无锁的获取线程安全的数据，空间交换了线程安全的上锁时间。只要让ThreadLocal具有线程的生命周期，就完全没必要使用remove方法，也完全不用担心内存泄漏的问题。
+​	另外说一点，HashMap是使用拉链法解决hash冲突的，ThreadLocalMap是使用线性探测解决hash冲突的（内部只维护Entey数组，没有链表）。所以，源码中在清除泄漏的Entry时，会进行rehash，防止数组的当前位置为null后，有hash冲突的Entry访问不到的问题。
+]]></content>
+      <categories>
+        <category>jdk</category>
+      </categories>
+      <tags>
+        <tag>ThreadLocal</tag>
       </tags>
   </entry>
 </search>

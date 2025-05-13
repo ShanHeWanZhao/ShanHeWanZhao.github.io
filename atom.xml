@@ -37,6 +37,23 @@
   </entry>
   
   <entry>
+    <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
+    <link href="https://blog.shanzhao.site/2022/03/03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/"/>
+    <id>https://blog.shanzhao.site/2022/03/03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</id>
+    <published>2022-03-03T10:34:17.000Z</published>
+    <updated>2022-03-03T10:34:17.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
+    
+    
+  </entry>
+  
+  <entry>
     <title>Spring-Transactional</title>
     <link href="https://blog.shanzhao.site/2021/02/23/spring-transactional/"/>
     <id>https://blog.shanzhao.site/2021/02/23/spring-transactional/</id>
@@ -52,7 +69,9 @@
     <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
     
     
-    <category term="-@Transactional" scheme="https://blog.shanzhao.site/tags/Transactional/"/>
+    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
+    
+    <category term="Transactional注解" scheme="https://blog.shanzhao.site/tags/Transactional%E6%B3%A8%E8%A7%A3/"/>
     
   </entry>
   
@@ -70,6 +89,8 @@
     
     <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
     
+    
+    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
     
     <category term="AOP" scheme="https://blog.shanzhao.site/tags/AOP/"/>
     
@@ -90,6 +111,8 @@
     
     <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
     
+    
+    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
     
   </entry>
   
