@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	从源码分析了AbstractAdvisingBeanPostProcessor的作用，以及和直接将Advisor注入到容器中使用的区别">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Spring-AbstractAdvisingBeanPostProcessor">
+<meta property="og:url" content="https://blog.shanzhao.site/2021/02/17/spring-abstractadvisingbeanpostprocessor/index.html">
+<meta property="og:site_name" content="reef&#39;s blog">
+<meta property="og:description" content="​	从源码分析了AbstractAdvisingBeanPostProcessor的作用，以及和直接将Advisor注入到容器中使用的区别">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-02-17T11:15:27.000Z">
+<meta property="article:modified_time" content="2021-02-17T11:15:27.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="BeanPostProcessor">
+<meta property="article:tag" content="AOP">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021/02/17/spring-abstractadvisingbeanpostprocessor/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021/02/17/spring-abstractadvisingbeanpostprocessor/","path":"2021/02/17/spring-abstractadvisingbeanpostprocessor/","title":"Spring-AbstractAdvisingBeanPostProcessor"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Spring-AbstractAdvisingBeanPostProcessor | reef's blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="reef's blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">reef's blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Spring-AbstractAdvisingBeanPostProcessor"><span class="nav-number">1.</span> <span class="nav-text">Spring-AbstractAdvisingBeanPostProcessor</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BD%9C%E7%94%A8"><span class="nav-number">1.1.</span> <span class="nav-text">核心作用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81"><span class="nav-number">1.2.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E7%82%B9%E6%80%9D%E8%80%83"><span class="nav-number">1.3.</span> <span class="nav-text">一点思考</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">18</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">18</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021/02/17/spring-abstractadvisingbeanpostprocessor/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Spring-AbstractAdvisingBeanPostProcessor | reef's blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Spring-AbstractAdvisingBeanPostProcessor
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-02-17 19:15:27" itemprop="dateCreated datePublished" datetime="2021-02-17T19:15:27+08:00">2021-02-17</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Spring/" itemprop="url" rel="index"><span itemprop="name">Spring</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>5 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	从源码分析了AbstractAdvisingBeanPostProcessor的作用，以及和直接将Advisor注入到容器中使用的区别</p>
+<span id="more"></span>
+
+
+<h1 id="Spring-AbstractAdvisingBeanPostProcessor"><a href="#Spring-AbstractAdvisingBeanPostProcessor" class="headerlink" title="Spring-AbstractAdvisingBeanPostProcessor"></a>Spring-AbstractAdvisingBeanPostProcessor</h1><p>​	<a href="https://blog.shanzhao.site/2021/02/08/spring-aop/">上一篇注解的切面自动代理</a></p>
+<p>​	简单来说<strong>这是一个用于将固定 <code>Advisor</code> 应用于 Bean 的通用基类</strong>，常用于实现基于注解的 AOP 功能（如异步、Validate）。核心子类有</p>
+<ul>
+<li><strong>AsyncAnnotationBeanPostProcessor</strong>：处理标注了 <code>@Async</code> 的方法，将其在调用时提交到线程池异步执行</li>
+<li><strong>MethodValidationPostProcessor</strong>：支持 <code>@Validated</code> 注解，拦截方法调用并对方法参数和返回值执行 JSR-303 Bean Validation</li>
+</ul>
+<h2 id="核心作用"><a href="#核心作用" class="headerlink" title="核心作用"></a>核心作用</h2><ul>
+<li>该类允许你通过定义一个固定的 <code>Advisor</code>（通过其 <code>advisor</code> 字段）来对目标 Bean 进行增强。</li>
+<li><strong>并不主动创建代理</strong>（<strong>因为AnnotationAwareAspectJAutoProxyCreator具有最高的优先级，会最先对bean进行代理</strong>），而是<strong>在 Bean 已被代理的情况下</strong>，将该 <code>Advisor</code> 添加到现有的代理中，从而实现功能增强。</li>
+</ul>
+<p>​	不主动创建代理是很好理解的，<strong>Spring 不希望对同一个 Bean 多次生成代理类（多个 CGLIB class 文件或多个 JDK proxy 实例），这不仅浪费资源，还会引发增强混乱</strong>。因此：</p>
+<ul>
+<li>Spring 通过设置 <code>AnnotationAwareAspectJAutoProxyCreator</code> 的最高优先级，<strong>统一负责生成代理对象</strong>。</li>
+<li>后续如 <code>AsyncAnnotationBeanPostProcessor</code>、<code>MethodValidationPostProcessor</code> 等，只需<strong>向已创建的代理对象添加 Advisor</strong>，即向其 <code>AdvisedSupport#advisors</code> 中追加增强逻辑。</li>
+<li>最终所有增强统一挂载在一个代理对象上，<strong>避免了重复代理、类污染与不必要的性能开销</strong>。</li>
+</ul>
+<h2 id="核心源码"><a href="#核心源码" class="headerlink" title="核心源码"></a>核心源码</h2><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">AbstractAdvisingBeanPostProcessor</span> <span class="token keyword">extends</span> <span class="token class-name">ProxyProcessorSupport</span> <span class="token keyword">implements</span> <span class="token class-name">BeanPostProcessor</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 由子类设置的Advisot</span>
+    <span class="token keyword">protected</span> Advisor advisor<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 是否需要将advisor放在整个代理链的最前，以达到最先执行的目的</span>
+    <span class="token comment" spellcheck="true">// 很有用，@Async会设置成true，从而让异步在第一个切面就开启，避免代理链在不同线程间切换</span>
+    <span class="token keyword">protected</span> <span class="token keyword">boolean</span> beforeExistingAdvisors <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// bean 初始化后的hook</span>
+    <span class="token keyword">public</span> Object <span class="token function">postProcessAfterInitialization</span><span class="token punctuation">(</span>Object bean<span class="token punctuation">,</span> String beanName<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>advisor <span class="token operator">==</span> null <span class="token operator">||</span> bean <span class="token keyword">instanceof</span> <span class="token class-name">AopInfrastructureBean</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// Ignore AOP infrastructure such as scoped proxies.</span>
+            <span class="token keyword">return</span> bean<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 判断当前的bean是否已经是个代理类了</span>
+        <span class="token comment" spellcheck="true">// 已经是代理类的bean，就不需要再重新创建proxy，直接用现有的，把advisor加入到list中就行</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>bean <span class="token keyword">instanceof</span> <span class="token class-name">Advised</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            Advised advised <span class="token operator">=</span> <span class="token punctuation">(</span>Advised<span class="token punctuation">)</span> bean<span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 只有再当前proxy未frozen的情况下，且原始bean支持被代理才需要增强</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>advised<span class="token punctuation">.</span><span class="token function">isFrozen</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token function">isEligible</span><span class="token punctuation">(</span>AopUtils<span class="token punctuation">.</span><span class="token function">getTargetClass</span><span class="token punctuation">(</span>bean<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>beforeExistingAdvisors<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 放最前面，最先执行</span>
+                    advised<span class="token punctuation">.</span><span class="token function">addAdvisor</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>advisor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 否则放最后</span>
+                    advised<span class="token punctuation">.</span><span class="token function">addAdvisor</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>advisor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">return</span> bean<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// ======== 走到这表示这个bean没被代理或代理已被冻结，新开一个代理再包装这个bean，可能造成层层代理 =============</span>
+
+        <span class="token comment" spellcheck="true">// 判断当前的advisor能否对这个bean增强</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">isEligible</span><span class="token punctuation">(</span>bean<span class="token punctuation">,</span> beanName<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            ProxyFactory proxyFactory <span class="token operator">=</span> <span class="token function">prepareProxyFactory</span><span class="token punctuation">(</span>bean<span class="token punctuation">,</span> beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>proxyFactory<span class="token punctuation">.</span><span class="token function">isProxyTargetClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token function">evaluateProxyInterfaces</span><span class="token punctuation">(</span>bean<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> proxyFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            proxyFactory<span class="token punctuation">.</span><span class="token function">addAdvisor</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>advisor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token function">customizeProxyFactory</span><span class="token punctuation">(</span>proxyFactory<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> proxyFactory<span class="token punctuation">.</span><span class="token function">getProxy</span><span class="token punctuation">(</span><span class="token function">getProxyClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// No proxy needed.</span>
+        <span class="token keyword">return</span> bean<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 也很重要，它默认还是用AopUtils#canApply来判断能否代理这个bean</span>
+    <span class="token comment" spellcheck="true">// 但子类可以实现它，自定义的来判断能否代理bean</span>
+    <span class="token keyword">protected</span> <span class="token keyword">boolean</span> <span class="token function">isEligible</span><span class="token punctuation">(</span>Object bean<span class="token punctuation">,</span> String beanName<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token function">isEligible</span><span class="token punctuation">(</span>bean<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="一点思考"><a href="#一点思考" class="headerlink" title="一点思考"></a>一点思考</h2><p>​	其实向容器中注册一个Advisor也能达到和AbstractAdvisingBeanPostProcessor一样的目的，还更简单点。那为什么还要有AbstractAdvisingBeanPostProcessor呢？</p>
+<p>​	因为向容器中注册一个Advisor需要依赖自动代理，即<strong>AnnotationAwareAspectJAutoProxyCreator。这个BeanPostProcessor是比较重的，功能更强也意味着更复杂</strong>。如果我们完全不需要注解式的自动代理，而只需要对某个注解（如@Async）进行代理，那实现AbstractAdvisingBeanPostProcessor是更好的选择，<strong>它不依赖自动代理，独自就能完成指定Advisor的代理，更轻</strong></p>
+<p>​	所以，总结AbstractAdvisingBeanPostProcessor的优势：</p>
+<ul>
+<li><strong>不依赖自动代理器</strong>：它本身就是一个 BeanPostProcessor，可以独立完成代理创建</li>
+<li><strong>只处理特定目标</strong>：可以通过内部的 <code>isEligible()</code> 方法自定义增强对象的筛选逻辑</li>
+<li><strong>避免过度代理</strong>：避免引入全局自动代理，减少对容器中其他 bean 的干扰</li>
+<li><strong>具备顺序控制能力</strong>：如 @Async 会将自身的 Advisor 放到代理链最前面，确保异步逻辑在最早执行。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/BeanPostProcessor/" rel="tag"># BeanPostProcessor</a>
+              <a href="/tags/AOP/" rel="tag"># AOP</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021/02/08/spring-aop/" rel="prev" title="Spring-AOP">
+                  <i class="fa fa-angle-left"></i> Spring-AOP
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2021/02/23/spring-transactional/" rel="next" title="Spring-Transactional">
+                  Spring-Transactional <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">153k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">4:38</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
