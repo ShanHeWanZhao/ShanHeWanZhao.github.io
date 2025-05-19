@@ -54,6 +54,30 @@
   </entry>
   
   <entry>
+    <title>Spring-ConfigurationClassPostProcessor</title>
+    <link href="https://blog.shanzhao.site/2021/05/13/spring-configurationclasspostprocessor/"/>
+    <id>https://blog.shanzhao.site/2021/05/13/spring-configurationclasspostprocessor/</id>
+    <published>2021-05-13T12:27:25.000Z</published>
+    <updated>2021-05-16T08:33:25.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	呕心沥血的分析了ConfigurationClassPostProcessor的核心源码，深入剖析了Spring注解驱动的原理。对其中的&lt;strong&gt;延迟机制、字节码解析优化和代理模型&lt;/strong&gt;进行了深度的思考，并通过arthas反编译反向验证了full configuration的代理&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
+    
+    
+    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
+    
+    <category term="BeanDefinitionRegistryPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanDefinitionRegistryPostProcessor/"/>
+    
+    <category term="Configuration注解" scheme="https://blog.shanzhao.site/tags/Configuration%E6%B3%A8%E8%A7%A3/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Spring-其他重要的BeanPostProcesor</title>
     <link href="https://blog.shanzhao.site/2021/04/01/spring-qi-ta-chong-yao-de-beanpostprocesor/"/>
     <id>https://blog.shanzhao.site/2021/04/01/spring-qi-ta-chong-yao-de-beanpostprocesor/</id>
