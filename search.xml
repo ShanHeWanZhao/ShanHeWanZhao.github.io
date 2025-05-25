@@ -2,7 +2,7 @@
 <search>
   <entry>
     <title>CMS</title>
-    <url>/2020/09/19/cms/</url>
+    <url>/2020-09-19/cms/</url>
     <content><![CDATA[
 ​	主要分析了CMS收集器的算法实现和收集流程，和部分关键参数对CMS的影响，以及三色标记如何解决对象漏标问题。并在最后总结了CMS的优缺点
 
@@ -105,76 +105,8 @@ CMS 是一种低停顿老年代收集器，适合延迟敏感型系统。
       </tags>
   </entry>
   <entry>
-    <title>CloudFlare-CDN缓存清除</title>
-    <url>/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/</url>
-    <content><![CDATA[
-​	给出了一些api用于清除Cloudflare的CDN缓存方式
- 
-
-CloudFlare-CDN缓存清除​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
-1 purgeUrl
-2 使用ApiKey清除（不推荐）
-ZONE_ID：区域id，即你在CF上托管的根域名id
-EMAIL：你的邮箱
-API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
-
-2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{"purge_everything": true}'
-
-2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
-
-3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
-
-3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
-     -H "Authorization: Bearer $API_TOKEN" \
-     -H "Content-Type:application/json"
-
-3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{"purge_everything": true}'
-
-3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
-
-4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
-5 参考链接
-官方清除缓存文档
-cloudflare dashboard创建token和查看ApiKey
-ZoneId获取
-
-]]></content>
-      <categories>
-        <category>cloudflare</category>
-      </categories>
-      <tags>
-        <tag>cdn缓存清除</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>G1</title>
-    <url>/2020/11/25/g1/</url>
+    <url>/2020-11-25/g1/</url>
     <content><![CDATA[
 ​	简单总结了G1和其常用参数，并分析了的G1日志
 
@@ -270,7 +202,7 @@ G1 不再物理区分年轻代和老年代，转而统一使用多个 Region 管
   </entry>
   <entry>
     <title>Git</title>
-    <url>/2020/02/07/git/</url>
+    <url>/2020-02-07/git/</url>
     <content><![CDATA[​	Git常用命令总结
 
 
@@ -434,7 +366,7 @@ ssh-keygen -t rsa
   </entry>
   <entry>
     <title>JVM参数</title>
-    <url>/2020/12/18/jvm-can-shu/</url>
+    <url>/2020-12-18/jvm-can-shu/</url>
     <content><![CDATA[JVM常用参数整理和垃圾收集器组合
  
 
@@ -515,7 +447,7 @@ GCRoots对象
   </entry>
   <entry>
     <title>Java源码篇-AQS</title>
-    <url>/2020/04/17/java-yuan-ma-pian-aqs/</url>
+    <url>/2020-04-17/java-yuan-ma-pian-aqs/</url>
     <content><![CDATA[
 ​	总结了LockSupport的作用，并从源码分析了AbstractQueuedSynchronizer的实现逻辑
 
@@ -767,7 +699,7 @@ static final class Node {
   </entry>
   <entry>
     <title>Java源码篇-Future</title>
-    <url>/2020/05/09/java-yuan-ma-pian-future/</url>
+    <url>/2020-05-09/java-yuan-ma-pian-future/</url>
     <content><![CDATA[
 ​	jdk中Future接口实现类相关源码解析。包括FutureTask和 ScheduledFutureTask
  
@@ -1048,7 +980,7 @@ NEW→CANCELLED&#x2F;INTERRUPTED（取消）
   </entry>
   <entry>
     <title>Java源码篇-Map</title>
-    <url>/2020/04/09/java-yuan-ma-pian-map/</url>
+    <url>/2020-04-09/java-yuan-ma-pian-map/</url>
     <content><![CDATA[​	jdk中常用Map实现类相关源码解析。包括 HashMap，LinkedHashMap，ConcurrentHashMap
  
 
@@ -1559,7 +1491,7 @@ get方法并没有加锁，如果桶已被转移怎么获取到数据？
   </entry>
   <entry>
     <title>Java源码篇-线程池</title>
-    <url>/2020/05/12/java-yuan-ma-pian-xian-cheng-chi/</url>
+    <url>/2020-05-12/java-yuan-ma-pian-xian-cheng-chi/</url>
     <content><![CDATA[​	对jdk的ThreadPoolExecutor和ScheduledThreadPoolExecutor进行了详细的源码分析
  
 
@@ -2060,7 +1992,7 @@ static class DelayedWorkQueue extends AbstractQueue&lt;Runnable>
   </entry>
   <entry>
     <title>Java源码篇-锁</title>
-    <url>/2020/04/18/java-yuan-ma-pian-suo/</url>
+    <url>/2020-04-18/java-yuan-ma-pian-suo/</url>
     <content><![CDATA[​	jdk中AQS实现类相关源码解析。包括 ReentrantLock，Condition，CountDownLatch，Semaphore，ReentrantReadWriteLock
 
 
@@ -2321,7 +2253,7 @@ static int exclusiveCount(int c) { return c &amp; EXCLUSIVE_MASK; }
   </entry>
   <entry>
     <title>Spring-@Resource和@Autowired的分析</title>
-    <url>/2021/01/18/spring-resource-he-autowired-de-fen-xi/</url>
+    <url>/2021-01-18/spring-resource-he-autowired-de-fen-xi/</url>
     <content><![CDATA[
 ​	从源码分析了@Resource和@Autowired的依赖创建流程和这两个注解的的异同
 
@@ -2669,394 +2601,8 @@ protected Map&lt;String, Object> findAutowireCandidates(
       </tags>
   </entry>
   <entry>
-    <title>Spring-Bean的Scope</title>
-    <url>/2021/06/28/spring-bean-de-scope/</url>
-    <content><![CDATA[
-​	分析了Spring Scope的作用和实现类。并从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证。重点应该关注基于代理的其他作用域Bean注册的两个BeanDefinition异同点，以及为何会注册两个BeanDefinition
-
-
-Spring-Bean的Scope​	在 Spring 中，所有组件本质上都是 Bean，虽然它们的创建方式一致，但生命周期和缓存策略并不统一。为了支持不同的使用场景，Spring 设计了 Scope（作用域）机制，来决定 Bean 实例在容器中的缓存行为。
-常见的 Scope
-通用环境
-
-
-
-singleton：默认作用域。单例bean，由Spring进行全局缓存
-prototype：很多博客翻译为多例，其实容易误导，因为session和request中的bean也算多例。翻译为原型bean更好，因为它是基于 Bean 定义模板进行实例化 的原型模式，每次获取Bean时都会创建一个新的实例（即取即创建）。因此，它不能被缓存，也不能被循环依赖
-
-
-
-
-
-web环境
-
-
-session：web环境下的缓存在Session里的bean
-
-request：web环境下的缓存在Request里的bean。意味着每次新的Request，都需要创建新的bean
-application：web环境下缓存在ServletContext里的bean。是存在于另一个容器里单例bean
-
-
-
-
-
-cloud环境
-
-
- refresh：spring colud环境下的一种作用域，在这个作用域里的bean意味着每次环境刷新后（RefreshEvent事件触发），都需要创建新的bean，并destory以前bean。例如cloud环境下如果配置中心支持动态更改kv，每次修改kv后就出触发RefreshEvent事件
-
-
-
-
-
-Scope实现​	在 AbstractBeanFactory#doGetBean 方法中，所有非默认作用域（非 singleton&#x2F;prototype）的 Bean 获取，均通过 Scope 接口实现支持。每种运行环境对应一个 Scope 实例，由它统一负责该环境下 Bean 的 创建、缓存与销毁。Spring提供的常见Scope实现如下
-
-SessionScope：session域的实现
-
-RequestScope：request域的实现
-
-ServletContextScope：application域的实现
-
-RefreshScope：refresh域的实现
-
-SimpleThreadScope：用ThreadLocal实现的Bean的缓存域。即线程可见Bean
-
-SimpleTransactionScope：事务作用域，将 Bean 缓存绑定到当前事务，内部存储在 TransactionSynchronizationManager.resources 中
-
-
-session域主要逻辑为获取当前request的HttpSession，从内部中获取bean，没有则再实例化bean并缓存到当前Session里
-public class SessionScope extends AbstractRequestAttributesScope {
-
-    @Override
-    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
-        Object mutex = RequestContextHolder.currentRequestAttributes().getSessionMutex();
-        synchronized (mutex) { // 加锁，避免多线程同时创建bean
-            return super.get(name, objectFactory);
-        }
-    }
-
-    // 父类中的AbstractRequestAttributesScope方法
-    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
-        RequestAttributes attributes = RequestContextHolder.currentRequestAttributes();
-        // 对于session域，是通过HttpSession#getAttribute方法操作的
-        Object scopedObject = attributes.getAttribute(name, getScope());
-        if (scopedObject == null) {
-            // 创建bean
-            scopedObject = objectFactory.getObject();
-            attributes.setAttribute(name, scopedObject, getScope());
-            Object retrievedObject = attributes.getAttribute(name, getScope());
-            if (retrievedObject != null) {
-                scopedObject = retrievedObject;
-            }
-        }
-        return scopedObject;
-    }
-
-}
-
-@Scope注解用于定义 Spring 容器中 Bean 的作用域（Scope）。该注解通常配合 @Component 或 @Bean 使用，控制 Bean 在容器中的生命周期及缓存策略
-
-value：指定当前 Bean 的作用域名称，可以使用我们自定义的scope。Spring解析时不会校验
-scopeName：同value
-proxyMode：指定当前 Bean 是否需要通过代理方式注入。枚举类型为 ScopedProxyMode，常用值包括：
-DEFAULT（默认值）：等价于 NO
-NO：不使用代理。意味着当前Bean不能被其他singleton bean给依赖注入
-INTERFACES：JDK 动态代理，即接口代理
-TARGET_CLASS：CGLIB 代理，即继承代理
-
-
-
-Scope代理​	还有个重要的问题，Spring 中非 singleton 作用域的 Bean 无法直接注入到 singleton Bean 中，原因在于singleton Bean一旦被创建，其内部的依赖也随之固定。而诸如 request、session 等作用域下的 Bean 生命周期较短，其实例在运行时可能会动态变化。
-​	所以为了解决这种作用域不一致带来的注入问题，Spring 提供了 作用域代理机制（Scoped Proxy）。核心思想为将实际的Scope Bean 包装成一个代理对象，注入到 singleton Bean 中；每次通过该代理访问时，都会根据当前上下文（如当前request或session）动态获取真实的目标 Bean。这样，从开发者视角来看，这个 Bean 就像是 singleton 一样稳定可用，但实际底层访问的却是随作用域动态变化的目标实例。
-ScopedProxyUtils​	是 Spring 在注册特定作用域（如 request、session）BeanDefinition 之前，用于创建作用域代理的工具类。它的核心作用是：在注册 BeanDefinition 前，将其包装成作用域代理，从而允许非 singleton Bean 被注入到 singleton Bean 中。其最终会在容器中注册一下两个 Bean
-
-代理 Bean（Scoped Proxy）
-
-类型为 ScopedProxyFactoryBean，作用域为 singleton
-Bean 名为原始 Bean 的名称（例如 userService）
-负责在运行时根据当前作用域动态获取实际 Bean 实例
-保留原始 Bean 的自动注入相关属性（如 @Primary、限定符），因此它才是被注入到其他 Bean 中的“主 Bean”
-
-  目标 Bean（Target Bean）
-
-Bean 名为 &quot;scopedTarget.&quot; + 原始名称（如 scopedTarget.userService）
-保持原有的作用域定义（如 request、session 等）
-被设置为不可自动注入（autowireCandidate = false）。都注入代理bean
-
-
-
-核心源码public abstract class ScopedProxyUtils {
-
-    // 代理目标 Bean 的命名前缀
-    private static final String TARGET_NAME_PREFIX = "scopedTarget.";
-
-    private static final int TARGET_NAME_PREFIX_LENGTH = TARGET_NAME_PREFIX.length();
-
-    /**
-     * 创建作用域代理：将一个具有非单例作用域的 Bean 包装为一个 ScopedProxyFactoryBean，
-     * 用于在注入到 singleton Bean 时仍保持作用域语义。
-     *
-     * 实现原理：将原始 Bean 注册为一个带前缀的新 Bean，然后为原始 Bean 名称注册一个代理 Bean，
-     * 每次访问这个代理 Bean 时，都会动态地从容器中获取当前作用域下的真实 Bean。
-     */
-    public static BeanDefinitionHolder createScopedProxy(BeanDefinitionHolder definition,
-            BeanDefinitionRegistry registry, boolean proxyTargetClass) {
-
-        String originalBeanName = definition.getBeanName();
-        BeanDefinition targetDefinition = definition.getBeanDefinition();
-        // 原bean修改后的目标beanName： scopedTarget. + 原beanName
-        String targetBeanName = getTargetBeanName(originalBeanName);
-
-        // 创建 ScopedProxyFactoryBean 的定义，用于代理原始 Bean
-        RootBeanDefinition proxyDefinition = new RootBeanDefinition(ScopedProxyFactoryBean.class);
-        proxyDefinition.setDecoratedDefinition(new BeanDefinitionHolder(targetDefinition, targetBeanName));
-        proxyDefinition.setOriginatingBeanDefinition(targetDefinition);
-        proxyDefinition.setSource(definition.getSource());
-        proxyDefinition.setRole(targetDefinition.getRole());
-
-        // 设置代理bean中targetBeanName（用来在BeanFactory中原始bean）
-        proxyDefinition.getPropertyValues().add("targetBeanName", targetBeanName);
-        if (proxyTargetClass) { // cglib proxy
-            targetDefinition.setAttribute(AutoProxyUtils.PRESERVE_TARGET_CLASS_ATTRIBUTE, Boolean.TRUE);
-        } else { // jdk proxy
-            proxyDefinition.getPropertyValues().add("proxyTargetClass", Boolean.FALSE);
-        }
-
-        // 复制原始 Bean 的自动注入相关属性
-        proxyDefinition.setAutowireCandidate(targetDefinition.isAutowireCandidate());
-        proxyDefinition.setPrimary(targetDefinition.isPrimary());
-        if (targetDefinition instanceof AbstractBeanDefinition) {
-            proxyDefinition.copyQualifiersFrom((AbstractBeanDefinition) targetDefinition);
-        }
-
-        // 将原始 Bean 设为非primary且不可自动注入（避免与代理冲突，这样Spring注册的这个bean始终是代理bean）
-        targetDefinition.setAutowireCandidate(false);
-        targetDefinition.setPrimary(false);
-
-        // 注册原bean到容器中，此时beanName已被替换
-        registry.registerBeanDefinition(targetBeanName, targetDefinition);
-
-        // 返回代理 Bean 的定义（仍然使用原始Bean的beanName）
-        return new BeanDefinitionHolder(proxyDefinition, originalBeanName, definition.getAliases());
-    }
-
-}
-
-ScopedProxyFactoryBean​	它构建了一个用于作用域代理的单例增强 Bean，这个bean具有如下特点
-
-**TargetSource 为 SimpleBeanTargetSource**：每次方法调用时，动态从 BeanFactory 获取目标 bean 实例（不做任何缓存）
-代理类实现了目标 bean 的所有接口和类：对外表现为原始 bean，可被其他 bean 正常依赖和注入（作为主 bean 使用）。
-实现了 AopInfrastructureBean 接口：标记为基础设施类，避免再次被 AOP、事务、异步等机制增强。
-**仅使用一个拦截器：DelegatingIntroductionInterceptor**：
-对被“引入”的接口方法（如 ScopedObject#getTargetObject()）进行特殊处理；
-对其他方法则调用 MethodInvocation#proceed()，由原始 bean 执行具体逻辑。
-
-
-
-核心源码public class ScopedProxyFactoryBean extends ProxyConfig
-        implements FactoryBean&lt;Object>, BeanFactoryAware, AopInfrastructureBean {
-    public void setBeanFactory(BeanFactory beanFactory) {
-        if (!(beanFactory instanceof ConfigurableBeanFactory)) {
-            throw new IllegalStateException("Not running in a ConfigurableBeanFactory: " + beanFactory);
-        }
-        ConfigurableBeanFactory cbf = (ConfigurableBeanFactory) beanFactory;
-
-        // 将 BeanFactory 注入目标作用域对象（这样才有能力从BeanFactory中获取目标作用域对象）
-        this.scopedTargetSource.setBeanFactory(beanFactory);
-
-        ProxyFactory pf = new ProxyFactory();
-        pf.copyFrom(this);
-        // 设置代理目标为 scopedTargetSource（默认为SimpleBeanTargetSource，其获取目标对象每次都调用BeanFactory#getBean）
-        // 且scopedTargetSource的getTargetClass()方法会解析并返回原始bean的class，用于代理增强
-        pf.setTargetSource(this.scopedTargetSource);
-
-        Assert.notNull(this.targetBeanName, "Property 'targetBeanName' is required");
-        Class&lt;?> beanType = beanFactory.getType(this.targetBeanName);
-        if (beanType == null) {
-            throw new IllegalStateException("Cannot create scoped proxy for bean '" + this.targetBeanName +
-                    "': Target type could not be determined at the time of proxy creation.");
-        }
-        // jdk代理判断
-        if (!isProxyTargetClass() || beanType.isInterface() || Modifier.isPrivate(beanType.getModifiers())) {
-            pf.setInterfaces(ClassUtils.getAllInterfacesForClass(beanType, cbf.getBeanClassLoader()));
-        }
-
-        // Add an introduction that implements only the methods on ScopedObject.
-        ScopedObject scopedObject = new DefaultScopedObject(cbf, this.scopedTargetSource.getTargetBeanName());
-        pf.addAdvice(new DelegatingIntroductionInterceptor(scopedObject));
-
-        // 设置该bean不会被其他自动代理 代理了
-        /*
-         * 为什么会这么设置？
-         * 这个bean以及是个代理增强bean了，它所需要增强的地方也是唯一的地方就是找到目标scope里真实的bean，并将方法的调用行为转移到目标作用域的真实的bean中去
-         *
-         * 例：session域的bean，该bean被自动注入的就应该是这个代理bean，这个bean存在的目的也只是找到session域
-         * 里对应的真实bean，然后调用该bean的方法全走session域的真实bean的方法，且由这个真实bean来进行其他自动代理的增强
-         */
-        pf.addInterface(AopInfrastructureBean.class);
-
-        // 创建好代理对象
-        this.proxy = pf.getProxy(cbf.getBeanClassLoader());
-    }
-
-    /**
-     * 单例
-     */
-    public boolean isSingleton() {
-        return true;
-    }
-}
-
-arthas验证测试类package site.shanzhao.config;
-
-@Component
-@SessionScope
-public class SessionScopeDemo {
-    
-}
-
-class信息查询用sc -d site.shanzhao.config.SessionScopeDemo命令，我这里只展示了增强的class，重点观察到
-
-父类为site.shanzhao.config.SessionScopeDemo
-相比普通AOP，多增加的接口有：
-org.springframework.aop.scope.ScopedObject
-org.springframework.aop.framework.AopInfrastructureBean
-
-
-
- class-info        site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- code-source       /Users/reef/IdeaProjects/soil/target/classes/
- name              site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- isInterface       false
- isAnnotation      false
- isEnum            false
- isAnonymousClass  false
- isArray           false
- isLocalClass      false
- isMemberClass     false
- isPrimitive       false
- isSynthetic       false
- simple-name       SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- modifier          public
- annotation
- interfaces        org.springframework.aop.scope.ScopedObject,java.io.Serializable,org.springframework.aop.framework.AopInfrastructureBean,org.springframework.aop.SpringProxy,org.springframework.aop.framework.
-                   Advised,org.springframework.cglib.proxy.Factory
- super-class       +-site.shanzhao.config.SessionScopeDemo
-                     +-java.lang.Object
- class-loader      +-jdk.internal.loader.ClassLoaders$AppClassLoader@311d617d
-                     +-jdk.internal.loader.ClassLoaders$PlatformClassLoader@1b4ae4e0
- classLoaderHash   311d617d
-
-ognl查询beanName# 使用ApplicationContext.getBeanNamesForType()方法，可知有两个SessionScopeDemo class的BeanDefinition
-[arthas@35578]$ ognl "@site.shanzhao.util.ApplicationContextUtils@applicationContext.getBeanNamesForType(@site.shanzhao.config.SessionScopeDemo@class)"
-@String[][
-    @String[scopedTarget.sessionScopeDemo],
-    @String[sessionScopeDemo],
-]
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-  </entry>
-  <entry>
-    <title>Spring-AbstractAdvisingBeanPostProcessor</title>
-    <url>/2021/02/17/spring-abstractadvisingbeanpostprocessor/</url>
-    <content><![CDATA[
-​	从源码分析了AbstractAdvisingBeanPostProcessor的作用，以及和直接将Advisor注入到容器中使用的区别
-
-
-
-Spring-AbstractAdvisingBeanPostProcessor​	上一篇注解的切面自动代理
-​	简单来说这是一个用于将固定 Advisor 应用于 Bean 的通用基类，常用于实现基于注解的 AOP 功能（如异步、Validate）。核心子类有
-
-AsyncAnnotationBeanPostProcessor：处理标注了 @Async 的方法，将其在调用时提交到线程池异步执行
-MethodValidationPostProcessor：支持 @Validated 注解，拦截方法调用并对方法参数和返回值执行 JSR-303 Bean Validation
-
-核心作用
-该类允许你通过定义一个固定的 Advisor（通过其 advisor 字段）来对目标 Bean 进行增强。
-并不主动创建代理（因为AnnotationAwareAspectJAutoProxyCreator具有最高的优先级，会最先对bean进行代理），而是在 Bean 已被代理的情况下，将该 Advisor 添加到现有的代理中，从而实现功能增强。
-
-​	不主动创建代理是很好理解的，Spring 不希望对同一个 Bean 多次生成代理类（多个 CGLIB class 文件或多个 JDK proxy 实例），这不仅浪费资源，还会引发增强混乱。因此：
-
-Spring 通过设置 AnnotationAwareAspectJAutoProxyCreator 的最高优先级，统一负责生成代理对象。
-后续如 AsyncAnnotationBeanPostProcessor、MethodValidationPostProcessor 等，只需向已创建的代理对象添加 Advisor，即向其 AdvisedSupport#advisors 中追加增强逻辑。
-最终所有增强统一挂载在一个代理对象上，避免了重复代理、类污染与不必要的性能开销。
-
-核心源码public abstract class AbstractAdvisingBeanPostProcessor extends ProxyProcessorSupport implements BeanPostProcessor {
-    // 由子类设置的Advisot
-    protected Advisor advisor;
-    // 是否需要将advisor放在整个代理链的最前，以达到最先执行的目的
-    // 很有用，@Async会设置成true，从而让异步在第一个切面就开启，避免代理链在不同线程间切换
-    protected boolean beforeExistingAdvisors = false;
-
-    // bean 初始化后的hook
-    public Object postProcessAfterInitialization(Object bean, String beanName) {
-        if (this.advisor == null || bean instanceof AopInfrastructureBean) {
-            // Ignore AOP infrastructure such as scoped proxies.
-            return bean;
-        }
-
-        // 判断当前的bean是否已经是个代理类了
-        // 已经是代理类的bean，就不需要再重新创建proxy，直接用现有的，把advisor加入到list中就行
-        if (bean instanceof Advised) {
-            Advised advised = (Advised) bean;
-            // 只有再当前proxy未frozen的情况下，且原始bean支持被代理才需要增强
-            if (!advised.isFrozen() &amp;&amp; isEligible(AopUtils.getTargetClass(bean))) {
-                if (this.beforeExistingAdvisors) { // 放最前面，最先执行
-                    advised.addAdvisor(0, this.advisor);
-                }
-                else { // 否则放最后
-                    advised.addAdvisor(this.advisor);
-                }
-                return bean;
-            }
-        }
-        // ======== 走到这表示这个bean没被代理或代理已被冻结，新开一个代理再包装这个bean，可能造成层层代理 =============
-
-        // 判断当前的advisor能否对这个bean增强
-        if (isEligible(bean, beanName)) {
-            ProxyFactory proxyFactory = prepareProxyFactory(bean, beanName);
-            if (!proxyFactory.isProxyTargetClass()) {
-                evaluateProxyInterfaces(bean.getClass(), proxyFactory);
-            }
-            proxyFactory.addAdvisor(this.advisor);
-            customizeProxyFactory(proxyFactory);
-            return proxyFactory.getProxy(getProxyClassLoader());
-        }
-
-        // No proxy needed.
-        return bean;
-    }
-
-    // 也很重要，它默认还是用AopUtils#canApply来判断能否代理这个bean
-    // 但子类可以实现它，自定义的来判断能否代理bean
-    protected boolean isEligible(Object bean, String beanName) {
-        return isEligible(bean.getClass());
-    }
-}
-
-一点思考​	其实向容器中注册一个Advisor也能达到和AbstractAdvisingBeanPostProcessor一样的目的，还更简单点。那为什么还要有AbstractAdvisingBeanPostProcessor呢？
-​	因为向容器中注册一个Advisor需要依赖自动代理，即AnnotationAwareAspectJAutoProxyCreator。这个BeanPostProcessor是比较重的，功能更强也意味着更复杂。如果我们完全不需要注解式的自动代理，而只需要对某个注解（如@Async）进行代理，那实现AbstractAdvisingBeanPostProcessor是更好的选择，它不依赖自动代理，独自就能完成指定Advisor的代理，更轻
-​	所以，总结AbstractAdvisingBeanPostProcessor的优势：
-
-不依赖自动代理器：它本身就是一个 BeanPostProcessor，可以独立完成代理创建
-只处理特定目标：可以通过内部的 isEligible() 方法自定义增强对象的筛选逻辑
-避免过度代理：避免引入全局自动代理，减少对容器中其他 bean 的干扰
-具备顺序控制能力：如 @Async 会将自身的 Advisor 放到代理链最前面，确保异步逻辑在最早执行。
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>BeanPostProcessor</tag>
-        <tag>AOP</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Spring-AOP</title>
-    <url>/2021/02/08/spring-aop/</url>
+    <url>/2021-02-08/spring-aop/</url>
     <content><![CDATA[​	从源码分析了Spring AOP的实现逻辑，以及利用arthas对代理class进行反编译以更加清晰的理解源码流程
 
 
@@ -3778,8 +3324,103 @@ frozen：表示配置是否被冻结。默认为false，支持在运行时动态
       </tags>
   </entry>
   <entry>
+    <title>Spring-AbstractAdvisingBeanPostProcessor</title>
+    <url>/2021-02-17/spring-abstractadvisingbeanpostprocessor/</url>
+    <content><![CDATA[
+​	从源码分析了AbstractAdvisingBeanPostProcessor的作用，以及和直接将Advisor注入到容器中使用的区别
+
+
+
+Spring-AbstractAdvisingBeanPostProcessor​	上一篇注解的切面自动代理
+​	简单来说这是一个用于将固定 Advisor 应用于 Bean 的通用基类，常用于实现基于注解的 AOP 功能（如异步、Validate）。核心子类有
+
+AsyncAnnotationBeanPostProcessor：处理标注了 @Async 的方法，将其在调用时提交到线程池异步执行
+MethodValidationPostProcessor：支持 @Validated 注解，拦截方法调用并对方法参数和返回值执行 JSR-303 Bean Validation
+
+核心作用
+该类允许你通过定义一个固定的 Advisor（通过其 advisor 字段）来对目标 Bean 进行增强。
+并不主动创建代理（因为AnnotationAwareAspectJAutoProxyCreator具有最高的优先级，会最先对bean进行代理），而是在 Bean 已被代理的情况下，将该 Advisor 添加到现有的代理中，从而实现功能增强。
+
+​	不主动创建代理是很好理解的，Spring 不希望对同一个 Bean 多次生成代理类（多个 CGLIB class 文件或多个 JDK proxy 实例），这不仅浪费资源，还会引发增强混乱。因此：
+
+Spring 通过设置 AnnotationAwareAspectJAutoProxyCreator 的最高优先级，统一负责生成代理对象。
+后续如 AsyncAnnotationBeanPostProcessor、MethodValidationPostProcessor 等，只需向已创建的代理对象添加 Advisor，即向其 AdvisedSupport#advisors 中追加增强逻辑。
+最终所有增强统一挂载在一个代理对象上，避免了重复代理、类污染与不必要的性能开销。
+
+核心源码public abstract class AbstractAdvisingBeanPostProcessor extends ProxyProcessorSupport implements BeanPostProcessor {
+    // 由子类设置的Advisot
+    protected Advisor advisor;
+    // 是否需要将advisor放在整个代理链的最前，以达到最先执行的目的
+    // 很有用，@Async会设置成true，从而让异步在第一个切面就开启，避免代理链在不同线程间切换
+    protected boolean beforeExistingAdvisors = false;
+
+    // bean 初始化后的hook
+    public Object postProcessAfterInitialization(Object bean, String beanName) {
+        if (this.advisor == null || bean instanceof AopInfrastructureBean) {
+            // Ignore AOP infrastructure such as scoped proxies.
+            return bean;
+        }
+
+        // 判断当前的bean是否已经是个代理类了
+        // 已经是代理类的bean，就不需要再重新创建proxy，直接用现有的，把advisor加入到list中就行
+        if (bean instanceof Advised) {
+            Advised advised = (Advised) bean;
+            // 只有再当前proxy未frozen的情况下，且原始bean支持被代理才需要增强
+            if (!advised.isFrozen() &amp;&amp; isEligible(AopUtils.getTargetClass(bean))) {
+                if (this.beforeExistingAdvisors) { // 放最前面，最先执行
+                    advised.addAdvisor(0, this.advisor);
+                }
+                else { // 否则放最后
+                    advised.addAdvisor(this.advisor);
+                }
+                return bean;
+            }
+        }
+        // ======== 走到这表示这个bean没被代理或代理已被冻结，新开一个代理再包装这个bean，可能造成层层代理 =============
+
+        // 判断当前的advisor能否对这个bean增强
+        if (isEligible(bean, beanName)) {
+            ProxyFactory proxyFactory = prepareProxyFactory(bean, beanName);
+            if (!proxyFactory.isProxyTargetClass()) {
+                evaluateProxyInterfaces(bean.getClass(), proxyFactory);
+            }
+            proxyFactory.addAdvisor(this.advisor);
+            customizeProxyFactory(proxyFactory);
+            return proxyFactory.getProxy(getProxyClassLoader());
+        }
+
+        // No proxy needed.
+        return bean;
+    }
+
+    // 也很重要，它默认还是用AopUtils#canApply来判断能否代理这个bean
+    // 但子类可以实现它，自定义的来判断能否代理bean
+    protected boolean isEligible(Object bean, String beanName) {
+        return isEligible(bean.getClass());
+    }
+}
+
+一点思考​	其实向容器中注册一个Advisor也能达到和AbstractAdvisingBeanPostProcessor一样的目的，还更简单点。那为什么还要有AbstractAdvisingBeanPostProcessor呢？
+​	因为向容器中注册一个Advisor需要依赖自动代理，即AnnotationAwareAspectJAutoProxyCreator。这个BeanPostProcessor是比较重的，功能更强也意味着更复杂。如果我们完全不需要注解式的自动代理，而只需要对某个注解（如@Async）进行代理，那实现AbstractAdvisingBeanPostProcessor是更好的选择，它不依赖自动代理，独自就能完成指定Advisor的代理，更轻
+​	所以，总结AbstractAdvisingBeanPostProcessor的优势：
+
+不依赖自动代理器：它本身就是一个 BeanPostProcessor，可以独立完成代理创建
+只处理特定目标：可以通过内部的 isEligible() 方法自定义增强对象的筛选逻辑
+避免过度代理：避免引入全局自动代理，减少对容器中其他 bean 的干扰
+具备顺序控制能力：如 @Async 会将自身的 Advisor 放到代理链最前面，确保异步逻辑在最早执行。
+
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>BeanPostProcessor</tag>
+        <tag>AOP</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Spring-Bean初始化</title>
-    <url>/2021/01/08/spring-bean-de-chu-shi-hua/</url>
+    <url>/2021-01-08/spring-bean-de-chu-shi-hua/</url>
     <content><![CDATA[
 ​	整体分析了BeanFactory和ApplicationContext的区别。并从Spring Bean创建流程源码分析了bean的创建流程并对其进行总结，并分析了三级缓存的作用
 
@@ -4118,7 +3759,7 @@ return wrappedBean;
   </entry>
   <entry>
     <title>Spring-Bean的字段填充阶段处理</title>
-    <url>/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</url>
+    <url>/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</url>
     <content><![CDATA[
 ​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程
  
@@ -4383,8 +4024,71 @@ public AutowiredAnnotationBeanPostProcessor() {
       </tags>
   </entry>
   <entry>
+    <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
+    <url>/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</url>
+    <content><![CDATA[​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考
+
+
+Spring-事物NOT_SUPPORTED策略下多数据源切换的问题起因今天写代码时遇到一个多数据源的切换问题，框架为Spring和Mybatus-Plus。在完全没事物的情况下pgsql和mysql切换没问题，但在@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)下却切换不了。翻了以前的Spring-Transactional文章和代码，遂记录一下原因和解决思路，以及整体的思考
+​	在有事物的情况下多数据源切换不了这是很正常的，毕竟Connection绑定到ThreadLocal了。但我开始简单的认为只要使用Propagation.NOT_SUPPORTED传播策略，毕竟这都不支持事物了，应该就能进行数据源切换。实际就是代码报错了，还是切换不了
+伪代码ProductService#recommend被调用在一个事物里
+public class ProductService {
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void recommend(int i){
+
+        // pgsqlMapper这个mapper有注解 @DS("postgresql")，走pqsql库
+        pgsqlMapper.queryById(i);
+        
+        // 走mysql库
+        msyqlMapper.queryById(i);
+    }
+    
+}
+
+分析原因​	ProductService#recommend使用了@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)注解，它构造出来的DefaultTransactionStatus中有如下两个字段需要重点关注。
+public class DefaultTransactionStatus extends AbstractTransactionStatus {
+    // 是否开启了真实的物理事物
+    private final boolean newTransaction;
+    // 是否由当前事务初始化并管理事务同步器（如注册连接绑定、hook 回调）
+    private final boolean newSynchronization;
+}
+
+​	其中newTransaction&#x3D;false, newSynchronization&#x3D;true（受AbstractPlatformTransactionManager.transactionSynchronization字段控制）。
+
+表示尽管当前未开启物理事务，但事务管理器仍会初始化事务同步器（TransactionSynchronizationManager.initSynchronization()），并允许资源绑定（如 ConnectionHolder）与注册事务hook（TransactionSynchronization）。
+换句话说，“没有物理事务，但仍可进行事务性资源管理和 hook 回调”
+
+​	所以当触发pgsqlMapper.queryById(i)方法时，会绑定如下资源。（这一切必须要newSynchronization&#x3D;true）
+
+
+获取SqlSession时（SqlSessionUtils#getSqlSession）将SqlSessionFactory -&gt; SqlSessionHolder 给缓存到TransactionSynchronizationManager#resources中
+获取Connection时（DataSourceUtils#doGetConnection）将DataSource -&gt; ConnectionHolder 也缓存到TransactionSynchronizationManager#resources中
+
+
+​	所以，当走到第二个方法msyqlMapper.queryById(i)时，会拿到上一步中缓存的SqlSessionHolder，内部操作的是同一个Connection（具体为DefaultSqlSession.executor.transaction.connection），即pgsql的Connection，所以报错了
+解决办法​	将这个字段AbstractPlatformTransactionManager.transactionSynchronization由默认的SYNCHRONIZATION_ALWAYS改为SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。直接获取这个AbstractPlatformTransactionManager bean再进行改动有些不优雅，我翻了一遍发现有这个PlatformTransactionManagerCustomizer接口，可以对PlatformTransactionManager的子类进行定制化修改。所以可以添加如下的bean到容器中即可
+@Component
+public class TransactionSynchronizationCustomizer implements PlatformTransactionManagerCustomizer&lt;AbstractPlatformTransactionManager>{
+
+    @Override
+    public void customize(AbstractPlatformTransactionManager transactionManager) {
+        // 解决Propagation.NOT_SUPPORTED下多数据源不能切换动态切换的问题
+        transactionManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
+    }
+}
+
+思考（重点）​		在 Spring 的事务模型中，Propagation.NOT_SUPPORTED 虽然会挂起当前事务，但默认配置下（SYNCHRONIZATION_ALWAYS）仍会注册事务同步器。 这导致即使没有物理事务，依然会出现线程绑定连接的行为（如通过 DataSourceUtils.getConnection() 获得的 Connection 会复用）。
+​	所以如果希望这个方法在语义上和“非事务环境”（即不使用@Transactional等情况）一致，避免隐式连接绑定，应将 transactionSynchronization 设置为 SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。
+​	看样子应该是Spring 为了支持某些非事务性方法（Propagation.NOT_SUPPORTED）也能参与事务资源控制才这样设计的
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+  </entry>
+  <entry>
     <title>Spring-Transactional</title>
-    <url>/2021/02/23/spring-transactional/</url>
+    <url>/2021-02-23/spring-transactional/</url>
     <content><![CDATA[
 ​	从源码分析了@Transactional的解析和切面使用流程。Spring事物如此复杂是因为不同的PROPAGATION有不同的策略，特别是在嵌套的流程中，所以重点分析了PlatformTransactionManager的事物获取流程，深入了解了PROPAGATION的实现
 
@@ -5328,71 +5032,8 @@ DataSourceUtils​		前面我们分析了 Spring 事务的整体流程，但还�
       </tags>
   </entry>
   <entry>
-    <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
-    <url>/2022/03/03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</url>
-    <content><![CDATA[​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考
-
-
-Spring-事物NOT_SUPPORTED策略下多数据源切换的问题起因今天写代码时遇到一个多数据源的切换问题，框架为Spring和Mybatus-Plus。在完全没事物的情况下pgsql和mysql切换没问题，但在@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)下却切换不了。翻了以前的Spring-Transactional文章和代码，遂记录一下原因和解决思路，以及整体的思考
-​	在有事物的情况下多数据源切换不了这是很正常的，毕竟Connection绑定到ThreadLocal了。但我开始简单的认为只要使用Propagation.NOT_SUPPORTED传播策略，毕竟这都不支持事物了，应该就能进行数据源切换。实际就是代码报错了，还是切换不了
-伪代码ProductService#recommend被调用在一个事物里
-public class ProductService {
-
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void recommend(int i){
-
-        // pgsqlMapper这个mapper有注解 @DS("postgresql")，走pqsql库
-        pgsqlMapper.queryById(i);
-        
-        // 走mysql库
-        msyqlMapper.queryById(i);
-    }
-    
-}
-
-分析原因​	ProductService#recommend使用了@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)注解，它构造出来的DefaultTransactionStatus中有如下两个字段需要重点关注。
-public class DefaultTransactionStatus extends AbstractTransactionStatus {
-    // 是否开启了真实的物理事物
-    private final boolean newTransaction;
-    // 是否由当前事务初始化并管理事务同步器（如注册连接绑定、hook 回调）
-    private final boolean newSynchronization;
-}
-
-​	其中newTransaction&#x3D;false, newSynchronization&#x3D;true（受AbstractPlatformTransactionManager.transactionSynchronization字段控制）。
-
-表示尽管当前未开启物理事务，但事务管理器仍会初始化事务同步器（TransactionSynchronizationManager.initSynchronization()），并允许资源绑定（如 ConnectionHolder）与注册事务hook（TransactionSynchronization）。
-换句话说，“没有物理事务，但仍可进行事务性资源管理和 hook 回调”
-
-​	所以当触发pgsqlMapper.queryById(i)方法时，会绑定如下资源。（这一切必须要newSynchronization&#x3D;true）
-
-
-获取SqlSession时（SqlSessionUtils#getSqlSession）将SqlSessionFactory -&gt; SqlSessionHolder 给缓存到TransactionSynchronizationManager#resources中
-获取Connection时（DataSourceUtils#doGetConnection）将DataSource -&gt; ConnectionHolder 也缓存到TransactionSynchronizationManager#resources中
-
-
-​	所以，当走到第二个方法msyqlMapper.queryById(i)时，会拿到上一步中缓存的SqlSessionHolder，内部操作的是同一个Connection（具体为DefaultSqlSession.executor.transaction.connection），即pgsql的Connection，所以报错了
-解决办法​	将这个字段AbstractPlatformTransactionManager.transactionSynchronization由默认的SYNCHRONIZATION_ALWAYS改为SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。直接获取这个AbstractPlatformTransactionManager bean再进行改动有些不优雅，我翻了一遍发现有这个PlatformTransactionManagerCustomizer接口，可以对PlatformTransactionManager的子类进行定制化修改。所以可以添加如下的bean到容器中即可
-@Component
-public class TransactionSynchronizationCustomizer implements PlatformTransactionManagerCustomizer&lt;AbstractPlatformTransactionManager>{
-
-    @Override
-    public void customize(AbstractPlatformTransactionManager transactionManager) {
-        // 解决Propagation.NOT_SUPPORTED下多数据源不能切换动态切换的问题
-        transactionManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
-    }
-}
-
-思考（重点）​		在 Spring 的事务模型中，Propagation.NOT_SUPPORTED 虽然会挂起当前事务，但默认配置下（SYNCHRONIZATION_ALWAYS）仍会注册事务同步器。 这导致即使没有物理事务，依然会出现线程绑定连接的行为（如通过 DataSourceUtils.getConnection() 获得的 Connection 会复用）。
-​	所以如果希望这个方法在语义上和“非事务环境”（即不使用@Transactional等情况）一致，避免隐式连接绑定，应将 transactionSynchronization 设置为 SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。
-​	看样子应该是Spring 为了支持某些非事务性方法（Propagation.NOT_SUPPORTED）也能参与事务资源控制才这样设计的
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-  </entry>
-  <entry>
     <title>Spring-ConfigurationClassPostProcessor</title>
-    <url>/2021/05/13/spring-configurationclasspostprocessor/</url>
+    <url>/2021-05-13/spring-configurationclasspostprocessor/</url>
     <content><![CDATA[
 ​	呕心沥血的分析了ConfigurationClassPostProcessor的核心源码，深入剖析了Spring注解驱动的原理。对其中的延迟机制、字节码解析优化和代理模型进行了深度的思考，并通过arthas反编译反向验证了full configuration的代理
 
@@ -6576,8 +6217,530 @@ full configration class的增强​	和lite configration class唯一的区别，
       </tags>
   </entry>
   <entry>
+    <title>Spring-其他重要的BeanPostProcesor</title>
+    <url>/2021-04-01/spring-qi-ta-chong-yao-de-beanpostprocesor/</url>
+    <content><![CDATA[
+​	AsyncAnnotationBeanPostProcessor和ScheduledAnnotationBeanPostProcessor源码解析
+
+
+Spring-其他重要的BeanPostProcesorAsyncAnnotationBeanPostProcessor@EnableAsync​	其主要功能是向容器中注册AsyncAnnotationBeanPostProcessor这个BeanDefinition，其继承了AbstractBeanFactoryAwareAdvisingPostProcessor，可以处理指定的Advisor以此实现@Async的代理，来开启异步
+主要属性
+
+
+
+属性
+说明
+
+
+
+annotation
+自定义的异步注解，可以用来定制化
+
+
+proxyTargetClass
+是否代理目标类。默认为false，即走jdk代理；为true则用cglib代理
+
+
+mode
+AOP 模式，取值有： PROXY（默认）：使用 Spring 的代理机制 ASPECTJ：使用 AspectJ（需要额外依赖与编译时&#x2F;加载时织入配置）
+
+
+order
+AsyncAnnotationBeanPostProcessor的执行顺序，默认最后才执行
+
+
+AsyncAnnotationAdvisor​	在AsyncAnnotationBeanPostProcessor#setBeanFactory（bean初始化阶段的一个hook方法，用于给bean填充BeanFactory）中设置的Advisor
+
+public class AsyncAnnotationAdvisor extends AbstractPointcutAdvisor implements BeanFactoryAware {
+
+    private Advice advice;
+
+    private Pointcut pointcut;
+
+    public AsyncAnnotationAdvisor(
+            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
+
+        Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes = new LinkedHashSet&lt;>(2);
+        // 支持@Async
+        asyncAnnotationTypes.add(Async.class);
+        try {
+            // 也支持EJB的@Asynchronous
+            asyncAnnotationTypes.add((Class&lt;? extends Annotation>) ClassUtils.forName("javax.ejb.Asynchronous",
+                    AsyncAnnotationAdvisor.class.getClassLoader()));
+        } catch (ClassNotFoundException ex) {
+            // 类路径里不存在@javax.ejb.Asynchronous，也无所谓
+        }
+        this.advice = buildAdvice(executor, exceptionHandler);
+        this.pointcut = buildPointcut(asyncAnnotationTypes);
+    }
+
+    /**
+     * 构建异步拦截器 Advice：用于真正执行异步调用逻辑
+     */
+    protected Advice buildAdvice(
+            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
+
+        AnnotationAsyncExecutionInterceptor interceptor = new AnnotationAsyncExecutionInterceptor(null);
+        interceptor.configure(executor, exceptionHandler);
+        return interceptor;
+    }
+
+    /**
+     * 将asyncAnnotationTypes所有注解构造成一个ComposablePointcut，只要class或method上存在任意一个asyncAnnotationType，即可进行代理
+     */
+    protected Pointcut buildPointcut(Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes) {
+        ComposablePointcut result = null;
+        for (Class&lt;? extends Annotation> asyncAnnotationType : asyncAnnotationTypes) {
+            // AnnotationMatchingPointcut是用于注解进行匹配的Pointcut
+            // cpc用于class匹配（只要class上存在asyncAnnotationType注解就行）
+            Pointcut cpc = new AnnotationMatchingPointcut(asyncAnnotationType, true);
+            // mpc用于方法匹配（只要method上存在asyncAnnotationType注解就行）
+            Pointcut mpc = new AnnotationMatchingPointcut(null, asyncAnnotationType, true);
+            // ComposablePointcut为注解组合，或逻辑。只要内部的ClasaFilter匹配一个就为true。MethodMatcher匹配一个就为true
+            if (result == null) {
+                result = new ComposablePointcut(cpc);
+            } else {
+                result.union(cpc);
+            }
+            result = result.union(mpc);
+        }
+        return (result != null ? result : Pointcut.TRUE);
+    }
+
+}
+
+AnnotationAsyncExecutionInterceptor​	拦截器核心，用于解析指定的执行器，并异步执行目标方法
+public class AnnotationAsyncExecutionInterceptor extends AsyncExecutionInterceptor {
+
+    public Object invoke(final MethodInvocation invocation) throws Throwable {
+        Class&lt;?> targetClass = (invocation.getThis() != null ? AopUtils.getTargetClass(invocation.getThis()) : null);
+        Method specificMethod = ClassUtils.getMostSpecificMethod(invocation.getMethod(), targetClass);
+        final Method userDeclaredMethod = BridgeMethodResolver.findBridgedMethod(specificMethod);
+
+        // 根据@Async的value来获取容器中对象的执行器，准备在这个Executor中执行代理逻辑
+        AsyncTaskExecutor executor = determineAsyncExecutor(userDeclaredMethod);
+        if (executor == null) {
+            throw new IllegalStateException(
+                    "No executor specified and no default executor set on AsyncExecutionInterceptor either");
+        }
+
+        // 构建Callable
+        Callable&lt;Object> task = () -> {
+            try {
+                Object result = invocation.proceed();
+                if (result instanceof Future) {
+                    return ((Future&lt;?>) result).get();
+                }
+            }
+            catch (ExecutionException ex) {
+                handleError(ex.getCause(), userDeclaredMethod, invocation.getArguments());
+            }
+            catch (Throwable ex) {
+                handleError(ex, userDeclaredMethod, invocation.getArguments());
+            }
+            return null;
+        };
+
+        // 提交任务到Executor中
+        return doSubmit(task, executor, invocation.getMethod().getReturnType());
+    }
+
+    /**
+     *  可知对于CompletableFuture，ListenableFuture，Future这三种返回值都是支持的，但对于其他返回值都直接返回null了
+     */
+    protected Object doSubmit(Callable&lt;Object> task, AsyncTaskExecutor executor, Class&lt;?> returnType) {
+        if (CompletableFuture.class.isAssignableFrom(returnType)) {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return task.call();
+                }
+                catch (Throwable ex) {
+                    throw new CompletionException(ex);
+                }
+            }, executor);
+        }
+        else if (ListenableFuture.class.isAssignableFrom(returnType)) {
+            return ((AsyncListenableTaskExecutor) executor).submitListenable(task);
+        }
+        else if (Future.class.isAssignableFrom(returnType)) {
+            return executor.submit(task);
+        }
+        else {
+            executor.submit(task);
+            return null;
+        }
+    }
+}
+
+总结
+方法或类上只要存在@Async或@Asynchronous即可走异步
+可使用@Async的value字段指定异步线程池（前提是要这个线程池在容器中）
+如未指定value，则使用容器中的AsyncConfigurer提供的Executor
+如果容器中没有AsyncConfigurer，则使用默认的SimpleAsyncTaskExecutor。其每次execute都会新开一个线程
+
+
+
+
+只支持CompletableFuture，ListenableFuture，Future这三种返回值。其余返回值都直接返回null
+异步切面会在这个方法中的所有切面里最先执行（因为其AsyncAnnotationBeanPostProcessor.beforeExistingAdvisors &#x3D; true）
+
+ScheduledAnnotationBeanPostProcessor@EnableScheduling​	向容器中注册ScheduledAnnotationBeanPostProcessor这个BeanDefinition，用于@Schedules和@Scheduled的解析和注册
+ScheduledAnnotationBeanPostProcessor核心源码public class ScheduledAnnotationBeanPostProcessor
+        implements ScheduledTaskHolder, MergedBeanDefinitionPostProcessor, DestructionAwareBeanPostProcessor,
+        Ordered, EmbeddedValueResolverAware, BeanNameAware, BeanFactoryAware, ApplicationContextAware,
+        SmartInitializingSingleton, ApplicationListener&lt;ContextRefreshedEvent>, DisposableBean {
+
+    /**
+     * bean初始化完成后的hook，只做定时任务的解析和封装，这里并不执行
+     */
+    public Object postProcessAfterInitialization(Object bean, String beanName) {
+        if (bean instanceof AopInfrastructureBean || bean instanceof TaskScheduler ||
+                bean instanceof ScheduledExecutorService) {
+            // Ignore AOP infrastructure such as scoped proxies.
+            return bean;
+        }
+
+        Class&lt;?> targetClass = AopProxyUtils.ultimateTargetClass(bean);
+        if (!this.nonAnnotatedClasses.contains(targetClass)) {
+            // 解析方法上的@Schedules和@Scheduled
+            Map&lt;Method, Set&lt;Scheduled>> annotatedMethods = MethodIntrospector.selectMethods(targetClass,
+                    (MethodIntrospector.MetadataLookup&lt;Set&lt;Scheduled>>) method -> {
+                        Set&lt;Scheduled> scheduledMethods = AnnotatedElementUtils.getMergedRepeatableAnnotations(
+                                method, Scheduled.class, Schedules.class);
+                        return (!scheduledMethods.isEmpty() ? scheduledMethods : null);
+                    });
+            if (annotatedMethods.isEmpty()) {
+                this.nonAnnotatedClasses.add(targetClass);
+            } else {
+                // 存在注解，对每个定时任务方法进行处理
+                annotatedMethods.forEach((method, scheduledMethods) -> scheduledMethods
+                        .forEach(scheduled -> processScheduled(scheduled, method, bean)));
+            }
+        }
+        return bean;
+    }
+
+    /**
+     * 解析@Scheduled注解，可知其定时字段优先级：cron > fixedDelay > fixedDelayString > fixedRate > fixedRateString
+     */
+    protected void processScheduled(Scheduled scheduled, Method method, Object bean) {
+        try {
+            // 将方法封装为可直接运行的Runnable（方法不能有参数）
+            Runnable runnable = createRunnable(bean, method);
+            // 是否已处理过（一个@Scheduled只能使用一个定时）
+            boolean processedSchedule = false;
+            String errorMessage = "Exactly one of the 'cron', 'fixedDelay(String)', or 'fixedRate(String)' attributes is required";
+
+            Set&lt;ScheduledTask> tasks = new LinkedHashSet&lt;>(4);
+
+            // 解析初始延时
+            long initialDelay = scheduled.initialDelay();
+            String initialDelayString = scheduled.initialDelayString();
+            if (StringUtils.hasText(initialDelayString)) {
+                Assert.isTrue(initialDelay &lt; 0, "Specify 'initialDelay' or 'initialDelayString', not both");
+                if (this.embeddedValueResolver != null) {
+                    initialDelayString = this.embeddedValueResolver.resolveStringValue(initialDelayString);
+                }
+                if (StringUtils.hasLength(initialDelayString)) {
+                    try {
+                        initialDelay = parseDelayAsLong(initialDelayString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid initialDelayString value \"" + initialDelayString
+                                        + "\" - cannot parse into long");
+                    }
+                }
+            }
+
+            // 优先解析cron表达式
+            String cron = scheduled.cron();
+            if (StringUtils.hasText(cron)) {
+                String zone = scheduled.zone();
+                if (this.embeddedValueResolver != null) {
+                    cron = this.embeddedValueResolver.resolveStringValue(cron);
+                    zone = this.embeddedValueResolver.resolveStringValue(zone);
+                }
+                if (StringUtils.hasLength(cron)) {
+                    // 校验cron不支持初始延时
+                    Assert.isTrue(initialDelay == -1, "'initialDelay' not supported for cron triggers");
+                    processedSchedule = true;
+                    if (!Scheduled.CRON_DISABLED.equals(cron)) {
+                        TimeZone timeZone;
+                        if (StringUtils.hasText(zone)) {
+                            timeZone = StringUtils.parseTimeZoneString(zone);
+                        } else {
+                            timeZone = TimeZone.getDefault();
+                        }
+                        // 构造为CronTask，先缓存起来
+                        tasks.add(this.registrar
+                                .scheduleCronTask(new CronTask(runnable, new CronTrigger(cron, timeZone))));
+                    }
+                }
+            }
+
+            if (initialDelay &lt; 0) {
+                initialDelay = 0;
+            }
+
+            // 解析固定周期
+            long fixedDelay = scheduled.fixedDelay();
+            if (fixedDelay >= 0) {
+                Assert.isTrue(!processedSchedule, errorMessage);
+                processedSchedule = true;
+                tasks.add(
+                        this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
+            }
+            String fixedDelayString = scheduled.fixedDelayString();
+            if (StringUtils.hasText(fixedDelayString)) {
+                if (this.embeddedValueResolver != null) {
+                    fixedDelayString = this.embeddedValueResolver.resolveStringValue(fixedDelayString);
+                }
+                if (StringUtils.hasLength(fixedDelayString)) {
+                    Assert.isTrue(!processedSchedule, errorMessage);
+                    processedSchedule = true;
+                    try {
+                        fixedDelay = parseDelayAsLong(fixedDelayString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid fixedDelayString value \"" + fixedDelayString + "\" - cannot parse into long");
+                    }
+                    // 构造为FixedDelayTask，先缓存起来
+                    tasks.add(this.registrar
+                            .scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
+                }
+            }
+
+            // 最后才解析固定频率
+            long fixedRate = scheduled.fixedRate();
+            if (fixedRate >= 0) {
+                Assert.isTrue(!processedSchedule, errorMessage);
+                processedSchedule = true;
+                tasks.add(this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
+            }
+            String fixedRateString = scheduled.fixedRateString();
+            if (StringUtils.hasText(fixedRateString)) {
+                if (this.embeddedValueResolver != null) {
+                    fixedRateString = this.embeddedValueResolver.resolveStringValue(fixedRateString);
+                }
+                if (StringUtils.hasLength(fixedRateString)) {
+                    Assert.isTrue(!processedSchedule, errorMessage);
+                    processedSchedule = true;
+                    try {
+                        fixedRate = parseDelayAsLong(fixedRateString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid fixedRateString value \"" + fixedRateString + "\" - cannot parse into long");
+                    }
+                    // 构造为FixedRateTask，先缓存起来
+                    tasks.add(
+                            this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
+                }
+            }
+
+            // 校验使用了注解的必须有定时任务
+            Assert.isTrue(processedSchedule, errorMessage);
+
+            // Finally register the scheduled tasks
+            synchronized (this.scheduledTasks) {
+                Set&lt;ScheduledTask> regTasks = this.scheduledTasks.computeIfAbsent(bean, key -> new LinkedHashSet&lt;>(4));
+                regTasks.addAll(tasks);
+            }
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException(
+                    "Encountered invalid @Scheduled method '" + method.getName() + "': " + ex.getMessage());
+        }
+    }
+
+    /**
+     * ContextRefreshed事件，表示容器刷新完毕，可以真正的注册定时任务了
+     */
+    public void onApplicationEvent(ContextRefreshedEvent event) {
+        if (event.getApplicationContext() == this.applicationContext) {
+            finishRegistration();
+        }
+    }
+
+    /**
+     * 开始真正的投递定时任务到线程池中。
+     * 定时线程池优先级：
+     * 1. scheduler
+     * 2. TaskScheduler(beanName为taskScheduler) bean
+     * 3. 任意TaskScheduler bean
+     * 4. ScheduledExecutorService(beanName为taskScheduler) bean
+     * 5. 任意ScheduledExecutorService bean
+     * 6. ScheduledThreadPoolExecutor（线程数为1）
+     */
+    private void finishRegistration() {
+        if (this.scheduler != null) {
+            this.registrar.setScheduler(this.scheduler);
+        }
+
+        if (this.beanFactory instanceof ListableBeanFactory) {
+            Map&lt;String, SchedulingConfigurer> beans = ((ListableBeanFactory) this.beanFactory)
+                    .getBeansOfType(SchedulingConfigurer.class);
+            List&lt;SchedulingConfigurer> configurers = new ArrayList&lt;>(beans.values());
+            AnnotationAwareOrderComparator.sort(configurers);
+            for (SchedulingConfigurer configurer : configurers) {
+                configurer.configureTasks(this.registrar);
+            }
+        }
+
+        if (this.registrar.hasTasks() &amp;&amp; this.registrar.getScheduler() == null) {
+            Assert.state(this.beanFactory != null, "BeanFactory must be set to find scheduler by type");
+            try {
+                // 先获取beanName为taskScheduler的TaskScheduler bean
+                this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, false));
+            } catch (NoUniqueBeanDefinitionException ex) {
+                try {
+                    // 再按class获取TaskScheduler bean
+                    this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, true));
+                } catch (NoSuchBeanDefinitionException ex2) {
+
+                }
+            } catch (NoSuchBeanDefinitionException ex) {
+                try {
+                    // 再获取beanName为taskScheduler的ScheduledExecutorService bean
+                    this.registrar.setScheduler(
+                            resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, false));
+                } catch (NoUniqueBeanDefinitionException ex2) {
+                    try {
+                        // 再按class获取ScheduledExecutorService bean
+                        this.registrar.setScheduler(
+                                resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, true));
+                    } catch (NoSuchBeanDefinitionException ex3) {
+
+                    }
+                } catch (NoSuchBeanDefinitionException ex2) {
+
+                }
+            }
+        }
+        // 到这了如果taskScheduler还没有，内部则会创建一个容量为1的ScheduledThreadPoolExecutor去执行定时任务
+        // 将bean解析完成的所有定时任务投递到定时任务线程吃
+        this.registrar.afterPropertiesSet();
+    }
+
+}
+
+总结
+bean初始化完成后解析才@Scheduled和@Schedules（只是解析，并不投递），缓存到统一的ScheduledTaskRegistrar中
+@Scheduled只能解析为一个定时任务，优先级：
+cron
+fixedDelay
+fixedDelayString
+fixedRate
+fixedRateString
+
+
+要定时成多个任务需要使用@Schedules
+
+
+ContextRefreshedEvent事件触发，开始投递任务
+先获取任务定时器，定时线程池优先级：
+ScheduledAnnotationBeanPostProcessor#scheduler（只能为TaskScheduler或ScheduledExecutorService的子类）
+任意TaskScheduler  bean
+TaskScheduler(beanName为taskScheduler)  bean
+任意ScheduledExecutorService  bean
+ScheduledExecutorService(beanName为taskScheduler)  bean
+ScheduledThreadPoolExecutor（线程数为1），即默认线程池
+
+
+将解析阶段ScheduledTaskRegistrar内缓存的Task都投递到定时线程池中
+
+
+重点了解下cron，它会被封装为ReschedulingRunnable，每次执行完后才根据cron计算下一次任务的执行时间，这样循环动态的计算执行时间
+
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>BeanPostProcessor</tag>
+        <tag>Async注解</tag>
+        <tag>Scheduled注解</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>谈谈ThreadLocal为什么被设计为弱引用</title>
+    <url>/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</url>
+    <content><![CDATA[
+分析了ThreadLocal为什么要被设计为弱引用，并给出了ThreadLocal的建议使用方法
+
+
+谈谈ThreadLocal为什么被设计为弱引用​	ThreadLocal在用作ThreadLocalMap的key时，是被设计为弱引用的。
+​	ThreadLocalMap的内部类Entry被设计为实现了WeakReference，Entry用来存放数据。在构造Entry对象时，将传进来的ThreadLocal对象包装成了真正的弱引用对象，而Entry对象和内部的value对象本身是强引用的。
+弱引用的解释：
+
+​		只具有弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。
+
+​	简单理解就是当垃圾回收时，该对象只被WeakReference对象的弱引用字段（T reference）所引用，而未被任何强类型的对象引用，那么，该弱引用的对象就会被回收。
+​	注意：WeakReference引用本身是强引用，它内部的（T reference）才是真正的弱引用字段，WeakReference就是一个装弱引用的容器而已。
+1 回收测试示例public class ThreadLocalDemo {
+    public static void main(String[] args) throws InterruptedException {
+        firstStack();
+        System.gc();
+        TimeUnit.SECONDS.sleep(1);
+        Thread thread = Thread.currentThread();
+        System.out.println(thread); // 在这里打断点，观察thread对象里的ThreadLocalMap数据
+
+    }
+    // 通过是否获取返回值观察A对象里的local对象是否被回收
+    private static A firstStack(){
+        A a = new A();
+        System.out.println("value: "+ a.get());
+        return a;
+    }
+    private static class A{
+        private ThreadLocal&lt;String> local = ThreadLocal.withInitial(() -> "in class A");
+
+        public String get(){
+            return local.get();
+        }
+        public void set(String str){
+            local.set(str);
+        }
+
+    }
+}
+
+
+ThreadLocal 被强引用持有，不会被回收
+
+
+ThreadLocal只被弱引用持有，gc后被回收了
+
+​	如上面的代码，当构造一个A对象时，内部的local对象也构造了，之后调用get和set方法对local对象取值和设置值，当A对象不可达时，垃圾收集器就会回收A。
+​	现在我们假设ThreadLocalMap的Entey里的key（ThreadLocal对象）不是弱引用的，且已经调用了A的对象的get或set方法，那么垃圾收集器回收A对象时，一定不会回收里面的local对象，为什么？
+
+因为Entey已近持有了local对象的引用，我们没有设置引用类型，那这个引用就默认是个强引用。
+Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（threadLocal对象）和value
+
+​	引用链如上面所示，这个引用链全是强引用，当这个线程还未结束时，他持有的强引用，包括递归下去的所有强引用都不会被垃圾回收器回收。
+​	那么回到正常情况，ThreadLocalMap里Entey的key是弱引用，在本例中也就是local对象在这里是弱引用，当对象A回收时，由于local对象只剩下被弱引用key所引用，所以local对象也会被回收。
+2 重点来了，key为什么被设计为弱引用？？​	回归本质，ThreadLocalMap是用来存放对象的，在一次线程的执行栈中，存放数据后方便我们在任意的地方取得我们想要的值而不被其他线程干扰。ThreadLocalMap本身并没有为外界提供取出和存放数据的API，我们所能获得数据的方式只有通过ThreadLocal类提供的API来间接的从ThreadLocalMap取出数据，所以，当我们用不了key（ThreadLocal对象）的API也就无法从ThreadLocalMap里取出指定的数据。
+​	在上面的例子中，A对象被回收了，这些get和set方法也访问不到了，也就没法从ThreadLocalMap里取出数据了。没法利用API取出数据，那这个Entry对象还有用吗？？所以最好的方法是在A对象被回收后，系统自动回收对应的Entry对象，但是让Entry对象或其中的value对象做为弱引用都是非常不合理的（这两个要是使用弱引用，都可能造成数据意外丢失）。所以，让key（threadLocal对象）为弱引用，自动被垃圾回收，key就变为null了，下次，我们就可以通过Entry不为null，而key为null来判断该Entry对象该被清理掉了。
+​	至于ThreadLocalMap为什么不给外界提供API来操作数据，我觉得是因为这个Map对于一个线程只有一份，任何地方都在用，为了提供更方便的API和为了我们不破换其他框架保存到里面的数据（数据不被污染），所以才用ThreadLocal作为key和API来操作数据。
+3 总结​	综上，Entry的key被设计为弱引用就是为了让程序自动的对访问不到的数据进行回收提醒。所以，在访问不到的数据被回收之前，内存泄漏确实是存在的，但是我们不用担心，就算我们不调用remove，ThreadLocalMap在内部的set，get和扩容时都会清理掉泄漏的Entry，内存泄漏完全没必要过于担心
+所以，ThreadLocal的建议使用方法：
+
+设计为static的，被class对象给强引用，线程存活期间就不会被回收，也不用remove，完全不用担心内存泄漏
+
+非static的，放置在长对象（比如被spring管理的对象）的内部，也不会被回收
+
+
+​	个人也觉得没必要让创建的ThreadLocal对象生命周期过短，ThreadLocal被设计出来本身就是用来跨方法栈获取当前线程的数据或者无锁的获取线程安全的数据，空间交换了线程安全的上锁时间。只要让ThreadLocal具有线程的生命周期，就完全没必要使用remove方法，也完全不用担心内存泄漏的问题。
+​	另外说一点，HashMap是使用拉链法解决hash冲突的，ThreadLocalMap是使用线性探测解决hash冲突的（内部只维护Entey数组，没有链表）。所以，源码中在清除泄漏的Entry时，会进行rehash，防止数组的当前位置为null后，有hash冲突的Entry访问不到的问题。
+]]></content>
+      <categories>
+        <category>jdk</category>
+      </categories>
+      <tags>
+        <tag>ThreadLocal</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Spring-容器refresh</title>
-    <url>/2021/06/03/spring-rong-qi-refresh/</url>
+    <url>/2021-06-03/spring-rong-qi-refresh/</url>
     <content><![CDATA[
 ​	从源码分析了Spring容器的refresh过程，并通过图文的方式记录了整个流程的核心步骤
 
@@ -7065,525 +7228,362 @@ protected void finishRefresh() {
       </categories>
   </entry>
   <entry>
-    <title>Spring-其他重要的BeanPostProcesor</title>
-    <url>/2021/04/01/spring-qi-ta-chong-yao-de-beanpostprocesor/</url>
+    <title>Spring-Bean的Scope</title>
+    <url>/2021-06-28/spring-bean-de-scope/</url>
     <content><![CDATA[
-​	AsyncAnnotationBeanPostProcessor和ScheduledAnnotationBeanPostProcessor源码解析
+​	分析了Spring Scope的作用和实现类。并从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证。重点应该关注基于代理的其他作用域Bean注册的两个BeanDefinition异同点，以及为何会注册两个BeanDefinition
 
 
-Spring-其他重要的BeanPostProcesorAsyncAnnotationBeanPostProcessor@EnableAsync​	其主要功能是向容器中注册AsyncAnnotationBeanPostProcessor这个BeanDefinition，其继承了AbstractBeanFactoryAwareAdvisingPostProcessor，可以处理指定的Advisor以此实现@Async的代理，来开启异步
-主要属性
-
-
-
-属性
-说明
+Spring-Bean的Scope​	在 Spring 中，所有组件本质上都是 Bean，虽然它们的创建方式一致，但生命周期和缓存策略并不统一。为了支持不同的使用场景，Spring 设计了 Scope（作用域）机制，来决定 Bean 实例在容器中的缓存行为。
+常见的 Scope
+通用环境
 
 
 
-annotation
-自定义的异步注解，可以用来定制化
+singleton：默认作用域。单例bean，由Spring进行全局缓存
+prototype：很多博客翻译为多例，其实容易误导，因为session和request中的bean也算多例。翻译为原型bean更好，因为它是基于 Bean 定义模板进行实例化 的原型模式，每次获取Bean时都会创建一个新的实例（即取即创建）。因此，它不能被缓存，也不能被循环依赖
 
 
-proxyTargetClass
-是否代理目标类。默认为false，即走jdk代理；为true则用cglib代理
 
 
-mode
-AOP 模式，取值有： PROXY（默认）：使用 Spring 的代理机制 ASPECTJ：使用 AspectJ（需要额外依赖与编译时&#x2F;加载时织入配置）
+
+web环境
 
 
-order
-AsyncAnnotationBeanPostProcessor的执行顺序，默认最后才执行
+session：web环境下的缓存在Session里的bean
+
+request：web环境下的缓存在Request里的bean。意味着每次新的Request，都需要创建新的bean
+application：web环境下缓存在ServletContext里的bean。是存在于另一个容器里单例bean
 
 
-AsyncAnnotationAdvisor​	在AsyncAnnotationBeanPostProcessor#setBeanFactory（bean初始化阶段的一个hook方法，用于给bean填充BeanFactory）中设置的Advisor
 
-public class AsyncAnnotationAdvisor extends AbstractPointcutAdvisor implements BeanFactoryAware {
 
-    private Advice advice;
 
-    private Pointcut pointcut;
+cloud环境
 
-    public AsyncAnnotationAdvisor(
-            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
 
-        Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes = new LinkedHashSet&lt;>(2);
-        // 支持@Async
-        asyncAnnotationTypes.add(Async.class);
-        try {
-            // 也支持EJB的@Asynchronous
-            asyncAnnotationTypes.add((Class&lt;? extends Annotation>) ClassUtils.forName("javax.ejb.Asynchronous",
-                    AsyncAnnotationAdvisor.class.getClassLoader()));
-        } catch (ClassNotFoundException ex) {
-            // 类路径里不存在@javax.ejb.Asynchronous，也无所谓
+ refresh：spring colud环境下的一种作用域，在这个作用域里的bean意味着每次环境刷新后（RefreshEvent事件触发），都需要创建新的bean，并destory以前bean。例如cloud环境下如果配置中心支持动态更改kv，每次修改kv后就出触发RefreshEvent事件
+
+
+
+
+
+Scope实现​	在 AbstractBeanFactory#doGetBean 方法中，所有非默认作用域（非 singleton&#x2F;prototype）的 Bean 获取，均通过 Scope 接口实现支持。每种运行环境对应一个 Scope 实例，由它统一负责该环境下 Bean 的 创建、缓存与销毁。Spring提供的常见Scope实现如下
+
+SessionScope：session域的实现
+
+RequestScope：request域的实现
+
+ServletContextScope：application域的实现
+
+RefreshScope：refresh域的实现
+
+SimpleThreadScope：用ThreadLocal实现的Bean的缓存域。即线程可见Bean
+
+SimpleTransactionScope：事务作用域，将 Bean 缓存绑定到当前事务，内部存储在 TransactionSynchronizationManager.resources 中
+
+
+session域主要逻辑为获取当前request的HttpSession，从内部中获取bean，没有则再实例化bean并缓存到当前Session里
+public class SessionScope extends AbstractRequestAttributesScope {
+
+    @Override
+    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
+        Object mutex = RequestContextHolder.currentRequestAttributes().getSessionMutex();
+        synchronized (mutex) { // 加锁，避免多线程同时创建bean
+            return super.get(name, objectFactory);
         }
-        this.advice = buildAdvice(executor, exceptionHandler);
-        this.pointcut = buildPointcut(asyncAnnotationTypes);
     }
 
-    /**
-     * 构建异步拦截器 Advice：用于真正执行异步调用逻辑
-     */
-    protected Advice buildAdvice(
-            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
-
-        AnnotationAsyncExecutionInterceptor interceptor = new AnnotationAsyncExecutionInterceptor(null);
-        interceptor.configure(executor, exceptionHandler);
-        return interceptor;
-    }
-
-    /**
-     * 将asyncAnnotationTypes所有注解构造成一个ComposablePointcut，只要class或method上存在任意一个asyncAnnotationType，即可进行代理
-     */
-    protected Pointcut buildPointcut(Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes) {
-        ComposablePointcut result = null;
-        for (Class&lt;? extends Annotation> asyncAnnotationType : asyncAnnotationTypes) {
-            // AnnotationMatchingPointcut是用于注解进行匹配的Pointcut
-            // cpc用于class匹配（只要class上存在asyncAnnotationType注解就行）
-            Pointcut cpc = new AnnotationMatchingPointcut(asyncAnnotationType, true);
-            // mpc用于方法匹配（只要method上存在asyncAnnotationType注解就行）
-            Pointcut mpc = new AnnotationMatchingPointcut(null, asyncAnnotationType, true);
-            // ComposablePointcut为注解组合，或逻辑。只要内部的ClasaFilter匹配一个就为true。MethodMatcher匹配一个就为true
-            if (result == null) {
-                result = new ComposablePointcut(cpc);
-            } else {
-                result.union(cpc);
+    // 父类中的AbstractRequestAttributesScope方法
+    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
+        RequestAttributes attributes = RequestContextHolder.currentRequestAttributes();
+        // 对于session域，是通过HttpSession#getAttribute方法操作的
+        Object scopedObject = attributes.getAttribute(name, getScope());
+        if (scopedObject == null) {
+            // 创建bean
+            scopedObject = objectFactory.getObject();
+            attributes.setAttribute(name, scopedObject, getScope());
+            Object retrievedObject = attributes.getAttribute(name, getScope());
+            if (retrievedObject != null) {
+                scopedObject = retrievedObject;
             }
-            result = result.union(mpc);
         }
-        return (result != null ? result : Pointcut.TRUE);
+        return scopedObject;
     }
 
 }
 
-AnnotationAsyncExecutionInterceptor​	拦截器核心，用于解析指定的执行器，并异步执行目标方法
-public class AnnotationAsyncExecutionInterceptor extends AsyncExecutionInterceptor {
+@Scope注解用于定义 Spring 容器中 Bean 的作用域（Scope）。该注解通常配合 @Component 或 @Bean 使用，控制 Bean 在容器中的生命周期及缓存策略
 
-    public Object invoke(final MethodInvocation invocation) throws Throwable {
-        Class&lt;?> targetClass = (invocation.getThis() != null ? AopUtils.getTargetClass(invocation.getThis()) : null);
-        Method specificMethod = ClassUtils.getMostSpecificMethod(invocation.getMethod(), targetClass);
-        final Method userDeclaredMethod = BridgeMethodResolver.findBridgedMethod(specificMethod);
-
-        // 根据@Async的value来获取容器中对象的执行器，准备在这个Executor中执行代理逻辑
-        AsyncTaskExecutor executor = determineAsyncExecutor(userDeclaredMethod);
-        if (executor == null) {
-            throw new IllegalStateException(
-                    "No executor specified and no default executor set on AsyncExecutionInterceptor either");
-        }
-
-        // 构建Callable
-        Callable&lt;Object> task = () -> {
-            try {
-                Object result = invocation.proceed();
-                if (result instanceof Future) {
-                    return ((Future&lt;?>) result).get();
-                }
-            }
-            catch (ExecutionException ex) {
-                handleError(ex.getCause(), userDeclaredMethod, invocation.getArguments());
-            }
-            catch (Throwable ex) {
-                handleError(ex, userDeclaredMethod, invocation.getArguments());
-            }
-            return null;
-        };
-
-        // 提交任务到Executor中
-        return doSubmit(task, executor, invocation.getMethod().getReturnType());
-    }
-
-    /**
-     *  可知对于CompletableFuture，ListenableFuture，Future这三种返回值都是支持的，但对于其他返回值都直接返回null了
-     */
-    protected Object doSubmit(Callable&lt;Object> task, AsyncTaskExecutor executor, Class&lt;?> returnType) {
-        if (CompletableFuture.class.isAssignableFrom(returnType)) {
-            return CompletableFuture.supplyAsync(() -> {
-                try {
-                    return task.call();
-                }
-                catch (Throwable ex) {
-                    throw new CompletionException(ex);
-                }
-            }, executor);
-        }
-        else if (ListenableFuture.class.isAssignableFrom(returnType)) {
-            return ((AsyncListenableTaskExecutor) executor).submitListenable(task);
-        }
-        else if (Future.class.isAssignableFrom(returnType)) {
-            return executor.submit(task);
-        }
-        else {
-            executor.submit(task);
-            return null;
-        }
-    }
-}
-
-总结
-方法或类上只要存在@Async或@Asynchronous即可走异步
-可使用@Async的value字段指定异步线程池（前提是要这个线程池在容器中）
-如未指定value，则使用容器中的AsyncConfigurer提供的Executor
-如果容器中没有AsyncConfigurer，则使用默认的SimpleAsyncTaskExecutor。其每次execute都会新开一个线程
+value：指定当前 Bean 的作用域名称，可以使用我们自定义的scope。Spring解析时不会校验
+scopeName：同value
+proxyMode：指定当前 Bean 是否需要通过代理方式注入。枚举类型为 ScopedProxyMode，常用值包括：
+DEFAULT（默认值）：等价于 NO
+NO：不使用代理。意味着当前Bean不能被其他singleton bean给依赖注入
+INTERFACES：JDK 动态代理，即接口代理
+TARGET_CLASS：CGLIB 代理，即继承代理
 
 
 
+Scope代理​	还有个重要的问题，Spring 中非 singleton 作用域的 Bean 无法直接注入到 singleton Bean 中，原因在于singleton Bean一旦被创建，其内部的依赖也随之固定。而诸如 request、session 等作用域下的 Bean 生命周期较短，其实例在运行时可能会动态变化。
+​	所以为了解决这种作用域不一致带来的注入问题，Spring 提供了 作用域代理机制（Scoped Proxy）。核心思想为将实际的Scope Bean 包装成一个代理对象，注入到 singleton Bean 中；每次通过该代理访问时，都会根据当前上下文（如当前request或session）动态获取真实的目标 Bean。这样，从开发者视角来看，这个 Bean 就像是 singleton 一样稳定可用，但实际底层访问的却是随作用域动态变化的目标实例。
+ScopedProxyUtils​	是 Spring 在注册特定作用域（如 request、session）BeanDefinition 之前，用于创建作用域代理的工具类。它的核心作用是：在注册 BeanDefinition 前，将其包装成作用域代理，从而允许非 singleton Bean 被注入到 singleton Bean 中。其最终会在容器中注册一下两个 Bean
 
-只支持CompletableFuture，ListenableFuture，Future这三种返回值。其余返回值都直接返回null
-异步切面会在这个方法中的所有切面里最先执行（因为其AsyncAnnotationBeanPostProcessor.beforeExistingAdvisors &#x3D; true）
+代理 Bean（Scoped Proxy）
 
-ScheduledAnnotationBeanPostProcessor@EnableScheduling​	向容器中注册ScheduledAnnotationBeanPostProcessor这个BeanDefinition，用于@Schedules和@Scheduled的解析和注册
-ScheduledAnnotationBeanPostProcessor核心源码public class ScheduledAnnotationBeanPostProcessor
-        implements ScheduledTaskHolder, MergedBeanDefinitionPostProcessor, DestructionAwareBeanPostProcessor,
-        Ordered, EmbeddedValueResolverAware, BeanNameAware, BeanFactoryAware, ApplicationContextAware,
-        SmartInitializingSingleton, ApplicationListener&lt;ContextRefreshedEvent>, DisposableBean {
+类型为 ScopedProxyFactoryBean，作用域为 singleton
+Bean 名为原始 Bean 的名称（例如 userService）
+负责在运行时根据当前作用域动态获取实际 Bean 实例
+保留原始 Bean 的自动注入相关属性（如 @Primary、限定符），因此它才是被注入到其他 Bean 中的“主 Bean”
+
+  目标 Bean（Target Bean）
+
+Bean 名为 &quot;scopedTarget.&quot; + 原始名称（如 scopedTarget.userService）
+保持原有的作用域定义（如 request、session 等）
+被设置为不可自动注入（autowireCandidate = false）。都注入代理bean
+
+
+
+核心源码public abstract class ScopedProxyUtils {
+
+    // 代理目标 Bean 的命名前缀
+    private static final String TARGET_NAME_PREFIX = "scopedTarget.";
+
+    private static final int TARGET_NAME_PREFIX_LENGTH = TARGET_NAME_PREFIX.length();
 
     /**
-     * bean初始化完成后的hook，只做定时任务的解析和封装，这里并不执行
+     * 创建作用域代理：将一个具有非单例作用域的 Bean 包装为一个 ScopedProxyFactoryBean，
+     * 用于在注入到 singleton Bean 时仍保持作用域语义。
+     *
+     * 实现原理：将原始 Bean 注册为一个带前缀的新 Bean，然后为原始 Bean 名称注册一个代理 Bean，
+     * 每次访问这个代理 Bean 时，都会动态地从容器中获取当前作用域下的真实 Bean。
      */
-    public Object postProcessAfterInitialization(Object bean, String beanName) {
-        if (bean instanceof AopInfrastructureBean || bean instanceof TaskScheduler ||
-                bean instanceof ScheduledExecutorService) {
-            // Ignore AOP infrastructure such as scoped proxies.
-            return bean;
+    public static BeanDefinitionHolder createScopedProxy(BeanDefinitionHolder definition,
+            BeanDefinitionRegistry registry, boolean proxyTargetClass) {
+
+        String originalBeanName = definition.getBeanName();
+        BeanDefinition targetDefinition = definition.getBeanDefinition();
+        // 原bean修改后的目标beanName： scopedTarget. + 原beanName
+        String targetBeanName = getTargetBeanName(originalBeanName);
+
+        // 创建 ScopedProxyFactoryBean 的定义，用于代理原始 Bean
+        RootBeanDefinition proxyDefinition = new RootBeanDefinition(ScopedProxyFactoryBean.class);
+        proxyDefinition.setDecoratedDefinition(new BeanDefinitionHolder(targetDefinition, targetBeanName));
+        proxyDefinition.setOriginatingBeanDefinition(targetDefinition);
+        proxyDefinition.setSource(definition.getSource());
+        proxyDefinition.setRole(targetDefinition.getRole());
+
+        // 设置代理bean中targetBeanName（用来在BeanFactory中原始bean）
+        proxyDefinition.getPropertyValues().add("targetBeanName", targetBeanName);
+        if (proxyTargetClass) { // cglib proxy
+            targetDefinition.setAttribute(AutoProxyUtils.PRESERVE_TARGET_CLASS_ATTRIBUTE, Boolean.TRUE);
+        } else { // jdk proxy
+            proxyDefinition.getPropertyValues().add("proxyTargetClass", Boolean.FALSE);
         }
 
-        Class&lt;?> targetClass = AopProxyUtils.ultimateTargetClass(bean);
-        if (!this.nonAnnotatedClasses.contains(targetClass)) {
-            // 解析方法上的@Schedules和@Scheduled
-            Map&lt;Method, Set&lt;Scheduled>> annotatedMethods = MethodIntrospector.selectMethods(targetClass,
-                    (MethodIntrospector.MetadataLookup&lt;Set&lt;Scheduled>>) method -> {
-                        Set&lt;Scheduled> scheduledMethods = AnnotatedElementUtils.getMergedRepeatableAnnotations(
-                                method, Scheduled.class, Schedules.class);
-                        return (!scheduledMethods.isEmpty() ? scheduledMethods : null);
-                    });
-            if (annotatedMethods.isEmpty()) {
-                this.nonAnnotatedClasses.add(targetClass);
-            } else {
-                // 存在注解，对每个定时任务方法进行处理
-                annotatedMethods.forEach((method, scheduledMethods) -> scheduledMethods
-                        .forEach(scheduled -> processScheduled(scheduled, method, bean)));
-            }
-        }
-        return bean;
-    }
-
-    /**
-     * 解析@Scheduled注解，可知其定时字段优先级：cron > fixedDelay > fixedDelayString > fixedRate > fixedRateString
-     */
-    protected void processScheduled(Scheduled scheduled, Method method, Object bean) {
-        try {
-            // 将方法封装为可直接运行的Runnable（方法不能有参数）
-            Runnable runnable = createRunnable(bean, method);
-            // 是否已处理过（一个@Scheduled只能使用一个定时）
-            boolean processedSchedule = false;
-            String errorMessage = "Exactly one of the 'cron', 'fixedDelay(String)', or 'fixedRate(String)' attributes is required";
-
-            Set&lt;ScheduledTask> tasks = new LinkedHashSet&lt;>(4);
-
-            // 解析初始延时
-            long initialDelay = scheduled.initialDelay();
-            String initialDelayString = scheduled.initialDelayString();
-            if (StringUtils.hasText(initialDelayString)) {
-                Assert.isTrue(initialDelay &lt; 0, "Specify 'initialDelay' or 'initialDelayString', not both");
-                if (this.embeddedValueResolver != null) {
-                    initialDelayString = this.embeddedValueResolver.resolveStringValue(initialDelayString);
-                }
-                if (StringUtils.hasLength(initialDelayString)) {
-                    try {
-                        initialDelay = parseDelayAsLong(initialDelayString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid initialDelayString value \"" + initialDelayString
-                                        + "\" - cannot parse into long");
-                    }
-                }
-            }
-
-            // 优先解析cron表达式
-            String cron = scheduled.cron();
-            if (StringUtils.hasText(cron)) {
-                String zone = scheduled.zone();
-                if (this.embeddedValueResolver != null) {
-                    cron = this.embeddedValueResolver.resolveStringValue(cron);
-                    zone = this.embeddedValueResolver.resolveStringValue(zone);
-                }
-                if (StringUtils.hasLength(cron)) {
-                    // 校验cron不支持初始延时
-                    Assert.isTrue(initialDelay == -1, "'initialDelay' not supported for cron triggers");
-                    processedSchedule = true;
-                    if (!Scheduled.CRON_DISABLED.equals(cron)) {
-                        TimeZone timeZone;
-                        if (StringUtils.hasText(zone)) {
-                            timeZone = StringUtils.parseTimeZoneString(zone);
-                        } else {
-                            timeZone = TimeZone.getDefault();
-                        }
-                        // 构造为CronTask，先缓存起来
-                        tasks.add(this.registrar
-                                .scheduleCronTask(new CronTask(runnable, new CronTrigger(cron, timeZone))));
-                    }
-                }
-            }
-
-            if (initialDelay &lt; 0) {
-                initialDelay = 0;
-            }
-
-            // 解析固定周期
-            long fixedDelay = scheduled.fixedDelay();
-            if (fixedDelay >= 0) {
-                Assert.isTrue(!processedSchedule, errorMessage);
-                processedSchedule = true;
-                tasks.add(
-                        this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
-            }
-            String fixedDelayString = scheduled.fixedDelayString();
-            if (StringUtils.hasText(fixedDelayString)) {
-                if (this.embeddedValueResolver != null) {
-                    fixedDelayString = this.embeddedValueResolver.resolveStringValue(fixedDelayString);
-                }
-                if (StringUtils.hasLength(fixedDelayString)) {
-                    Assert.isTrue(!processedSchedule, errorMessage);
-                    processedSchedule = true;
-                    try {
-                        fixedDelay = parseDelayAsLong(fixedDelayString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid fixedDelayString value \"" + fixedDelayString + "\" - cannot parse into long");
-                    }
-                    // 构造为FixedDelayTask，先缓存起来
-                    tasks.add(this.registrar
-                            .scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
-                }
-            }
-
-            // 最后才解析固定频率
-            long fixedRate = scheduled.fixedRate();
-            if (fixedRate >= 0) {
-                Assert.isTrue(!processedSchedule, errorMessage);
-                processedSchedule = true;
-                tasks.add(this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
-            }
-            String fixedRateString = scheduled.fixedRateString();
-            if (StringUtils.hasText(fixedRateString)) {
-                if (this.embeddedValueResolver != null) {
-                    fixedRateString = this.embeddedValueResolver.resolveStringValue(fixedRateString);
-                }
-                if (StringUtils.hasLength(fixedRateString)) {
-                    Assert.isTrue(!processedSchedule, errorMessage);
-                    processedSchedule = true;
-                    try {
-                        fixedRate = parseDelayAsLong(fixedRateString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid fixedRateString value \"" + fixedRateString + "\" - cannot parse into long");
-                    }
-                    // 构造为FixedRateTask，先缓存起来
-                    tasks.add(
-                            this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
-                }
-            }
-
-            // 校验使用了注解的必须有定时任务
-            Assert.isTrue(processedSchedule, errorMessage);
-
-            // Finally register the scheduled tasks
-            synchronized (this.scheduledTasks) {
-                Set&lt;ScheduledTask> regTasks = this.scheduledTasks.computeIfAbsent(bean, key -> new LinkedHashSet&lt;>(4));
-                regTasks.addAll(tasks);
-            }
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalStateException(
-                    "Encountered invalid @Scheduled method '" + method.getName() + "': " + ex.getMessage());
-        }
-    }
-
-    /**
-     * ContextRefreshed事件，表示容器刷新完毕，可以真正的注册定时任务了
-     */
-    public void onApplicationEvent(ContextRefreshedEvent event) {
-        if (event.getApplicationContext() == this.applicationContext) {
-            finishRegistration();
-        }
-    }
-
-    /**
-     * 开始真正的投递定时任务到线程池中。
-     * 定时线程池优先级：
-     * 1. scheduler
-     * 2. TaskScheduler(beanName为taskScheduler) bean
-     * 3. 任意TaskScheduler bean
-     * 4. ScheduledExecutorService(beanName为taskScheduler) bean
-     * 5. 任意ScheduledExecutorService bean
-     * 6. ScheduledThreadPoolExecutor（线程数为1）
-     */
-    private void finishRegistration() {
-        if (this.scheduler != null) {
-            this.registrar.setScheduler(this.scheduler);
+        // 复制原始 Bean 的自动注入相关属性
+        proxyDefinition.setAutowireCandidate(targetDefinition.isAutowireCandidate());
+        proxyDefinition.setPrimary(targetDefinition.isPrimary());
+        if (targetDefinition instanceof AbstractBeanDefinition) {
+            proxyDefinition.copyQualifiersFrom((AbstractBeanDefinition) targetDefinition);
         }
 
-        if (this.beanFactory instanceof ListableBeanFactory) {
-            Map&lt;String, SchedulingConfigurer> beans = ((ListableBeanFactory) this.beanFactory)
-                    .getBeansOfType(SchedulingConfigurer.class);
-            List&lt;SchedulingConfigurer> configurers = new ArrayList&lt;>(beans.values());
-            AnnotationAwareOrderComparator.sort(configurers);
-            for (SchedulingConfigurer configurer : configurers) {
-                configurer.configureTasks(this.registrar);
-            }
-        }
+        // 将原始 Bean 设为非primary且不可自动注入（避免与代理冲突，这样Spring注册的这个bean始终是代理bean）
+        targetDefinition.setAutowireCandidate(false);
+        targetDefinition.setPrimary(false);
 
-        if (this.registrar.hasTasks() &amp;&amp; this.registrar.getScheduler() == null) {
-            Assert.state(this.beanFactory != null, "BeanFactory must be set to find scheduler by type");
-            try {
-                // 先获取beanName为taskScheduler的TaskScheduler bean
-                this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, false));
-            } catch (NoUniqueBeanDefinitionException ex) {
-                try {
-                    // 再按class获取TaskScheduler bean
-                    this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, true));
-                } catch (NoSuchBeanDefinitionException ex2) {
+        // 注册原bean到容器中，此时beanName已被替换
+        registry.registerBeanDefinition(targetBeanName, targetDefinition);
 
-                }
-            } catch (NoSuchBeanDefinitionException ex) {
-                try {
-                    // 再获取beanName为taskScheduler的ScheduledExecutorService bean
-                    this.registrar.setScheduler(
-                            resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, false));
-                } catch (NoUniqueBeanDefinitionException ex2) {
-                    try {
-                        // 再按class获取ScheduledExecutorService bean
-                        this.registrar.setScheduler(
-                                resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, true));
-                    } catch (NoSuchBeanDefinitionException ex3) {
-
-                    }
-                } catch (NoSuchBeanDefinitionException ex2) {
-
-                }
-            }
-        }
-        // 到这了如果taskScheduler还没有，内部则会创建一个容量为1的ScheduledThreadPoolExecutor去执行定时任务
-        // 将bean解析完成的所有定时任务投递到定时任务线程吃
-        this.registrar.afterPropertiesSet();
+        // 返回代理 Bean 的定义（仍然使用原始Bean的beanName）
+        return new BeanDefinitionHolder(proxyDefinition, originalBeanName, definition.getAliases());
     }
 
 }
 
-总结
-bean初始化完成后解析才@Scheduled和@Schedules（只是解析，并不投递），缓存到统一的ScheduledTaskRegistrar中
-@Scheduled只能解析为一个定时任务，优先级：
-cron
-fixedDelay
-fixedDelayString
-fixedRate
-fixedRateString
+ScopedProxyFactoryBean​	它构建了一个用于作用域代理的单例增强 Bean，这个bean具有如下特点
+
+**TargetSource 为 SimpleBeanTargetSource**：每次方法调用时，动态从 BeanFactory 获取目标 bean 实例（不做任何缓存）
+代理类实现了目标 bean 的所有接口和类：对外表现为原始 bean，可被其他 bean 正常依赖和注入（作为主 bean 使用）。
+实现了 AopInfrastructureBean 接口：标记为基础设施类，避免再次被 AOP、事务、异步等机制增强。
+**仅使用一个拦截器：DelegatingIntroductionInterceptor**：
+对被“引入”的接口方法（如 ScopedObject#getTargetObject()）进行特殊处理；
+对其他方法则调用 MethodInvocation#proceed()，由原始 bean 执行具体逻辑。
 
 
-要定时成多个任务需要使用@Schedules
+
+核心源码public class ScopedProxyFactoryBean extends ProxyConfig
+        implements FactoryBean&lt;Object>, BeanFactoryAware, AopInfrastructureBean {
+    public void setBeanFactory(BeanFactory beanFactory) {
+        if (!(beanFactory instanceof ConfigurableBeanFactory)) {
+            throw new IllegalStateException("Not running in a ConfigurableBeanFactory: " + beanFactory);
+        }
+        ConfigurableBeanFactory cbf = (ConfigurableBeanFactory) beanFactory;
+
+        // 将 BeanFactory 注入目标作用域对象（这样才有能力从BeanFactory中获取目标作用域对象）
+        this.scopedTargetSource.setBeanFactory(beanFactory);
+
+        ProxyFactory pf = new ProxyFactory();
+        pf.copyFrom(this);
+        // 设置代理目标为 scopedTargetSource（默认为SimpleBeanTargetSource，其获取目标对象每次都调用BeanFactory#getBean）
+        // 且scopedTargetSource的getTargetClass()方法会解析并返回原始bean的class，用于代理增强
+        pf.setTargetSource(this.scopedTargetSource);
+
+        Assert.notNull(this.targetBeanName, "Property 'targetBeanName' is required");
+        Class&lt;?> beanType = beanFactory.getType(this.targetBeanName);
+        if (beanType == null) {
+            throw new IllegalStateException("Cannot create scoped proxy for bean '" + this.targetBeanName +
+                    "': Target type could not be determined at the time of proxy creation.");
+        }
+        // jdk代理判断
+        if (!isProxyTargetClass() || beanType.isInterface() || Modifier.isPrivate(beanType.getModifiers())) {
+            pf.setInterfaces(ClassUtils.getAllInterfacesForClass(beanType, cbf.getBeanClassLoader()));
+        }
+
+        // Add an introduction that implements only the methods on ScopedObject.
+        ScopedObject scopedObject = new DefaultScopedObject(cbf, this.scopedTargetSource.getTargetBeanName());
+        pf.addAdvice(new DelegatingIntroductionInterceptor(scopedObject));
+
+        // 设置该bean不会被其他自动代理 代理了
+        /*
+         * 为什么会这么设置？
+         * 这个bean以及是个代理增强bean了，它所需要增强的地方也是唯一的地方就是找到目标scope里真实的bean，并将方法的调用行为转移到目标作用域的真实的bean中去
+         *
+         * 例：session域的bean，该bean被自动注入的就应该是这个代理bean，这个bean存在的目的也只是找到session域
+         * 里对应的真实bean，然后调用该bean的方法全走session域的真实bean的方法，且由这个真实bean来进行其他自动代理的增强
+         */
+        pf.addInterface(AopInfrastructureBean.class);
+
+        // 创建好代理对象
+        this.proxy = pf.getProxy(cbf.getBeanClassLoader());
+    }
+
+    /**
+     * 单例
+     */
+    public boolean isSingleton() {
+        return true;
+    }
+}
+
+arthas验证测试类package site.shanzhao.config;
+
+@Component
+@SessionScope
+public class SessionScopeDemo {
+    
+}
+
+class信息查询用sc -d site.shanzhao.config.SessionScopeDemo命令，我这里只展示了增强的class，重点观察到
+
+父类为site.shanzhao.config.SessionScopeDemo
+相比普通AOP，多增加的接口有：
+org.springframework.aop.scope.ScopedObject
+org.springframework.aop.framework.AopInfrastructureBean
 
 
-ContextRefreshedEvent事件触发，开始投递任务
-先获取任务定时器，定时线程池优先级：
-ScheduledAnnotationBeanPostProcessor#scheduler（只能为TaskScheduler或ScheduledExecutorService的子类）
-任意TaskScheduler  bean
-TaskScheduler(beanName为taskScheduler)  bean
-任意ScheduledExecutorService  bean
-ScheduledExecutorService(beanName为taskScheduler)  bean
-ScheduledThreadPoolExecutor（线程数为1），即默认线程池
 
+ class-info        site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ code-source       /Users/reef/IdeaProjects/soil/target/classes/
+ name              site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ isInterface       false
+ isAnnotation      false
+ isEnum            false
+ isAnonymousClass  false
+ isArray           false
+ isLocalClass      false
+ isMemberClass     false
+ isPrimitive       false
+ isSynthetic       false
+ simple-name       SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ modifier          public
+ annotation
+ interfaces        org.springframework.aop.scope.ScopedObject,java.io.Serializable,org.springframework.aop.framework.AopInfrastructureBean,org.springframework.aop.SpringProxy,org.springframework.aop.framework.
+                   Advised,org.springframework.cglib.proxy.Factory
+ super-class       +-site.shanzhao.config.SessionScopeDemo
+                     +-java.lang.Object
+ class-loader      +-jdk.internal.loader.ClassLoaders$AppClassLoader@311d617d
+                     +-jdk.internal.loader.ClassLoaders$PlatformClassLoader@1b4ae4e0
+ classLoaderHash   311d617d
 
-将解析阶段ScheduledTaskRegistrar内缓存的Task都投递到定时线程池中
-
-
-重点了解下cron，它会被封装为ReschedulingRunnable，每次执行完后才根据cron计算下一次任务的执行时间，这样循环动态的计算执行时间
+ognl查询beanName# 使用ApplicationContext.getBeanNamesForType()方法，可知有两个SessionScopeDemo class的BeanDefinition
+[arthas@35578]$ ognl "@site.shanzhao.util.ApplicationContextUtils@applicationContext.getBeanNamesForType(@site.shanzhao.config.SessionScopeDemo@class)"
+@String[][
+    @String[scopedTarget.sessionScopeDemo],
+    @String[sessionScopeDemo],
+]
 
 ]]></content>
       <categories>
         <category>Spring</category>
       </categories>
-      <tags>
-        <tag>BeanPostProcessor</tag>
-        <tag>Async注解</tag>
-        <tag>Scheduled注解</tag>
-      </tags>
   </entry>
   <entry>
-    <title>谈谈ThreadLocal为什么被设计为弱引用</title>
-    <url>/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</url>
+    <title>CloudFlare-CDN缓存清除</title>
+    <url>/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/</url>
     <content><![CDATA[
-分析了ThreadLocal为什么要被设计为弱引用，并给出了ThreadLocal的建议使用方法
+​	给出了一些api用于清除Cloudflare的CDN缓存方式
+ 
 
+CloudFlare-CDN缓存清除​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
+1 purgeUrl
+2 使用ApiKey清除（不推荐）
+ZONE_ID：区域id，即你在CF上托管的根域名id
+EMAIL：你的邮箱
+API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
 
-谈谈ThreadLocal为什么被设计为弱引用​	ThreadLocal在用作ThreadLocalMap的key时，是被设计为弱引用的。
-​	ThreadLocalMap的内部类Entry被设计为实现了WeakReference，Entry用来存放数据。在构造Entry对象时，将传进来的ThreadLocal对象包装成了真正的弱引用对象，而Entry对象和内部的value对象本身是强引用的。
-弱引用的解释：
+2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{"purge_everything": true}'
 
-​		只具有弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。
+2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
 
-​	简单理解就是当垃圾回收时，该对象只被WeakReference对象的弱引用字段（T reference）所引用，而未被任何强类型的对象引用，那么，该弱引用的对象就会被回收。
-​	注意：WeakReference引用本身是强引用，它内部的（T reference）才是真正的弱引用字段，WeakReference就是一个装弱引用的容器而已。
-1 回收测试示例public class ThreadLocalDemo {
-    public static void main(String[] args) throws InterruptedException {
-        firstStack();
-        System.gc();
-        TimeUnit.SECONDS.sleep(1);
-        Thread thread = Thread.currentThread();
-        System.out.println(thread); // 在这里打断点，观察thread对象里的ThreadLocalMap数据
+3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
 
-    }
-    // 通过是否获取返回值观察A对象里的local对象是否被回收
-    private static A firstStack(){
-        A a = new A();
-        System.out.println("value: "+ a.get());
-        return a;
-    }
-    private static class A{
-        private ThreadLocal&lt;String> local = ThreadLocal.withInitial(() -> "in class A");
+3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+     -H "Authorization: Bearer $API_TOKEN" \
+     -H "Content-Type:application/json"
 
-        public String get(){
-            return local.get();
-        }
-        public void set(String str){
-            local.set(str);
-        }
+3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{"purge_everything": true}'
 
-    }
-}
+3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
 
+4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
+5 参考链接
+官方清除缓存文档
+cloudflare dashboard创建token和查看ApiKey
+ZoneId获取
 
-ThreadLocal 被强引用持有，不会被回收
-
-
-ThreadLocal只被弱引用持有，gc后被回收了
-
-​	如上面的代码，当构造一个A对象时，内部的local对象也构造了，之后调用get和set方法对local对象取值和设置值，当A对象不可达时，垃圾收集器就会回收A。
-​	现在我们假设ThreadLocalMap的Entey里的key（ThreadLocal对象）不是弱引用的，且已经调用了A的对象的get或set方法，那么垃圾收集器回收A对象时，一定不会回收里面的local对象，为什么？
-
-因为Entey已近持有了local对象的引用，我们没有设置引用类型，那这个引用就默认是个强引用。
-Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（threadLocal对象）和value
-
-​	引用链如上面所示，这个引用链全是强引用，当这个线程还未结束时，他持有的强引用，包括递归下去的所有强引用都不会被垃圾回收器回收。
-​	那么回到正常情况，ThreadLocalMap里Entey的key是弱引用，在本例中也就是local对象在这里是弱引用，当对象A回收时，由于local对象只剩下被弱引用key所引用，所以local对象也会被回收。
-2 重点来了，key为什么被设计为弱引用？？​	回归本质，ThreadLocalMap是用来存放对象的，在一次线程的执行栈中，存放数据后方便我们在任意的地方取得我们想要的值而不被其他线程干扰。ThreadLocalMap本身并没有为外界提供取出和存放数据的API，我们所能获得数据的方式只有通过ThreadLocal类提供的API来间接的从ThreadLocalMap取出数据，所以，当我们用不了key（ThreadLocal对象）的API也就无法从ThreadLocalMap里取出指定的数据。
-​	在上面的例子中，A对象被回收了，这些get和set方法也访问不到了，也就没法从ThreadLocalMap里取出数据了。没法利用API取出数据，那这个Entry对象还有用吗？？所以最好的方法是在A对象被回收后，系统自动回收对应的Entry对象，但是让Entry对象或其中的value对象做为弱引用都是非常不合理的（这两个要是使用弱引用，都可能造成数据意外丢失）。所以，让key（threadLocal对象）为弱引用，自动被垃圾回收，key就变为null了，下次，我们就可以通过Entry不为null，而key为null来判断该Entry对象该被清理掉了。
-​	至于ThreadLocalMap为什么不给外界提供API来操作数据，我觉得是因为这个Map对于一个线程只有一份，任何地方都在用，为了提供更方便的API和为了我们不破换其他框架保存到里面的数据（数据不被污染），所以才用ThreadLocal作为key和API来操作数据。
-3 总结​	综上，Entry的key被设计为弱引用就是为了让程序自动的对访问不到的数据进行回收提醒。所以，在访问不到的数据被回收之前，内存泄漏确实是存在的，但是我们不用担心，就算我们不调用remove，ThreadLocalMap在内部的set，get和扩容时都会清理掉泄漏的Entry，内存泄漏完全没必要过于担心
-所以，ThreadLocal的建议使用方法：
-
-设计为static的，被class对象给强引用，线程存活期间就不会被回收，也不用remove，完全不用担心内存泄漏
-
-非static的，放置在长对象（比如被spring管理的对象）的内部，也不会被回收
-
-
-​	个人也觉得没必要让创建的ThreadLocal对象生命周期过短，ThreadLocal被设计出来本身就是用来跨方法栈获取当前线程的数据或者无锁的获取线程安全的数据，空间交换了线程安全的上锁时间。只要让ThreadLocal具有线程的生命周期，就完全没必要使用remove方法，也完全不用担心内存泄漏的问题。
-​	另外说一点，HashMap是使用拉链法解决hash冲突的，ThreadLocalMap是使用线性探测解决hash冲突的（内部只维护Entey数组，没有链表）。所以，源码中在清除泄漏的Entry时，会进行rehash，防止数组的当前位置为null后，有hash冲突的Entry访问不到的问题。
 ]]></content>
       <categories>
-        <category>jdk</category>
+        <category>cloudflare</category>
       </categories>
       <tags>
-        <tag>ThreadLocal</tag>
+        <tag>cdn缓存清除</tag>
       </tags>
   </entry>
 </search>

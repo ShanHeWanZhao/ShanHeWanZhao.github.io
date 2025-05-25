@@ -18,8 +18,8 @@
   
   <entry>
     <title>CloudFlare-CDN缓存清除</title>
-    <link href="https://blog.shanzhao.site/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/"/>
-    <id>https://blog.shanzhao.site/2024/06/14/cloudflare-cdn-huan-cun-qing-chu/</id>
+    <link href="https://blog.shanzhao.site/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/"/>
+    <id>https://blog.shanzhao.site/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/</id>
     <published>2024-06-14T02:33:50.000Z</published>
     <updated>2025-04-19T10:21:00.832Z</updated>
     
@@ -38,8 +38,8 @@
   
   <entry>
     <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
-    <link href="https://blog.shanzhao.site/2022/03/03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/"/>
-    <id>https://blog.shanzhao.site/2022/03/03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</id>
+    <link href="https://blog.shanzhao.site/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/"/>
+    <id>https://blog.shanzhao.site/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</id>
     <published>2022-03-03T10:34:17.000Z</published>
     <updated>2022-03-03T10:34:17.000Z</updated>
     
@@ -55,8 +55,8 @@
   
   <entry>
     <title>Spring-Bean的Scope</title>
-    <link href="https://blog.shanzhao.site/2021/06/28/spring-bean-de-scope/"/>
-    <id>https://blog.shanzhao.site/2021/06/28/spring-bean-de-scope/</id>
+    <link href="https://blog.shanzhao.site/2021-06-28/spring-bean-de-scope/"/>
+    <id>https://blog.shanzhao.site/2021-06-28/spring-bean-de-scope/</id>
     <published>2021-06-28T13:04:19.000Z</published>
     <updated>2021-06-28T13:04:19.000Z</updated>
     
@@ -73,8 +73,8 @@
   
   <entry>
     <title>Spring-容器refresh</title>
-    <link href="https://blog.shanzhao.site/2021/06/03/spring-rong-qi-refresh/"/>
-    <id>https://blog.shanzhao.site/2021/06/03/spring-rong-qi-refresh/</id>
+    <link href="https://blog.shanzhao.site/2021-06-03/spring-rong-qi-refresh/"/>
+    <id>https://blog.shanzhao.site/2021-06-03/spring-rong-qi-refresh/</id>
     <published>2021-06-03T13:01:42.000Z</published>
     <updated>2021-06-06T13:01:42.000Z</updated>
     
@@ -91,8 +91,8 @@
   
   <entry>
     <title>Spring-ConfigurationClassPostProcessor</title>
-    <link href="https://blog.shanzhao.site/2021/05/13/spring-configurationclasspostprocessor/"/>
-    <id>https://blog.shanzhao.site/2021/05/13/spring-configurationclasspostprocessor/</id>
+    <link href="https://blog.shanzhao.site/2021-05-13/spring-configurationclasspostprocessor/"/>
+    <id>https://blog.shanzhao.site/2021-05-13/spring-configurationclasspostprocessor/</id>
     <published>2021-05-13T12:27:25.000Z</published>
     <updated>2021-05-16T08:33:25.000Z</updated>
     
@@ -115,8 +115,8 @@
   
   <entry>
     <title>Spring-其他重要的BeanPostProcesor</title>
-    <link href="https://blog.shanzhao.site/2021/04/01/spring-qi-ta-chong-yao-de-beanpostprocesor/"/>
-    <id>https://blog.shanzhao.site/2021/04/01/spring-qi-ta-chong-yao-de-beanpostprocesor/</id>
+    <link href="https://blog.shanzhao.site/2021-04-01/spring-qi-ta-chong-yao-de-beanpostprocesor/"/>
+    <id>https://blog.shanzhao.site/2021-04-01/spring-qi-ta-chong-yao-de-beanpostprocesor/</id>
     <published>2021-04-01T12:43:23.000Z</published>
     <updated>2021-04-01T12:43:23.000Z</updated>
     
@@ -139,8 +139,8 @@
   
   <entry>
     <title>Spring-Transactional</title>
-    <link href="https://blog.shanzhao.site/2021/02/23/spring-transactional/"/>
-    <id>https://blog.shanzhao.site/2021/02/23/spring-transactional/</id>
+    <link href="https://blog.shanzhao.site/2021-02-23/spring-transactional/"/>
+    <id>https://blog.shanzhao.site/2021-02-23/spring-transactional/</id>
     <published>2021-02-23T13:08:46.000Z</published>
     <updated>2021-02-23T13:08:46.000Z</updated>
     
@@ -159,8 +159,8 @@
   
   <entry>
     <title>Spring-AbstractAdvisingBeanPostProcessor</title>
-    <link href="https://blog.shanzhao.site/2021/02/17/spring-abstractadvisingbeanpostprocessor/"/>
-    <id>https://blog.shanzhao.site/2021/02/17/spring-abstractadvisingbeanpostprocessor/</id>
+    <link href="https://blog.shanzhao.site/2021-02-17/spring-abstractadvisingbeanpostprocessor/"/>
+    <id>https://blog.shanzhao.site/2021-02-17/spring-abstractadvisingbeanpostprocessor/</id>
     <published>2021-02-17T11:15:27.000Z</published>
     <updated>2021-02-17T11:15:27.000Z</updated>
     
@@ -181,8 +181,8 @@
   
   <entry>
     <title>Spring-AOP</title>
-    <link href="https://blog.shanzhao.site/2021/02/08/spring-aop/"/>
-    <id>https://blog.shanzhao.site/2021/02/08/spring-aop/</id>
+    <link href="https://blog.shanzhao.site/2021-02-08/spring-aop/"/>
+    <id>https://blog.shanzhao.site/2021-02-08/spring-aop/</id>
     <published>2021-02-08T13:16:27.000Z</published>
     <updated>2021-02-08T13:16:27.000Z</updated>
     
@@ -202,8 +202,8 @@
   
   <entry>
     <title>Spring-@Resource和@Autowired的分析</title>
-    <link href="https://blog.shanzhao.site/2021/01/18/spring-resource-he-autowired-de-fen-xi/"/>
-    <id>https://blog.shanzhao.site/2021/01/18/spring-resource-he-autowired-de-fen-xi/</id>
+    <link href="https://blog.shanzhao.site/2021-01-18/spring-resource-he-autowired-de-fen-xi/"/>
+    <id>https://blog.shanzhao.site/2021-01-18/spring-resource-he-autowired-de-fen-xi/</id>
     <published>2021-01-18T12:22:04.000Z</published>
     <updated>2021-01-18T12:22:04.000Z</updated>
     
@@ -222,8 +222,8 @@
   
   <entry>
     <title>Spring-Bean的字段填充阶段处理</title>
-    <link href="https://blog.shanzhao.site/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/"/>
-    <id>https://blog.shanzhao.site/2021/01/14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</id>
+    <link href="https://blog.shanzhao.site/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/"/>
+    <id>https://blog.shanzhao.site/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</id>
     <published>2021-01-14T04:33:58.000Z</published>
     <updated>2021-01-14T04:33:58.000Z</updated>
     
@@ -242,8 +242,8 @@
   
   <entry>
     <title>Spring-Bean初始化</title>
-    <link href="https://blog.shanzhao.site/2021/01/08/spring-bean-de-chu-shi-hua/"/>
-    <id>https://blog.shanzhao.site/2021/01/08/spring-bean-de-chu-shi-hua/</id>
+    <link href="https://blog.shanzhao.site/2021-01-08/spring-bean-de-chu-shi-hua/"/>
+    <id>https://blog.shanzhao.site/2021-01-08/spring-bean-de-chu-shi-hua/</id>
     <published>2021-01-08T12:40:58.000Z</published>
     <updated>2021-01-15T07:40:33.000Z</updated>
     
@@ -262,8 +262,8 @@
   
   <entry>
     <title>JVM参数</title>
-    <link href="https://blog.shanzhao.site/2020/12/18/jvm-can-shu/"/>
-    <id>https://blog.shanzhao.site/2020/12/18/jvm-can-shu/</id>
+    <link href="https://blog.shanzhao.site/2020-12-18/jvm-can-shu/"/>
+    <id>https://blog.shanzhao.site/2020-12-18/jvm-can-shu/</id>
     <published>2020-12-18T12:29:59.000Z</published>
     <updated>2025-12-19T05:34:59.000Z</updated>
     
@@ -281,8 +281,8 @@
   
   <entry>
     <title>G1</title>
-    <link href="https://blog.shanzhao.site/2020/11/25/g1/"/>
-    <id>https://blog.shanzhao.site/2020/11/25/g1/</id>
+    <link href="https://blog.shanzhao.site/2020-11-25/g1/"/>
+    <id>https://blog.shanzhao.site/2020-11-25/g1/</id>
     <published>2020-11-25T10:16:52.000Z</published>
     <updated>2020-11-25T10:16:52.000Z</updated>
     
@@ -301,8 +301,8 @@
   
   <entry>
     <title>谈谈ThreadLocal为什么被设计为弱引用</title>
-    <link href="https://blog.shanzhao.site/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/"/>
-    <id>https://blog.shanzhao.site/2020/11/21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</id>
+    <link href="https://blog.shanzhao.site/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/"/>
+    <id>https://blog.shanzhao.site/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</id>
     <published>2020-11-21T06:23:19.000Z</published>
     <updated>2020-11-24T08:21:22.000Z</updated>
     
@@ -321,8 +321,8 @@
   
   <entry>
     <title>CMS</title>
-    <link href="https://blog.shanzhao.site/2020/09/19/cms/"/>
-    <id>https://blog.shanzhao.site/2020/09/19/cms/</id>
+    <link href="https://blog.shanzhao.site/2020-09-19/cms/"/>
+    <id>https://blog.shanzhao.site/2020-09-19/cms/</id>
     <published>2020-09-19T14:26:14.000Z</published>
     <updated>2020-09-19T14:26:14.000Z</updated>
     
@@ -343,8 +343,8 @@
   
   <entry>
     <title>Java源码篇-线程池</title>
-    <link href="https://blog.shanzhao.site/2020/05/12/java-yuan-ma-pian-xian-cheng-chi/"/>
-    <id>https://blog.shanzhao.site/2020/05/12/java-yuan-ma-pian-xian-cheng-chi/</id>
+    <link href="https://blog.shanzhao.site/2020-05-12/java-yuan-ma-pian-xian-cheng-chi/"/>
+    <id>https://blog.shanzhao.site/2020-05-12/java-yuan-ma-pian-xian-cheng-chi/</id>
     <published>2020-05-12T07:45:13.000Z</published>
     <updated>2020-06-03T10:22:12.000Z</updated>
     
@@ -362,8 +362,8 @@
   
   <entry>
     <title>Java源码篇-Future</title>
-    <link href="https://blog.shanzhao.site/2020/05/09/java-yuan-ma-pian-future/"/>
-    <id>https://blog.shanzhao.site/2020/05/09/java-yuan-ma-pian-future/</id>
+    <link href="https://blog.shanzhao.site/2020-05-09/java-yuan-ma-pian-future/"/>
+    <id>https://blog.shanzhao.site/2020-05-09/java-yuan-ma-pian-future/</id>
     <published>2020-05-09T02:43:53.000Z</published>
     <updated>2020-05-11T07:41:01.000Z</updated>
     
@@ -382,8 +382,8 @@
   
   <entry>
     <title>Java源码篇-锁</title>
-    <link href="https://blog.shanzhao.site/2020/04/18/java-yuan-ma-pian-suo/"/>
-    <id>https://blog.shanzhao.site/2020/04/18/java-yuan-ma-pian-suo/</id>
+    <link href="https://blog.shanzhao.site/2020-04-18/java-yuan-ma-pian-suo/"/>
+    <id>https://blog.shanzhao.site/2020-04-18/java-yuan-ma-pian-suo/</id>
     <published>2020-04-18T13:13:10.000Z</published>
     <updated>2020-04-18T13:13:10.000Z</updated>
     
@@ -401,8 +401,8 @@
   
   <entry>
     <title>Java源码篇-AQS</title>
-    <link href="https://blog.shanzhao.site/2020/04/17/java-yuan-ma-pian-aqs/"/>
-    <id>https://blog.shanzhao.site/2020/04/17/java-yuan-ma-pian-aqs/</id>
+    <link href="https://blog.shanzhao.site/2020-04-17/java-yuan-ma-pian-aqs/"/>
+    <id>https://blog.shanzhao.site/2020-04-17/java-yuan-ma-pian-aqs/</id>
     <published>2020-04-17T13:13:10.000Z</published>
     <updated>2025-04-19T10:22:38.466Z</updated>
     
