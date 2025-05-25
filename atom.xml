@@ -54,6 +54,24 @@
   </entry>
   
   <entry>
+    <title>Spring-Bean的Scope</title>
+    <link href="https://blog.shanzhao.site/2021/06/28/spring-bean-de-scope/"/>
+    <id>https://blog.shanzhao.site/2021/06/28/spring-bean-de-scope/</id>
+    <published>2021-06-28T13:04:19.000Z</published>
+    <updated>2021-06-28T13:04:19.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	分析了Spring Scope的作用和实现类。并&lt;strong&gt;从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证&lt;/strong&gt;。重点应该关注基于代理的其他作用域Bean注册的&lt;strong&gt;两个BeanDefinition异同点，以及为何会注册两个BeanDefinition&lt;/strong&gt;&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
+    
+    
+  </entry>
+  
+  <entry>
     <title>Spring-容器refresh</title>
     <link href="https://blog.shanzhao.site/2021/06/03/spring-rong-qi-refresh/"/>
     <id>https://blog.shanzhao.site/2021/06/03/spring-rong-qi-refresh/</id>
@@ -400,27 +418,6 @@
     <category term="LockSupport" scheme="https://blog.shanzhao.site/tags/LockSupport/"/>
     
     <category term="AQS" scheme="https://blog.shanzhao.site/tags/AQS/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Java源码篇-Map</title>
-    <link href="https://blog.shanzhao.site/2020/04/09/java-yuan-ma-pian-map/"/>
-    <id>https://blog.shanzhao.site/2020/04/09/java-yuan-ma-pian-map/</id>
-    <published>2020-04-09T11:21:44.000Z</published>
-    <updated>2025-04-19T10:42:38.494Z</updated>
-    
-    
-    <summary type="html">&lt;p&gt;​	jdk中常用Map实现类相关源码解析。包括 HashMap，LinkedHashMap，ConcurrentHashMap&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
-    
-    
-    <category term="Map" scheme="https://blog.shanzhao.site/tags/Map/"/>
-    
-    <category term="ConcurrentHashMap" scheme="https://blog.shanzhao.site/tags/ConcurrentHashMap/"/>
     
   </entry>
   
