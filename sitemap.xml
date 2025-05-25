@@ -250,21 +250,7 @@
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/tags/cdn%E7%BC%93%E5%AD%98%E6%B8%85%E9%99%A4/</loc>
-    <lastmod>2025-05-25</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
     <loc>https://blog.shanzhao.site/tags/G1/</loc>
-    <lastmod>2025-05-25</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://blog.shanzhao.site/tags/Git/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -286,6 +272,20 @@
   
   <url>
     <loc>https://blog.shanzhao.site/tags/AQS/</loc>
+    <lastmod>2025-05-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://blog.shanzhao.site/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/</loc>
+    <lastmod>2025-05-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://blog.shanzhao.site/tags/Git/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -320,14 +320,14 @@
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/tags/AOP/</loc>
+    <loc>https://blog.shanzhao.site/tags/BeanPostProcessor/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/tags/BeanPostProcessor/</loc>
+    <loc>https://blog.shanzhao.site/tags/AOP/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -341,7 +341,7 @@
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/</loc>
+    <loc>https://blog.shanzhao.site/tags/Transactional%E6%B3%A8%E8%A7%A3/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -369,7 +369,7 @@
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/tags/Transactional%E6%B3%A8%E8%A7%A3/</loc>
+    <loc>https://blog.shanzhao.site/tags/cdn%E7%BC%93%E5%AD%98%E6%B8%85%E9%99%A4/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -399,7 +399,7 @@
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/categories/cloudflare/</loc>
+    <loc>https://blog.shanzhao.site/categories/jdk/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -413,14 +413,14 @@
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/categories/jdk/</loc>
+    <loc>https://blog.shanzhao.site/categories/Spring/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/categories/Spring/</loc>
+    <loc>https://blog.shanzhao.site/categories/cloudflare/</loc>
     <lastmod>2025-05-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
