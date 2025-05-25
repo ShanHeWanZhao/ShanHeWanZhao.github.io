@@ -193,10 +193,10 @@
 </div>
   <div class="links-of-author animated">
       <span class="links-of-author-item">
-        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
       </span>
       <span class="links-of-author-item">
-        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
       </span>
   </div>
 
@@ -302,7 +302,7 @@
 <li><strong>-Xmn32m</strong> ：年轻代大小</li>
 <li><strong>-XX:MaxNewSize&#x3D;256m</strong> : 最大新生代大小</li>
 <li><strong>-Xss512k</strong>：栈大小</li>
-<li><strong>-XX:MetaspaceSize&#x3D;256M</strong> ：Metaspace扩容时触发FullGC的初始化阈值(并不是元空间的初始化大小，元空间是不断扩容的，当达到这个值时，就会触发full gc，<a target="_blank" rel="noopener" href="https://www.jianshu.com/p/b448c21d2e71">链接</a>）</li>
+<li><strong>-XX:MetaspaceSize&#x3D;256M</strong> ：Metaspace扩容时触发FullGC的初始化阈值(并不是元空间的初始化大小，元空间是不断扩容的，当达到这个值时，就会触发full gc，<a target="_blank" rel="noopener external nofollow noreferrer" href="https://www.jianshu.com/p/b448c21d2e71">链接</a>）</li>
 <li><strong>-XX:MaxMetaspaceSize&#x3D;512M</strong>：Metaspace最大大小</li>
 <li><strong>-XX:NewRatio&#x3D;2</strong>：老年代和新生代的比例</li>
 <li><strong>-XX:SurvivorRatio&#x3D;8</strong> ：Eden区与一个Survivor区的大小比值（所以<strong>s0:s1:eden&#x3D;1:1:8</strong>）</li>
@@ -319,7 +319,7 @@
 <li><strong>-XX:+PrintGCDateStamps</strong>：打印GC发生的时间</li>
 <li><strong>-XX:+PrintHeapAtGC</strong>：每一次GC前和GC后，都打印堆信息</li>
 <li><strong>-XX:+PrintClassHistogram</strong>：按下Ctrl+Break后，打印类的信息</li>
-<li><strong>-XX:+PrintGCApplicationConcurrentTime</strong> ：打印应用程序的运行时间（许多事情会导致JVM暂停所有线程，停在安全点。gc也只是其中的一种，当暂停之后在重启应用线程，则会刷新这个时间（归0），在重新计数）<a target="_blank" rel="noopener" href="http://ifeve.com/logging-stop-the-world-pauses-in-jvm/">链接</a></li>
+<li><strong>-XX:+PrintGCApplicationConcurrentTime</strong> ：打印应用程序的运行时间（许多事情会导致JVM暂停所有线程，停在安全点。gc也只是其中的一种，当暂停之后在重启应用线程，则会刷新这个时间（归0），在重新计数）<a target="_blank" rel="noopener external nofollow noreferrer" href="http://ifeve.com/logging-stop-the-world-pauses-in-jvm/">链接</a></li>
 <li><strong>-XX:+PrintGCApplicationStoppedTime</strong> ：打印应用线程暂停的时间，显示应用线程被暂停了多久和应用线程暂停到安全点花费的时间</li>
 <li><strong>-XX:TargetSurvivorRatio&#x3D;50</strong> ：survivor空间的晋升大小空间百分比（默认为50）</li>
 <li><strong>-XX:MaxTenuringThreshold&#x3D;15</strong>  ：年轻代晋升到老年代的最大年龄阈值(tenuring threshold)。默认值为 15[每次GC，增加1岁，到15岁如果还要存活，放入Old区]。<strong>jvm还会动态的计算晋升阈值，方法：依次从年龄为1的对象大小加起来，一直加到大小超过了 [（TargetSurvivorRatio * survivor_capacity）&#x2F; 100 ]值，这时加起来的最大年龄大小即为这次晋升的临界阈值</strong>（具体算法在：hotspot\src\share\vm\gc_implementation\shared\ageTable.cpp文件里，方法为compute_tenuring_threshold）</li>

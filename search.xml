@@ -105,6 +105,74 @@ CMS 是一种低停顿老年代收集器，适合延迟敏感型系统。
       </tags>
   </entry>
   <entry>
+    <title>CloudFlare-CDN缓存清除</title>
+    <url>/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/</url>
+    <content><![CDATA[
+​	给出了一些api用于清除Cloudflare的CDN缓存方式
+ 
+
+CloudFlare-CDN缓存清除​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
+1 purgeUrl
+2 使用ApiKey清除（不推荐）
+ZONE_ID：区域id，即你在CF上托管的根域名id
+EMAIL：你的邮箱
+API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
+
+2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{"purge_everything": true}'
+
+2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
+
+3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
+
+3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+     -H "Authorization: Bearer $API_TOKEN" \
+     -H "Content-Type:application/json"
+
+3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{"purge_everything": true}'
+
+3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
+
+4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
+5 参考链接
+官方清除缓存文档
+cloudflare dashboard创建token和查看ApiKey
+ZoneId获取
+
+]]></content>
+      <categories>
+        <category>cloudflare</category>
+      </categories>
+      <tags>
+        <tag>cdn缓存清除</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>G1</title>
     <url>/2020-11-25/g1/</url>
     <content><![CDATA[
@@ -695,287 +763,6 @@ static final class Node {
       <tags>
         <tag>LockSupport</tag>
         <tag>AQS</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Java源码篇-Future</title>
-    <url>/2020-05-09/java-yuan-ma-pian-future/</url>
-    <content><![CDATA[
-​	jdk中Future接口实现类相关源码解析。包括FutureTask和 ScheduledFutureTask
- 
-
-1 FutureFuture接口表示一个异步操作的结果，即未来的结果，同时实现了 Runnable 和 Future 接口。提供了如下的一些基础方法可获取、判断和取消等操作
-
-get()：阻塞直到计算完成并返回结果（支持超时设置）
-
-isDone()：非阻塞检查任务是否完成（成功&#x2F;失败&#x2F;取消）
-
-cancel(boolean mayInterruptIfRunning)：尝试取消任务，参数决定是否中断执行中的线程
-
-isCancelled()：判断任务是否被取消
-
-
-其实现类为FutureTask，就是用它来实现Callable接口的功能
-
-1.1 FutureTask1.1.1 重点字段和方法public class FutureTask&lt;V> implements RunnableFuture&lt;V> {
-    // state字段，表示了当前Future的状态，取值为如下字段
-    private volatile int state;
-
-    private static final int NEW          = 0; // 初始状态，新建
-    private static final int COMPLETING   = 1; // 正在结束
-    private static final int NORMAL       = 2; // 正常执行完毕
-    private static final int EXCEPTIONAL  = 3; // 异常执行完毕
-    private static final int CANCELLED    = 4; // 前一个状态必须是NEW，已取消（未中断）
-    private static final int INTERRUPTING = 5; // 前一个状态必须是NEW，正在中断（中断）
-    private static final int INTERRUPTED  = 6; // 取消成功的才可以设置，中断完成（中断）
-
-    // 待运行的Callable任务
-    private Callable&lt;V> callable;
-    // Callable执行的结果。如果出现执行的过程中异常，则保存的是异常对象
-    private Object outcome;
-    // 运行Callable#call方法的线程（也即是运行业务代码的线程）
-    private volatile Thread runner;
-    // 当这里面的Callable还未执行完，却有其他线程调用Future#get()方法，
-    // 	会将其他线程阻塞并构造为等待节点，维持一个链表结构，以便在Callable执行完毕后唤醒并回调
-    private volatile WaitNode waiters;
-
-
-    public void run() {
-        if (state != NEW ||
-            !UNSAFE.compareAndSwapObject(this, runnerOffset,
-                                         null, Thread.currentThread()))
-            return;
-        try {
-            Callable&lt;V> c = callable;
-            if (c != null &amp;&amp; state == NEW) {
-                V result;
-                boolean ran;
-                try {
-                    // 执行业务方法
-                    result = c.call();
-                    ran = true;
-                } catch (Throwable ex) {
-                    result = null;
-                    ran = false;
-                    setException(ex); // 异常结束，将状态设为EXCEPTIONAL，如果等待队列有节点，则唤醒对应的线程
-                }
-                if (ran)
-                    set(result); // 正常结束，将状态设为NORMAL，如果等待队列有节点，则唤醒对应的线程
-            }
-        } finally {
-            runner = null;
-            int s = state;
-            if (s >= INTERRUPTING)
-                handlePossibleCancellationInterrupt(s);
-        }
-    }
-    // 阻塞获取
-    public V get() throws InterruptedException, ExecutionException {
-        int s = state;
-        if (s &lt;= COMPLETING) // 还未完全结束Callabke，进入等待
-            s = awaitDone(false, 0L);
-        return report(s);
-    }
-    // 根据state判断是否需要阻塞并做对于的事
-    private int awaitDone(boolean timed, long nanos)
-        throws InterruptedException {
-        final long deadline = timed ? System.nanoTime() + nanos : 0L;
-        WaitNode q = null;
-        boolean queued = false;
-        for (;;) {
-            if (Thread.interrupted()) { // 当前线程支持响应中断
-                removeWaiter(q);
-                throw new InterruptedException();
-            }
-
-            int s = state;
-            if (s > COMPLETING) { // Callable运行完毕，且result已经设置完毕
-                if (q != null)
-                    q.thread = null;
-                return s;
-            }
-            // 进入到以下分支，就代表Callable还未完全执行完毕
-
-            else if (s == COMPLETING) // cannot time out yet  Callable运行完毕，但正在设置result，让出执行时间，等待下次判断
-                Thread.yield();
-            else if (q == null) // 第一次循环，构造等待节点
-                q = new WaitNode();
-            else if (!queued) // 还未加入等待队列，则将节点加入到等待队列中
-                queued = UNSAFE.compareAndSwapObject(this, waitersOffset,
-                                                     q.next = waiters, q);
-            else if (timed) { // 是否运行超时判断
-                nanos = deadline - System.nanoTime();
-                if (nanos &lt;= 0L) {
-                    removeWaiter(q);
-                    return state;
-                }
-                LockSupport.parkNanos(this, nanos);
-            }
-            else // 暂停当前线程，等待任务执行完毕的唤醒
-                LockSupport.park(this);
-        }
-    }
-    // 任务执行完毕，唤醒等待队列的所有节点
-    private void finishCompletion() {
-        // assert state > COMPLETING;
-        for (WaitNode q; (q = waiters) != null;) {
-            if (UNSAFE.compareAndSwapObject(this, waitersOffset, q, null)) {
-                for (;;) {
-                    Thread t = q.thread;
-                    if (t != null) {
-                        q.thread = null;
-                        LockSupport.unpark(t);
-                    }
-                    WaitNode next = q.next;
-                    if (next == null)
-                        break;
-                    q.next = null; // unlink to help gc
-                    q = next;
-                }
-                break;
-            }
-        }
-
-        done();
-
-        callable = null;        // to reduce footprint
-    }
-}
-
-1.1.2 总结
-FutureTask根据内部的state字段来判断当前任务运行到了哪个阶段并作出对于的抉择，也使用volatile修饰保证它在多线程环境下的可见性。
-state状态流转：
-NEW→COMPLETING→NORMAL（成功）
-NEW→COMPLETING→EXCEPTIONAL（失败）
-NEW→CANCELLED&#x2F;INTERRUPTED（取消）
-
-
-
-
-如果想获取任务执行的结果，要使用get来获取结果，get是个阻塞的方法。当任务还未执行完毕时，会将调用get的方法阻塞并构造成WaitNode，再通过内部的next字段链接下一个WaitNode，形成一个链表结构。当任务执行完毕后，内部调用的finishCompletion方法会判断等待链表是否为空，不为空就代表有线程在获取结果时被阻塞了，这时唤醒阻塞队列的所有线程，最终，调用get方法的线程返回结果。即使用 WaitNode 链表 + CAS 操作管理阻塞线程，避免显式锁开销
-只会允许任务执行一次，状态不可逆转
-
-1.2 ScheduledFutureTask​	ScheduledFutureTask继承了FutureTask，当向定时任务线程池投递任务时（Runnable或Callable），都会将其封装为ScheduledFutureTask
-1.2.1 重点字段和方法 private class ScheduledFutureTask&lt;V>
-            extends FutureTask&lt;V> implements RunnableScheduledFuture&lt;V> {
-     /** 
-     * 当前任务的id（自增的），代表了进入队列的顺序 &lt;br/>
-     * 当两个定时任务下次执行时间一致时，sequenceNumber越小就会越早执行
-     */
-    private final long sequenceNumber;
-    // 下次执行当前任务的纳秒时间戳
-    private long time;
-
-    /**
-     * 执行定时任务的纳秒间隔时间
-     * 大于0：代表固定的频率，不受任务的执行所花费的时间影响
-     * 等于0：代表不是一个重复的任务（只会执行一次
-     * 小于0：代表固定的时间间隔，基于任务执行完毕后的时间计算。（任务执行完后再基于当前时间计算下次执行时间）
-     */
-    private final long period;
-    // 当前任务在数组中的索引
-    int heapIndex;
-
-    public long getDelay(TimeUnit unit) {
-        return unit.convert(time - now(), NANOSECONDS);
-    }
-    // 比较方法，决定了放入数组的位置
-    public int compareTo(Delayed other) {
-        if (other == this) // compare zero if same object
-            return 0;
-        if (other instanceof ScheduledFutureTask) {
-            ScheduledFutureTask&lt;?> x = (ScheduledFutureTask&lt;?>)other;
-            long diff = time - x.time;
-            if (diff &lt; 0)
-                return -1;
-            else if (diff > 0) // 当前任务的下次执行时间更长，返回正数
-                return 1;
-            else if (sequenceNumber &lt; x.sequenceNumber)
-                return -1;
-            else
-                return 1;
-        }
-        long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS);
-        return (diff &lt; 0) ? -1 : (diff > 0) ? 1 : 0;
-    }
-
-    /**
-     * false: 代表当前任务为一次性任务
-     * true: 定时任务
-     */
-    public boolean isPeriodic() {
-        return period != 0;
-    }
-    // 当前任务执行完毕后，用来计算下次执行时间
-    private void setNextRunTime() {
-        long p = period;
-        // p为两次执行时间的时间间隔的纳秒值
-        if (p > 0) // p大于0，即为固定时间执行的任务，基于初始运行时间计算下一次的执行时间
-            time += p;
-        else // p小于0，为基于完成任务的时间来执行，基于任务运行完的时间，来计算出下一次的执行时间
-            time = triggerTime(-p);
-    }
-    // 主方法，运行当前定时任务
-    public void run() {
-        boolean periodic = isPeriodic();
-        if (!canRunInCurrentRunState(periodic))
-            cancel(false);
-        else if (!periodic) // 非定时任务，当作普通任务直接调用FutureTask的run方法运行
-            ScheduledFutureTask.super.run();
-        else if (ScheduledFutureTask.super.runAndReset()) { // 运行定时任务，且运行成功（没抛异常）
-            setNextRunTime(); // 设置下一次执行时间
-            reExecutePeriodic(outerTask); // 再把当前任务重新入队列
-        }
-    }
-    /**
-      父类的FutureTask中的方法，运行并重置状态，用于任务的多次执行 
-         * 正常执行时：不会修改运行状态（也就是说这个操作不会修改state字段值，保持初始值，以支持重复执行）。
-         * 出现异常时：还是将state设为EXCEPTIONAL，也就是说一个定时任务要是抛出了异常，之后就不会再执行它了
-         */
-    protected boolean runAndReset() {
-        if (state != NEW || // 不为NEW状态的都不执行
-            !UNSAFE.compareAndSwapObject(this, runnerOffset,
-                                         null, Thread.currentThread()))
-            return false;
-        boolean ran = false;
-        int s = state;
-        try {
-            Callable&lt;V> c = callable;
-            if (c != null &amp;&amp; s == NEW) {
-                try {
-                    c.call(); // 不设置返回结果。多次执行的任务就不该有执行结果
-                    ran = true;
-                } catch (Throwable ex) {
-                    setException(ex);  // 抛出异常，修改state为EXCEPTIONAL，以后也不在执行它
-                }
-            }
-        } finally {
-            // runner must be non-null until state is settled to
-            // prevent concurrent calls to run()
-            runner = null;
-            // state must be re-read after nulling runner to prevent
-            // leaked interrupts
-            s = state;
-            if (s >= INTERRUPTING)
-                handlePossibleCancellationInterrupt(s);
-        }
-        return ran &amp;&amp; s == NEW;
-    }
- }
-
-1.2.2 总结ScheduledFutureTask 通过 period 字段判断任务类型：0 表示一次性任务，&gt;0 表示固定频率，&lt;0 表示固定延迟。
-在 run() 方法中，若任务为周期性任务，执行完当前任务后会计算下次执行时间，并将自身重新提交至基于小顶堆的 DelayedWorkQueue 中，以维持调度。
-
-基于纳秒时间精度，避免 System.currentTimeMillis() 的系统时间变动干扰。
-复用 FutureTask 的任务封装机制，增强任务调度能力。
-精简实现，不依赖额外锁，主要通过最小堆和 Delayed 接口实现调度。
-
-]]></content>
-      <categories>
-        <category>jdk</category>
-      </categories>
-      <tags>
-        <tag>多线程</tag>
       </tags>
   </entry>
   <entry>
@@ -2252,355 +2039,6 @@ static int exclusiveCount(int c) { return c &amp; EXCLUSIVE_MASK; }
       </tags>
   </entry>
   <entry>
-    <title>Spring-@Resource和@Autowired的分析</title>
-    <url>/2021-01-18/spring-resource-he-autowired-de-fen-xi/</url>
-    <content><![CDATA[
-​	从源码分析了@Resource和@Autowired的依赖创建流程和这两个注解的的异同
-
-
-Spring-@Resource和@Autowired的分析紧接上篇文章Spring-Bean的字段填充阶段相关处理器
-@Resource​	CommonAnnotationBeanPostProcessor#autowireResource部分核心源码
-if (factory instanceof AutowireCapableBeanFactory) {
-  AutowireCapableBeanFactory beanFactory = (AutowireCapableBeanFactory) factory;
-  // field依赖会构建成LookupDependencyDescriptor，required只能为true
-  DependencyDescriptor descriptor = element.getDependencyDescriptor();
-  // byType
-  // 当不设置@Resource.name字段值，以字段名作为beanName的Bean不在容器中
-  if (this.fallbackToDefaultTypeMatch &amp;&amp; element.isDefaultName &amp;&amp; !factory.containsBean(name)) {
-    autowiredBeanNames = new LinkedHashSet&lt;>();
-    // 解析依赖bean
-    resource = beanFactory.resolveDependency(descriptor, requestingBeanName, autowiredBeanNames, null);
-    if (resource == null) {
-      throw new NoSuchBeanDefinitionException(element.getLookupType(), "No resolvable resource object");
-    }
-  } else { // byName
-    resource = beanFactory.resolveBeanByName(name, descriptor);
-    autowiredBeanNames = Collections.singleton(name);
-  }
-}
-
-@Autowired​	AutowiredFieldElement#resolveFieldValue部分核心源码
-// 此时required可由我们定义，表示这个bean不再是必须存在的
-DependencyDescriptor desc = new DependencyDescriptor(field, this.required);
-desc.setContainingClass(bean.getClass());
-Set&lt;String> autowiredBeanNames = new LinkedHashSet&lt;>(1);
-Assert.state(beanFactory != null, "No BeanFactory available");
-TypeConverter typeConverter = beanFactory.getTypeConverter();
-Object value;
-try {
-  // 解析依赖bean，只有byType
-  value = beanFactory.resolveDependency(desc, beanName, autowiredBeanNames, typeConverter);
-}
-catch (BeansException ex) {
-  throw new UnsatisfiedDependencyException(null, beanName, new InjectionPoint(field), ex);
-}
-
-公共的解析源码AutowireCapableBeanFactory#resolveDependency主要流程：
-
-
-判断注入点是否标注了 @Lazy，如有，则返回懒加载代理对象；
-若标注了 @Value，解析其占位符表达式并进行类型转换；
-判断依赖类型，若是集合类型（如 List、Map、Stream 、数组等），则调用 resolveMultipleBeans 获取所有候选
-若为单个 Bean 类型，则根据类型查找候选 Bean，结合 @Qualifier、@Primary、@Priority 等注解进行筛选；
-若无匹配 Bean，是否抛出异常由 required 属性决定。
-
-
-public Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
-    @Nullable Set&lt;String> autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException {
-
-  descriptor.initParameterNameDiscovery(getParameterNameDiscoverer());
-  if (Optional.class == descriptor.getDependencyType()) { // 处理类型为Optional
-    return createOptionalDependency(descriptor, requestingBeanName);
-  }
-  else if (ObjectFactory.class == descriptor.getDependencyType() ||
-      ObjectProvider.class == descriptor.getDependencyType()) {
-    return new DependencyObjectProvider(descriptor, requestingBeanName);
-  }
-  else if (javaxInjectProviderClass == descriptor.getDependencyType()) {
-    return new Jsr330Factory().createDependencyProvider(descriptor, requestingBeanName);
-  }
-  else {
-    // 判断是否有@Lazy注解。使用了@Lazy则在这里直接创建了代理对象并返回
-    Object result = getAutowireCandidateResolver().getLazyResolutionProxyIfNecessary(
-        descriptor, requestingBeanName);
-    if (result == null) {
-      // 开始获取依赖bean
-      result = doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter);
-    }
-    return result;
-  }
-}
-
-public Object doResolveDependency(DependencyDescriptor descriptor, @Nullable String beanName,
-    @Nullable Set&lt;String> autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException {
-
-  InjectionPoint previousInjectionPoint = ConstructorResolver.setCurrentInjectionPoint(descriptor);
-  try {
-    Object shortcut = descriptor.resolveShortcut(this);
-    if (shortcut != null) {
-      return shortcut;
-    }
-
-    Class&lt;?> type = descriptor.getDependencyType();
-    // 解析@Value注解
-    Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);
-    if (value != null) {
-      if (value instanceof String) {
-        String strVal = resolveEmbeddedValue((String) value);
-        BeanDefinition bd = (beanName != null &amp;&amp; containsBean(beanName) ?
-            getMergedBeanDefinition(beanName) : null);
-        value = evaluateBeanDefinitionString(strVal, bd);
-      }
-      TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConverter());
-      try {
-        return converter.convertIfNecessary(value, type, descriptor.getTypeDescriptor());
-      }
-      catch (UnsupportedOperationException ex) {
-        // A custom TypeConverter which does not support TypeDescriptor resolution...
-        return (descriptor.getField() != null ?
-            converter.convertIfNecessary(value, type, descriptor.getField()) :
-            converter.convertIfNecessary(value, type, descriptor.getMethodParameter()));
-      }
-    }
-    // 先进行多bean解析
-    Object multipleBeans = resolveMultipleBeans(descriptor, beanName, autowiredBeanNames, typeConverter);
-    if (multipleBeans != null) { // 多bean解析出来了则直接返回
-      return multipleBeans;
-    }
-    // 将这个type所有的可能bean都解析出来
-    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, type, descriptor);
-    if (matchingBeans.isEmpty()) { // 没找到
-      if (isRequired(descriptor)) { 
-        // 如过required为true，会直接跑异常
-        // 只有@Autowired才可设置required为false
-        raiseNoMatchingBeanFound(type, descriptor.getResolvableType(), descriptor);
-      }
-      return null;
-    }
-
-    // ====== 走到这表示这个bean是单个的，需要再根据其他注解来返回一个优先级最高的bean ======
-
-    // 最终的依赖beanName
-    String autowiredBeanName;
-    // 最终的依赖bean实例
-    Object instanceCandidate;
-
-    if (matchingBeans.size() > 1) { // 存在多个候选bean
-      // 会先根据@Primary注解筛选，否则根据@Priority筛选出优先级最高的bean
-      autowiredBeanName = determineAutowireCandidate(matchingBeans, descriptor);
-      if (autowiredBeanName == null) { // 异常处理，根据required选择是否跑异常
-        if (isRequired(descriptor) || !indicatesMultipleBeans(type)) {
-          return descriptor.resolveNotUnique(descriptor.getResolvableType(), matchingBeans);
-        }
-        else {
-          return null;
-        }
-      }
-      instanceCandidate = matchingBeans.get(autowiredBeanName);
-    }
-    else { // 只有1个候选bean
-      Map.Entry&lt;String, Object> entry = matchingBeans.entrySet().iterator().next();
-      autowiredBeanName = entry.getKey();
-      instanceCandidate = entry.getValue();
-    }
-
-    if (autowiredBeanNames != null) {
-      autowiredBeanNames.add(autowiredBeanName);
-    }
-    if (instanceCandidate instanceof Class) {
-      instanceCandidate = descriptor.resolveCandidate(autowiredBeanName, type, this);
-    }
-    Object result = instanceCandidate;
-    if (result instanceof NullBean) {
-      if (isRequired(descriptor)) {
-        raiseNoMatchingBeanFound(type, descriptor.getResolvableType(), descriptor);
-      }
-      result = null;
-    }
-    if (!ClassUtils.isAssignableValue(type, result)) {
-      throw new BeanNotOfRequiredTypeException(autowiredBeanName, type, instanceCandidate.getClass());
-    }
-    return result;
-  }
-  finally {
-    ConstructorResolver.setCurrentInjectionPoint(previousInjectionPoint);
-  }
-}
-
-DefaultListableBeanFactory#resolveMultipleBeans​	支持注入类型为 Collection&lt;T&gt;、Map&lt;String, T&gt;、T[] 和 Stream&lt;T&gt; 的多 Bean 依赖。该方法会查找所有匹配的候选 Bean，按类型筛选、处理限定符（如 @Qualifier），并封装成目标集合类型返回。
-/**
-处理依赖bean的type是一个容器的情况。可能为 数组、集合、Map甚至Stream
-*/
-private Object resolveMultipleBeans(DependencyDescriptor descriptor, @Nullable String beanName,
-    @Nullable Set&lt;String> autowiredBeanNames, @Nullable TypeConverter typeConverter) {
-
-  Class&lt;?> type = descriptor.getDependencyType();
-
-  if (descriptor instanceof StreamDependencyDescriptor) { // type = Stream
-    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, type, descriptor);
-    if (autowiredBeanNames != null) {
-      autowiredBeanNames.addAll(matchingBeans.keySet());
-    }
-    Stream&lt;Object> stream = matchingBeans.keySet().stream()
-        .map(name -> descriptor.resolveCandidate(name, type, this))
-        .filter(bean -> !(bean instanceof NullBean));
-    if (((StreamDependencyDescriptor) descriptor).isOrdered()) {
-      stream = stream.sorted(adaptOrderComparator(matchingBeans));
-    }
-    return stream;
-  }
-  else if (type.isArray()) { // type = 数组
-    Class&lt;?> componentType = type.getComponentType();
-    ResolvableType resolvableType = descriptor.getResolvableType();
-    Class&lt;?> resolvedArrayType = resolvableType.resolve(type);
-    if (resolvedArrayType != type) {
-      componentType = resolvableType.getComponentType().resolve();
-    }
-    if (componentType == null) {
-      return null;
-    }
-    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, componentType,
-        new MultiElementDescriptor(descriptor));
-    if (matchingBeans.isEmpty()) {
-      return null;
-    }
-    if (autowiredBeanNames != null) {
-      autowiredBeanNames.addAll(matchingBeans.keySet());
-    }
-    TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConverter());
-    Object result = converter.convertIfNecessary(matchingBeans.values(), resolvedArrayType);
-    if (result instanceof Object[]) {
-      Comparator&lt;Object> comparator = adaptDependencyComparator(matchingBeans);
-      if (comparator != null) {
-        Arrays.sort((Object[]) result, comparator);
-      }
-    }
-    return result;
-  }
-  else if (Collection.class.isAssignableFrom(type) &amp;&amp; type.isInterface()) { // type = 集合
-    // 解析出这个bean的范型type
-    Class&lt;?> elementType = descriptor.getResolvableType().asCollection().resolveGeneric();
-    if (elementType == null) {
-      return null;
-    }
-    // 找出匹配范型type的候选bean
-    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, elementType,
-        new MultiElementDescriptor(descriptor));
-    if (matchingBeans.isEmpty()) {
-      return null;
-    }
-    if (autowiredBeanNames != null) {
-      autowiredBeanNames.addAll(matchingBeans.keySet());
-    }
-    TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConverter());
-    Object result = converter.convertIfNecessary(matchingBeans.values(), type);
-    if (result instanceof List) {
-      if (((List&lt;?>) result).size() > 1) {
-        Comparator&lt;Object> comparator = adaptDependencyComparator(matchingBeans);
-        if (comparator != null) {
-          ((List&lt;?>) result).sort(comparator);
-        }
-      }
-    }
-    return result;
-  }
-  else if (Map.class == type) {  // type = Map
-    ResolvableType mapType = descriptor.getResolvableType().asMap();
-    Class&lt;?> keyType = mapType.resolveGeneric(0);
-    if (String.class != keyType) {
-      return null;
-    }
-    // 解析出Map中value的type
-    Class&lt;?> valueType = mapType.resolveGeneric(1);
-    if (valueType == null) {
-      return null;
-    }
-    // 对value type进行bean搜索，返回
-    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, valueType,
-        new MultiElementDescriptor(descriptor));
-    if (matchingBeans.isEmpty()) {
-      return null;
-    }
-    if (autowiredBeanNames != null) {
-      autowiredBeanNames.addAll(matchingBeans.keySet());
-    }
-    return matchingBeans;
-  }
-  else {
-    return null;
-  }
-}
-
-DefaultListableBeanFactory#findAutowireCandidates​	DefaultListableBeanFactory#findAutowireCandidates 用于查找参数中 beanName（如 Bean A）所依赖的、类型为 requiredType 的所有候选 Bean（如 Bean B）。返回结果为一个 Map&lt;String, Object&gt;，其中 key 是候选 Bean 的名称，value 是对应的实例。
-​		方法内部会先在 BeanFactory 中找出所有类型匹配 requiredType 的 Bean 名称，然后根据限定注解（如 @Qualifier）等条件进行筛选。筛选通过的候选 Bean 会被递归创建并作为依赖返回。
-protected Map&lt;String, Object> findAutowireCandidates(
-    @Nullable String beanName, Class&lt;?> requiredType, DependencyDescriptor descriptor) {
-  // 找出这个type所有的beanName
-  // 内部就是遍历BeanFactory中所有的BeanDefinition，依次进行type匹配判断，在收集结果并缓存
-  String[] candidateNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
-      this, requiredType, true, descriptor.isEager());
-  Map&lt;String, Object> result = new LinkedHashMap&lt;>(candidateNames.length);
-  // 一些特殊bean的处理，比如ApplicationContext之类的bean
-  for (Map.Entry&lt;Class&lt;?>, Object> classObjectEntry : this.resolvableDependencies.entrySet()) {
-    Class&lt;?> autowiringType = classObjectEntry.getKey();
-    if (autowiringType.isAssignableFrom(requiredType)) {
-      Object autowiringValue = classObjectEntry.getValue();
-      autowiringValue = AutowireUtils.resolveAutowiringValue(autowiringValue, requiredType);
-      if (requiredType.isInstance(autowiringValue)) {
-        result.put(ObjectUtils.identityToString(autowiringValue), autowiringValue);
-        break;
-      }
-    }
-  }
-  // 依次判断每个候选beanName，看其是否有资格成为真正的目标bean
-  for (String candidate : candidateNames) {
-    // 非自引用，isAutowireCandidate最终会调用到QualifierAnnotationAutowireCandidateResolver#isAutowireCandidate方法，根据@Qualifier注解来判断是否是目标bean
-    if (!isSelfReference(beanName, candidate) &amp;&amp; isAutowireCandidate(candidate, descriptor)) { 
-      // 目标bean，会使用BeanFactory来获取这个bean。实现递归创建bean
-      addCandidateEntry(result, candidate, descriptor, requiredType);
-    }
-  }
-  if (result.isEmpty()) { // 上面的流程没找到，则进行fallback放宽条件继续找
-    boolean multiple = indicatesMultipleBeans(requiredType);
-    DependencyDescriptor fallbackDescriptor = descriptor.forFallbackMatch();
-    for (String candidate : candidateNames) {
-      if (!isSelfReference(beanName, candidate) &amp;&amp; isAutowireCandidate(candidate, fallbackDescriptor) &amp;&amp;
-          (!multiple || getAutowireCandidateResolver().hasQualifier(descriptor))) {
-        addCandidateEntry(result, candidate, descriptor, requiredType);
-      }
-    }
-    if (result.isEmpty() &amp;&amp; !multiple) { // 继续放宽条件
-      for (String candidate : candidateNames) {
-        if (isSelfReference(beanName, candidate) &amp;&amp;
-            (!(descriptor instanceof MultiElementDescriptor) || !beanName.equals(candidate)) &amp;&amp;
-            isAutowireCandidate(candidate, fallbackDescriptor)) {
-          addCandidateEntry(result, candidate, descriptor, requiredType);
-        }
-      }
-    }
-  }
-  return result;
-}
-
-两个注解总结共同点
-都支持容器类型的Bean解析（比如Stream，数组，集合，Map）
-都支持@Lazy，@Qualifier，@Value等注解
-都支持字段、方法参数
-
-不同点
-@Autowired可以设置required为false，即不强制需要这个bean。而@Resource则必须要对应的bean存在
-@Resource由javax提供，是集byName和byType为一体的注解。框架无关，属于 Java 官方对 IOC 容器的通用约定。在Spring中，当没设置@Resource的name，并且由框架解析出来的name（字段名or去掉set的方法名）不在容器中才会使用byType
-@Autowired本身只能byType，搭配@Qualifier才可实现byName
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>BeanPostProcessor</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Spring-AOP</title>
     <url>/2021-02-08/spring-aop/</url>
     <content><![CDATA[​	从源码分析了Spring AOP的实现逻辑，以及利用arthas对代理class进行反编译以更加清晰的理解源码流程
@@ -3319,8 +2757,8 @@ frozen：表示配置是否被冻结。默认为false，支持在运行时动态
         <category>Spring</category>
       </categories>
       <tags>
-        <tag>BeanPostProcessor</tag>
         <tag>AOP</tag>
+        <tag>BeanPostProcessor</tag>
       </tags>
   </entry>
   <entry>
@@ -3414,9 +2852,300 @@ Spring 通过设置 AnnotationAwareAspectJAutoProxyCreator 的最高优先级，
         <category>Spring</category>
       </categories>
       <tags>
-        <tag>BeanPostProcessor</tag>
         <tag>AOP</tag>
+        <tag>BeanPostProcessor</tag>
       </tags>
+  </entry>
+  <entry>
+    <title>Spring-Bean的Scope</title>
+    <url>/2021-06-28/spring-bean-de-scope/</url>
+    <content><![CDATA[
+​	分析了Spring Scope的作用和实现类。并从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证。重点应该关注基于代理的其他作用域Bean注册的两个BeanDefinition异同点，以及为何会注册两个BeanDefinition
+
+
+Spring-Bean的Scope​	在 Spring 中，所有组件本质上都是 Bean，虽然它们的创建方式一致，但生命周期和缓存策略并不统一。为了支持不同的使用场景，Spring 设计了 Scope（作用域）机制，来决定 Bean 实例在容器中的缓存行为。
+常见的 Scope
+通用环境
+
+
+
+singleton：默认作用域。单例bean，由Spring进行全局缓存
+prototype：很多博客翻译为多例，其实容易误导，因为session和request中的bean也算多例。翻译为原型bean更好，因为它是基于 Bean 定义模板进行实例化 的原型模式，每次获取Bean时都会创建一个新的实例（即取即创建）。因此，它不能被缓存，也不能被循环依赖
+
+
+
+
+
+web环境
+
+
+session：web环境下的缓存在Session里的bean
+
+request：web环境下的缓存在Request里的bean。意味着每次新的Request，都需要创建新的bean
+application：web环境下缓存在ServletContext里的bean。是存在于另一个容器里单例bean
+
+
+
+
+
+cloud环境
+
+
+ refresh：spring colud环境下的一种作用域，在这个作用域里的bean意味着每次环境刷新后（RefreshEvent事件触发），都需要创建新的bean，并destory以前bean。例如cloud环境下如果配置中心支持动态更改kv，每次修改kv后就出触发RefreshEvent事件
+
+
+
+
+
+Scope实现​	在 AbstractBeanFactory#doGetBean 方法中，所有非默认作用域（非 singleton&#x2F;prototype）的 Bean 获取，均通过 Scope 接口实现支持。每种运行环境对应一个 Scope 实例，由它统一负责该环境下 Bean 的 创建、缓存与销毁。Spring提供的常见Scope实现如下
+
+SessionScope：session域的实现
+
+RequestScope：request域的实现
+
+ServletContextScope：application域的实现
+
+RefreshScope：refresh域的实现
+
+SimpleThreadScope：用ThreadLocal实现的Bean的缓存域。即线程可见Bean
+
+SimpleTransactionScope：事务作用域，将 Bean 缓存绑定到当前事务，内部存储在 TransactionSynchronizationManager.resources 中
+
+
+session域主要逻辑为获取当前request的HttpSession，从内部中获取bean，没有则再实例化bean并缓存到当前Session里
+public class SessionScope extends AbstractRequestAttributesScope {
+
+    @Override
+    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
+        Object mutex = RequestContextHolder.currentRequestAttributes().getSessionMutex();
+        synchronized (mutex) { // 加锁，避免多线程同时创建bean
+            return super.get(name, objectFactory);
+        }
+    }
+
+    // 父类中的AbstractRequestAttributesScope方法
+    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
+        RequestAttributes attributes = RequestContextHolder.currentRequestAttributes();
+        // 对于session域，是通过HttpSession#getAttribute方法操作的
+        Object scopedObject = attributes.getAttribute(name, getScope());
+        if (scopedObject == null) {
+            // 创建bean
+            scopedObject = objectFactory.getObject();
+            attributes.setAttribute(name, scopedObject, getScope());
+            Object retrievedObject = attributes.getAttribute(name, getScope());
+            if (retrievedObject != null) {
+                scopedObject = retrievedObject;
+            }
+        }
+        return scopedObject;
+    }
+
+}
+
+@Scope注解用于定义 Spring 容器中 Bean 的作用域（Scope）。该注解通常配合 @Component 或 @Bean 使用，控制 Bean 在容器中的生命周期及缓存策略
+
+value：指定当前 Bean 的作用域名称，可以使用我们自定义的scope。Spring解析时不会校验
+scopeName：同value
+proxyMode：指定当前 Bean 是否需要通过代理方式注入。枚举类型为 ScopedProxyMode，常用值包括：
+DEFAULT（默认值）：等价于 NO
+NO：不使用代理。意味着当前Bean不能被其他singleton bean给依赖注入
+INTERFACES：JDK 动态代理，即接口代理
+TARGET_CLASS：CGLIB 代理，即继承代理
+
+
+
+Scope代理​	还有个重要的问题，Spring 中非 singleton 作用域的 Bean 无法直接注入到 singleton Bean 中，原因在于singleton Bean一旦被创建，其内部的依赖也随之固定。而诸如 request、session 等作用域下的 Bean 生命周期较短，其实例在运行时可能会动态变化。
+​	所以为了解决这种作用域不一致带来的注入问题，Spring 提供了 作用域代理机制（Scoped Proxy）。核心思想为将实际的Scope Bean 包装成一个代理对象，注入到 singleton Bean 中；每次通过该代理访问时，都会根据当前上下文（如当前request或session）动态获取真实的目标 Bean。这样，从开发者视角来看，这个 Bean 就像是 singleton 一样稳定可用，但实际底层访问的却是随作用域动态变化的目标实例。
+ScopedProxyUtils​	是 Spring 在注册特定作用域（如 request、session）BeanDefinition 之前，用于创建作用域代理的工具类。它的核心作用是：在注册 BeanDefinition 前，将其包装成作用域代理，从而允许非 singleton Bean 被注入到 singleton Bean 中。其最终会在容器中注册一下两个 Bean
+
+代理 Bean（Scoped Proxy）
+
+类型为 ScopedProxyFactoryBean，作用域为 singleton
+Bean 名为原始 Bean 的名称（例如 userService）
+负责在运行时根据当前作用域动态获取实际 Bean 实例
+保留原始 Bean 的自动注入相关属性（如 @Primary、限定符），因此它才是被注入到其他 Bean 中的“主 Bean”
+
+  目标 Bean（Target Bean）
+
+Bean 名为 &quot;scopedTarget.&quot; + 原始名称（如 scopedTarget.userService）
+保持原有的作用域定义（如 request、session 等）
+被设置为不可自动注入（autowireCandidate = false）。都注入代理bean
+
+
+
+核心源码public abstract class ScopedProxyUtils {
+
+    // 代理目标 Bean 的命名前缀
+    private static final String TARGET_NAME_PREFIX = "scopedTarget.";
+
+    private static final int TARGET_NAME_PREFIX_LENGTH = TARGET_NAME_PREFIX.length();
+
+    /**
+     * 创建作用域代理：将一个具有非单例作用域的 Bean 包装为一个 ScopedProxyFactoryBean，
+     * 用于在注入到 singleton Bean 时仍保持作用域语义。
+     *
+     * 实现原理：将原始 Bean 注册为一个带前缀的新 Bean，然后为原始 Bean 名称注册一个代理 Bean，
+     * 每次访问这个代理 Bean 时，都会动态地从容器中获取当前作用域下的真实 Bean。
+     */
+    public static BeanDefinitionHolder createScopedProxy(BeanDefinitionHolder definition,
+            BeanDefinitionRegistry registry, boolean proxyTargetClass) {
+
+        String originalBeanName = definition.getBeanName();
+        BeanDefinition targetDefinition = definition.getBeanDefinition();
+        // 原bean修改后的目标beanName： scopedTarget. + 原beanName
+        String targetBeanName = getTargetBeanName(originalBeanName);
+
+        // 创建 ScopedProxyFactoryBean 的定义，用于代理原始 Bean
+        RootBeanDefinition proxyDefinition = new RootBeanDefinition(ScopedProxyFactoryBean.class);
+        proxyDefinition.setDecoratedDefinition(new BeanDefinitionHolder(targetDefinition, targetBeanName));
+        proxyDefinition.setOriginatingBeanDefinition(targetDefinition);
+        proxyDefinition.setSource(definition.getSource());
+        proxyDefinition.setRole(targetDefinition.getRole());
+
+        // 设置代理bean中targetBeanName（用来在BeanFactory中原始bean）
+        proxyDefinition.getPropertyValues().add("targetBeanName", targetBeanName);
+        if (proxyTargetClass) { // cglib proxy
+            targetDefinition.setAttribute(AutoProxyUtils.PRESERVE_TARGET_CLASS_ATTRIBUTE, Boolean.TRUE);
+        } else { // jdk proxy
+            proxyDefinition.getPropertyValues().add("proxyTargetClass", Boolean.FALSE);
+        }
+
+        // 复制原始 Bean 的自动注入相关属性
+        proxyDefinition.setAutowireCandidate(targetDefinition.isAutowireCandidate());
+        proxyDefinition.setPrimary(targetDefinition.isPrimary());
+        if (targetDefinition instanceof AbstractBeanDefinition) {
+            proxyDefinition.copyQualifiersFrom((AbstractBeanDefinition) targetDefinition);
+        }
+
+        // 将原始 Bean 设为非primary且不可自动注入（避免与代理冲突，这样Spring注册的这个bean始终是代理bean）
+        targetDefinition.setAutowireCandidate(false);
+        targetDefinition.setPrimary(false);
+
+        // 注册原bean到容器中，此时beanName已被替换
+        registry.registerBeanDefinition(targetBeanName, targetDefinition);
+
+        // 返回代理 Bean 的定义（仍然使用原始Bean的beanName）
+        return new BeanDefinitionHolder(proxyDefinition, originalBeanName, definition.getAliases());
+    }
+
+}
+
+ScopedProxyFactoryBean​	它构建了一个用于作用域代理的单例增强 Bean，这个bean具有如下特点
+
+**TargetSource 为 SimpleBeanTargetSource**：每次方法调用时，动态从 BeanFactory 获取目标 bean 实例（不做任何缓存）
+代理类实现了目标 bean 的所有接口和类：对外表现为原始 bean，可被其他 bean 正常依赖和注入（作为主 bean 使用）。
+实现了 AopInfrastructureBean 接口：标记为基础设施类，避免再次被 AOP、事务、异步等机制增强。
+**仅使用一个拦截器：DelegatingIntroductionInterceptor**：
+对被“引入”的接口方法（如 ScopedObject#getTargetObject()）进行特殊处理；
+对其他方法则调用 MethodInvocation#proceed()，由原始 bean 执行具体逻辑。
+
+
+
+核心源码public class ScopedProxyFactoryBean extends ProxyConfig
+        implements FactoryBean&lt;Object>, BeanFactoryAware, AopInfrastructureBean {
+    public void setBeanFactory(BeanFactory beanFactory) {
+        if (!(beanFactory instanceof ConfigurableBeanFactory)) {
+            throw new IllegalStateException("Not running in a ConfigurableBeanFactory: " + beanFactory);
+        }
+        ConfigurableBeanFactory cbf = (ConfigurableBeanFactory) beanFactory;
+
+        // 将 BeanFactory 注入目标作用域对象（这样才有能力从BeanFactory中获取目标作用域对象）
+        this.scopedTargetSource.setBeanFactory(beanFactory);
+
+        ProxyFactory pf = new ProxyFactory();
+        pf.copyFrom(this);
+        // 设置代理目标为 scopedTargetSource（默认为SimpleBeanTargetSource，其获取目标对象每次都调用BeanFactory#getBean）
+        // 且scopedTargetSource的getTargetClass()方法会解析并返回原始bean的class，用于代理增强
+        pf.setTargetSource(this.scopedTargetSource);
+
+        Assert.notNull(this.targetBeanName, "Property 'targetBeanName' is required");
+        Class&lt;?> beanType = beanFactory.getType(this.targetBeanName);
+        if (beanType == null) {
+            throw new IllegalStateException("Cannot create scoped proxy for bean '" + this.targetBeanName +
+                    "': Target type could not be determined at the time of proxy creation.");
+        }
+        // jdk代理判断
+        if (!isProxyTargetClass() || beanType.isInterface() || Modifier.isPrivate(beanType.getModifiers())) {
+            pf.setInterfaces(ClassUtils.getAllInterfacesForClass(beanType, cbf.getBeanClassLoader()));
+        }
+
+        // Add an introduction that implements only the methods on ScopedObject.
+        ScopedObject scopedObject = new DefaultScopedObject(cbf, this.scopedTargetSource.getTargetBeanName());
+        pf.addAdvice(new DelegatingIntroductionInterceptor(scopedObject));
+
+        // 设置该bean不会被其他自动代理 代理了
+        /*
+         * 为什么会这么设置？
+         * 这个bean以及是个代理增强bean了，它所需要增强的地方也是唯一的地方就是找到目标scope里真实的bean，并将方法的调用行为转移到目标作用域的真实的bean中去
+         *
+         * 例：session域的bean，该bean被自动注入的就应该是这个代理bean，这个bean存在的目的也只是找到session域
+         * 里对应的真实bean，然后调用该bean的方法全走session域的真实bean的方法，且由这个真实bean来进行其他自动代理的增强
+         */
+        pf.addInterface(AopInfrastructureBean.class);
+
+        // 创建好代理对象
+        this.proxy = pf.getProxy(cbf.getBeanClassLoader());
+    }
+
+    /**
+     * 单例
+     */
+    public boolean isSingleton() {
+        return true;
+    }
+}
+
+arthas验证测试类package site.shanzhao.config;
+
+@Component
+@SessionScope
+public class SessionScopeDemo {
+    
+}
+
+class信息查询用sc -d site.shanzhao.config.SessionScopeDemo命令，我这里只展示了增强的class，重点观察到
+
+父类为site.shanzhao.config.SessionScopeDemo
+相比普通AOP，多增加的接口有：
+org.springframework.aop.scope.ScopedObject
+org.springframework.aop.framework.AopInfrastructureBean
+
+
+
+ class-info        site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ code-source       /Users/reef/IdeaProjects/soil/target/classes/
+ name              site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ isInterface       false
+ isAnnotation      false
+ isEnum            false
+ isAnonymousClass  false
+ isArray           false
+ isLocalClass      false
+ isMemberClass     false
+ isPrimitive       false
+ isSynthetic       false
+ simple-name       SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ modifier          public
+ annotation
+ interfaces        org.springframework.aop.scope.ScopedObject,java.io.Serializable,org.springframework.aop.framework.AopInfrastructureBean,org.springframework.aop.SpringProxy,org.springframework.aop.framework.
+                   Advised,org.springframework.cglib.proxy.Factory
+ super-class       +-site.shanzhao.config.SessionScopeDemo
+                     +-java.lang.Object
+ class-loader      +-jdk.internal.loader.ClassLoaders$AppClassLoader@311d617d
+                     +-jdk.internal.loader.ClassLoaders$PlatformClassLoader@1b4ae4e0
+ classLoaderHash   311d617d
+
+ognl查询beanName# 使用ApplicationContext.getBeanNamesForType()方法，可知有两个SessionScopeDemo class的BeanDefinition
+[arthas@35578]$ ognl "@site.shanzhao.util.ApplicationContextUtils@applicationContext.getBeanNamesForType(@site.shanzhao.config.SessionScopeDemo@class)"
+@String[][
+    @String[scopedTarget.sessionScopeDemo],
+    @String[sessionScopeDemo],
+]
+
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
   </entry>
   <entry>
     <title>Spring-Bean初始化</title>
@@ -3758,6 +3487,636 @@ return wrappedBean;
       </tags>
   </entry>
   <entry>
+    <title>Java源码篇-Future</title>
+    <url>/2020-05-09/java-yuan-ma-pian-future/</url>
+    <content><![CDATA[
+​	jdk中Future接口实现类相关源码解析。包括FutureTask和 ScheduledFutureTask
+ 
+
+1 FutureFuture接口表示一个异步操作的结果，即未来的结果，同时实现了 Runnable 和 Future 接口。提供了如下的一些基础方法可获取、判断和取消等操作
+
+get()：阻塞直到计算完成并返回结果（支持超时设置）
+
+isDone()：非阻塞检查任务是否完成（成功&#x2F;失败&#x2F;取消）
+
+cancel(boolean mayInterruptIfRunning)：尝试取消任务，参数决定是否中断执行中的线程
+
+isCancelled()：判断任务是否被取消
+
+
+其实现类为FutureTask，就是用它来实现Callable接口的功能
+
+1.1 FutureTask1.1.1 重点字段和方法public class FutureTask&lt;V> implements RunnableFuture&lt;V> {
+    // state字段，表示了当前Future的状态，取值为如下字段
+    private volatile int state;
+
+    private static final int NEW          = 0; // 初始状态，新建
+    private static final int COMPLETING   = 1; // 正在结束
+    private static final int NORMAL       = 2; // 正常执行完毕
+    private static final int EXCEPTIONAL  = 3; // 异常执行完毕
+    private static final int CANCELLED    = 4; // 前一个状态必须是NEW，已取消（未中断）
+    private static final int INTERRUPTING = 5; // 前一个状态必须是NEW，正在中断（中断）
+    private static final int INTERRUPTED  = 6; // 取消成功的才可以设置，中断完成（中断）
+
+    // 待运行的Callable任务
+    private Callable&lt;V> callable;
+    // Callable执行的结果。如果出现执行的过程中异常，则保存的是异常对象
+    private Object outcome;
+    // 运行Callable#call方法的线程（也即是运行业务代码的线程）
+    private volatile Thread runner;
+    // 当这里面的Callable还未执行完，却有其他线程调用Future#get()方法，
+    // 	会将其他线程阻塞并构造为等待节点，维持一个链表结构，以便在Callable执行完毕后唤醒并回调
+    private volatile WaitNode waiters;
+
+
+    public void run() {
+        if (state != NEW ||
+            !UNSAFE.compareAndSwapObject(this, runnerOffset,
+                                         null, Thread.currentThread()))
+            return;
+        try {
+            Callable&lt;V> c = callable;
+            if (c != null &amp;&amp; state == NEW) {
+                V result;
+                boolean ran;
+                try {
+                    // 执行业务方法
+                    result = c.call();
+                    ran = true;
+                } catch (Throwable ex) {
+                    result = null;
+                    ran = false;
+                    setException(ex); // 异常结束，将状态设为EXCEPTIONAL，如果等待队列有节点，则唤醒对应的线程
+                }
+                if (ran)
+                    set(result); // 正常结束，将状态设为NORMAL，如果等待队列有节点，则唤醒对应的线程
+            }
+        } finally {
+            runner = null;
+            int s = state;
+            if (s >= INTERRUPTING)
+                handlePossibleCancellationInterrupt(s);
+        }
+    }
+    // 阻塞获取
+    public V get() throws InterruptedException, ExecutionException {
+        int s = state;
+        if (s &lt;= COMPLETING) // 还未完全结束Callabke，进入等待
+            s = awaitDone(false, 0L);
+        return report(s);
+    }
+    // 根据state判断是否需要阻塞并做对于的事
+    private int awaitDone(boolean timed, long nanos)
+        throws InterruptedException {
+        final long deadline = timed ? System.nanoTime() + nanos : 0L;
+        WaitNode q = null;
+        boolean queued = false;
+        for (;;) {
+            if (Thread.interrupted()) { // 当前线程支持响应中断
+                removeWaiter(q);
+                throw new InterruptedException();
+            }
+
+            int s = state;
+            if (s > COMPLETING) { // Callable运行完毕，且result已经设置完毕
+                if (q != null)
+                    q.thread = null;
+                return s;
+            }
+            // 进入到以下分支，就代表Callable还未完全执行完毕
+
+            else if (s == COMPLETING) // cannot time out yet  Callable运行完毕，但正在设置result，让出执行时间，等待下次判断
+                Thread.yield();
+            else if (q == null) // 第一次循环，构造等待节点
+                q = new WaitNode();
+            else if (!queued) // 还未加入等待队列，则将节点加入到等待队列中
+                queued = UNSAFE.compareAndSwapObject(this, waitersOffset,
+                                                     q.next = waiters, q);
+            else if (timed) { // 是否运行超时判断
+                nanos = deadline - System.nanoTime();
+                if (nanos &lt;= 0L) {
+                    removeWaiter(q);
+                    return state;
+                }
+                LockSupport.parkNanos(this, nanos);
+            }
+            else // 暂停当前线程，等待任务执行完毕的唤醒
+                LockSupport.park(this);
+        }
+    }
+    // 任务执行完毕，唤醒等待队列的所有节点
+    private void finishCompletion() {
+        // assert state > COMPLETING;
+        for (WaitNode q; (q = waiters) != null;) {
+            if (UNSAFE.compareAndSwapObject(this, waitersOffset, q, null)) {
+                for (;;) {
+                    Thread t = q.thread;
+                    if (t != null) {
+                        q.thread = null;
+                        LockSupport.unpark(t);
+                    }
+                    WaitNode next = q.next;
+                    if (next == null)
+                        break;
+                    q.next = null; // unlink to help gc
+                    q = next;
+                }
+                break;
+            }
+        }
+
+        done();
+
+        callable = null;        // to reduce footprint
+    }
+}
+
+1.1.2 总结
+FutureTask根据内部的state字段来判断当前任务运行到了哪个阶段并作出对于的抉择，也使用volatile修饰保证它在多线程环境下的可见性。
+state状态流转：
+NEW→COMPLETING→NORMAL（成功）
+NEW→COMPLETING→EXCEPTIONAL（失败）
+NEW→CANCELLED&#x2F;INTERRUPTED（取消）
+
+
+
+
+如果想获取任务执行的结果，要使用get来获取结果，get是个阻塞的方法。当任务还未执行完毕时，会将调用get的方法阻塞并构造成WaitNode，再通过内部的next字段链接下一个WaitNode，形成一个链表结构。当任务执行完毕后，内部调用的finishCompletion方法会判断等待链表是否为空，不为空就代表有线程在获取结果时被阻塞了，这时唤醒阻塞队列的所有线程，最终，调用get方法的线程返回结果。即使用 WaitNode 链表 + CAS 操作管理阻塞线程，避免显式锁开销
+只会允许任务执行一次，状态不可逆转
+
+1.2 ScheduledFutureTask​	ScheduledFutureTask继承了FutureTask，当向定时任务线程池投递任务时（Runnable或Callable），都会将其封装为ScheduledFutureTask
+1.2.1 重点字段和方法 private class ScheduledFutureTask&lt;V>
+            extends FutureTask&lt;V> implements RunnableScheduledFuture&lt;V> {
+     /** 
+     * 当前任务的id（自增的），代表了进入队列的顺序 &lt;br/>
+     * 当两个定时任务下次执行时间一致时，sequenceNumber越小就会越早执行
+     */
+    private final long sequenceNumber;
+    // 下次执行当前任务的纳秒时间戳
+    private long time;
+
+    /**
+     * 执行定时任务的纳秒间隔时间
+     * 大于0：代表固定的频率，不受任务的执行所花费的时间影响
+     * 等于0：代表不是一个重复的任务（只会执行一次
+     * 小于0：代表固定的时间间隔，基于任务执行完毕后的时间计算。（任务执行完后再基于当前时间计算下次执行时间）
+     */
+    private final long period;
+    // 当前任务在数组中的索引
+    int heapIndex;
+
+    public long getDelay(TimeUnit unit) {
+        return unit.convert(time - now(), NANOSECONDS);
+    }
+    // 比较方法，决定了放入数组的位置
+    public int compareTo(Delayed other) {
+        if (other == this) // compare zero if same object
+            return 0;
+        if (other instanceof ScheduledFutureTask) {
+            ScheduledFutureTask&lt;?> x = (ScheduledFutureTask&lt;?>)other;
+            long diff = time - x.time;
+            if (diff &lt; 0)
+                return -1;
+            else if (diff > 0) // 当前任务的下次执行时间更长，返回正数
+                return 1;
+            else if (sequenceNumber &lt; x.sequenceNumber)
+                return -1;
+            else
+                return 1;
+        }
+        long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS);
+        return (diff &lt; 0) ? -1 : (diff > 0) ? 1 : 0;
+    }
+
+    /**
+     * false: 代表当前任务为一次性任务
+     * true: 定时任务
+     */
+    public boolean isPeriodic() {
+        return period != 0;
+    }
+    // 当前任务执行完毕后，用来计算下次执行时间
+    private void setNextRunTime() {
+        long p = period;
+        // p为两次执行时间的时间间隔的纳秒值
+        if (p > 0) // p大于0，即为固定时间执行的任务，基于初始运行时间计算下一次的执行时间
+            time += p;
+        else // p小于0，为基于完成任务的时间来执行，基于任务运行完的时间，来计算出下一次的执行时间
+            time = triggerTime(-p);
+    }
+    // 主方法，运行当前定时任务
+    public void run() {
+        boolean periodic = isPeriodic();
+        if (!canRunInCurrentRunState(periodic))
+            cancel(false);
+        else if (!periodic) // 非定时任务，当作普通任务直接调用FutureTask的run方法运行
+            ScheduledFutureTask.super.run();
+        else if (ScheduledFutureTask.super.runAndReset()) { // 运行定时任务，且运行成功（没抛异常）
+            setNextRunTime(); // 设置下一次执行时间
+            reExecutePeriodic(outerTask); // 再把当前任务重新入队列
+        }
+    }
+    /**
+      父类的FutureTask中的方法，运行并重置状态，用于任务的多次执行 
+         * 正常执行时：不会修改运行状态（也就是说这个操作不会修改state字段值，保持初始值，以支持重复执行）。
+         * 出现异常时：还是将state设为EXCEPTIONAL，也就是说一个定时任务要是抛出了异常，之后就不会再执行它了
+         */
+    protected boolean runAndReset() {
+        if (state != NEW || // 不为NEW状态的都不执行
+            !UNSAFE.compareAndSwapObject(this, runnerOffset,
+                                         null, Thread.currentThread()))
+            return false;
+        boolean ran = false;
+        int s = state;
+        try {
+            Callable&lt;V> c = callable;
+            if (c != null &amp;&amp; s == NEW) {
+                try {
+                    c.call(); // 不设置返回结果。多次执行的任务就不该有执行结果
+                    ran = true;
+                } catch (Throwable ex) {
+                    setException(ex);  // 抛出异常，修改state为EXCEPTIONAL，以后也不在执行它
+                }
+            }
+        } finally {
+            // runner must be non-null until state is settled to
+            // prevent concurrent calls to run()
+            runner = null;
+            // state must be re-read after nulling runner to prevent
+            // leaked interrupts
+            s = state;
+            if (s >= INTERRUPTING)
+                handlePossibleCancellationInterrupt(s);
+        }
+        return ran &amp;&amp; s == NEW;
+    }
+ }
+
+1.2.2 总结ScheduledFutureTask 通过 period 字段判断任务类型：0 表示一次性任务，&gt;0 表示固定频率，&lt;0 表示固定延迟。
+在 run() 方法中，若任务为周期性任务，执行完当前任务后会计算下次执行时间，并将自身重新提交至基于小顶堆的 DelayedWorkQueue 中，以维持调度。
+
+基于纳秒时间精度，避免 System.currentTimeMillis() 的系统时间变动干扰。
+复用 FutureTask 的任务封装机制，增强任务调度能力。
+精简实现，不依赖额外锁，主要通过最小堆和 Delayed 接口实现调度。
+
+]]></content>
+      <categories>
+        <category>jdk</category>
+      </categories>
+      <tags>
+        <tag>多线程</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Spring-@Resource和@Autowired的分析</title>
+    <url>/2021-01-18/spring-resource-he-autowired-de-fen-xi/</url>
+    <content><![CDATA[
+​	从源码分析了@Resource和@Autowired的依赖创建流程和这两个注解的的异同
+
+
+Spring-@Resource和@Autowired的分析紧接上篇文章Spring-Bean的字段填充阶段相关处理器
+@Resource​	CommonAnnotationBeanPostProcessor#autowireResource部分核心源码
+if (factory instanceof AutowireCapableBeanFactory) {
+  AutowireCapableBeanFactory beanFactory = (AutowireCapableBeanFactory) factory;
+  // field依赖会构建成LookupDependencyDescriptor，required只能为true
+  DependencyDescriptor descriptor = element.getDependencyDescriptor();
+  // byType
+  // 当不设置@Resource.name字段值，以字段名作为beanName的Bean不在容器中
+  if (this.fallbackToDefaultTypeMatch &amp;&amp; element.isDefaultName &amp;&amp; !factory.containsBean(name)) {
+    autowiredBeanNames = new LinkedHashSet&lt;>();
+    // 解析依赖bean
+    resource = beanFactory.resolveDependency(descriptor, requestingBeanName, autowiredBeanNames, null);
+    if (resource == null) {
+      throw new NoSuchBeanDefinitionException(element.getLookupType(), "No resolvable resource object");
+    }
+  } else { // byName
+    resource = beanFactory.resolveBeanByName(name, descriptor);
+    autowiredBeanNames = Collections.singleton(name);
+  }
+}
+
+@Autowired​	AutowiredFieldElement#resolveFieldValue部分核心源码
+// 此时required可由我们定义，表示这个bean不再是必须存在的
+DependencyDescriptor desc = new DependencyDescriptor(field, this.required);
+desc.setContainingClass(bean.getClass());
+Set&lt;String> autowiredBeanNames = new LinkedHashSet&lt;>(1);
+Assert.state(beanFactory != null, "No BeanFactory available");
+TypeConverter typeConverter = beanFactory.getTypeConverter();
+Object value;
+try {
+  // 解析依赖bean，只有byType
+  value = beanFactory.resolveDependency(desc, beanName, autowiredBeanNames, typeConverter);
+}
+catch (BeansException ex) {
+  throw new UnsatisfiedDependencyException(null, beanName, new InjectionPoint(field), ex);
+}
+
+公共的解析源码AutowireCapableBeanFactory#resolveDependency主要流程：
+
+
+判断注入点是否标注了 @Lazy，如有，则返回懒加载代理对象；
+若标注了 @Value，解析其占位符表达式并进行类型转换；
+判断依赖类型，若是集合类型（如 List、Map、Stream 、数组等），则调用 resolveMultipleBeans 获取所有候选
+若为单个 Bean 类型，则根据类型查找候选 Bean，结合 @Qualifier、@Primary、@Priority 等注解进行筛选；
+若无匹配 Bean，是否抛出异常由 required 属性决定。
+
+
+public Object resolveDependency(DependencyDescriptor descriptor, @Nullable String requestingBeanName,
+    @Nullable Set&lt;String> autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException {
+
+  descriptor.initParameterNameDiscovery(getParameterNameDiscoverer());
+  if (Optional.class == descriptor.getDependencyType()) { // 处理类型为Optional
+    return createOptionalDependency(descriptor, requestingBeanName);
+  }
+  else if (ObjectFactory.class == descriptor.getDependencyType() ||
+      ObjectProvider.class == descriptor.getDependencyType()) {
+    return new DependencyObjectProvider(descriptor, requestingBeanName);
+  }
+  else if (javaxInjectProviderClass == descriptor.getDependencyType()) {
+    return new Jsr330Factory().createDependencyProvider(descriptor, requestingBeanName);
+  }
+  else {
+    // 判断是否有@Lazy注解。使用了@Lazy则在这里直接创建了代理对象并返回
+    Object result = getAutowireCandidateResolver().getLazyResolutionProxyIfNecessary(
+        descriptor, requestingBeanName);
+    if (result == null) {
+      // 开始获取依赖bean
+      result = doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter);
+    }
+    return result;
+  }
+}
+
+public Object doResolveDependency(DependencyDescriptor descriptor, @Nullable String beanName,
+    @Nullable Set&lt;String> autowiredBeanNames, @Nullable TypeConverter typeConverter) throws BeansException {
+
+  InjectionPoint previousInjectionPoint = ConstructorResolver.setCurrentInjectionPoint(descriptor);
+  try {
+    Object shortcut = descriptor.resolveShortcut(this);
+    if (shortcut != null) {
+      return shortcut;
+    }
+
+    Class&lt;?> type = descriptor.getDependencyType();
+    // 解析@Value注解
+    Object value = getAutowireCandidateResolver().getSuggestedValue(descriptor);
+    if (value != null) {
+      if (value instanceof String) {
+        String strVal = resolveEmbeddedValue((String) value);
+        BeanDefinition bd = (beanName != null &amp;&amp; containsBean(beanName) ?
+            getMergedBeanDefinition(beanName) : null);
+        value = evaluateBeanDefinitionString(strVal, bd);
+      }
+      TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConverter());
+      try {
+        return converter.convertIfNecessary(value, type, descriptor.getTypeDescriptor());
+      }
+      catch (UnsupportedOperationException ex) {
+        // A custom TypeConverter which does not support TypeDescriptor resolution...
+        return (descriptor.getField() != null ?
+            converter.convertIfNecessary(value, type, descriptor.getField()) :
+            converter.convertIfNecessary(value, type, descriptor.getMethodParameter()));
+      }
+    }
+    // 先进行多bean解析
+    Object multipleBeans = resolveMultipleBeans(descriptor, beanName, autowiredBeanNames, typeConverter);
+    if (multipleBeans != null) { // 多bean解析出来了则直接返回
+      return multipleBeans;
+    }
+    // 将这个type所有的可能bean都解析出来
+    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, type, descriptor);
+    if (matchingBeans.isEmpty()) { // 没找到
+      if (isRequired(descriptor)) { 
+        // 如过required为true，会直接跑异常
+        // 只有@Autowired才可设置required为false
+        raiseNoMatchingBeanFound(type, descriptor.getResolvableType(), descriptor);
+      }
+      return null;
+    }
+
+    // ====== 走到这表示这个bean是单个的，需要再根据其他注解来返回一个优先级最高的bean ======
+
+    // 最终的依赖beanName
+    String autowiredBeanName;
+    // 最终的依赖bean实例
+    Object instanceCandidate;
+
+    if (matchingBeans.size() > 1) { // 存在多个候选bean
+      // 会先根据@Primary注解筛选，否则根据@Priority筛选出优先级最高的bean
+      autowiredBeanName = determineAutowireCandidate(matchingBeans, descriptor);
+      if (autowiredBeanName == null) { // 异常处理，根据required选择是否跑异常
+        if (isRequired(descriptor) || !indicatesMultipleBeans(type)) {
+          return descriptor.resolveNotUnique(descriptor.getResolvableType(), matchingBeans);
+        }
+        else {
+          return null;
+        }
+      }
+      instanceCandidate = matchingBeans.get(autowiredBeanName);
+    }
+    else { // 只有1个候选bean
+      Map.Entry&lt;String, Object> entry = matchingBeans.entrySet().iterator().next();
+      autowiredBeanName = entry.getKey();
+      instanceCandidate = entry.getValue();
+    }
+
+    if (autowiredBeanNames != null) {
+      autowiredBeanNames.add(autowiredBeanName);
+    }
+    if (instanceCandidate instanceof Class) {
+      instanceCandidate = descriptor.resolveCandidate(autowiredBeanName, type, this);
+    }
+    Object result = instanceCandidate;
+    if (result instanceof NullBean) {
+      if (isRequired(descriptor)) {
+        raiseNoMatchingBeanFound(type, descriptor.getResolvableType(), descriptor);
+      }
+      result = null;
+    }
+    if (!ClassUtils.isAssignableValue(type, result)) {
+      throw new BeanNotOfRequiredTypeException(autowiredBeanName, type, instanceCandidate.getClass());
+    }
+    return result;
+  }
+  finally {
+    ConstructorResolver.setCurrentInjectionPoint(previousInjectionPoint);
+  }
+}
+
+DefaultListableBeanFactory#resolveMultipleBeans​	支持注入类型为 Collection&lt;T&gt;、Map&lt;String, T&gt;、T[] 和 Stream&lt;T&gt; 的多 Bean 依赖。该方法会查找所有匹配的候选 Bean，按类型筛选、处理限定符（如 @Qualifier），并封装成目标集合类型返回。
+/**
+处理依赖bean的type是一个容器的情况。可能为 数组、集合、Map甚至Stream
+*/
+private Object resolveMultipleBeans(DependencyDescriptor descriptor, @Nullable String beanName,
+    @Nullable Set&lt;String> autowiredBeanNames, @Nullable TypeConverter typeConverter) {
+
+  Class&lt;?> type = descriptor.getDependencyType();
+
+  if (descriptor instanceof StreamDependencyDescriptor) { // type = Stream
+    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, type, descriptor);
+    if (autowiredBeanNames != null) {
+      autowiredBeanNames.addAll(matchingBeans.keySet());
+    }
+    Stream&lt;Object> stream = matchingBeans.keySet().stream()
+        .map(name -> descriptor.resolveCandidate(name, type, this))
+        .filter(bean -> !(bean instanceof NullBean));
+    if (((StreamDependencyDescriptor) descriptor).isOrdered()) {
+      stream = stream.sorted(adaptOrderComparator(matchingBeans));
+    }
+    return stream;
+  }
+  else if (type.isArray()) { // type = 数组
+    Class&lt;?> componentType = type.getComponentType();
+    ResolvableType resolvableType = descriptor.getResolvableType();
+    Class&lt;?> resolvedArrayType = resolvableType.resolve(type);
+    if (resolvedArrayType != type) {
+      componentType = resolvableType.getComponentType().resolve();
+    }
+    if (componentType == null) {
+      return null;
+    }
+    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, componentType,
+        new MultiElementDescriptor(descriptor));
+    if (matchingBeans.isEmpty()) {
+      return null;
+    }
+    if (autowiredBeanNames != null) {
+      autowiredBeanNames.addAll(matchingBeans.keySet());
+    }
+    TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConverter());
+    Object result = converter.convertIfNecessary(matchingBeans.values(), resolvedArrayType);
+    if (result instanceof Object[]) {
+      Comparator&lt;Object> comparator = adaptDependencyComparator(matchingBeans);
+      if (comparator != null) {
+        Arrays.sort((Object[]) result, comparator);
+      }
+    }
+    return result;
+  }
+  else if (Collection.class.isAssignableFrom(type) &amp;&amp; type.isInterface()) { // type = 集合
+    // 解析出这个bean的范型type
+    Class&lt;?> elementType = descriptor.getResolvableType().asCollection().resolveGeneric();
+    if (elementType == null) {
+      return null;
+    }
+    // 找出匹配范型type的候选bean
+    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, elementType,
+        new MultiElementDescriptor(descriptor));
+    if (matchingBeans.isEmpty()) {
+      return null;
+    }
+    if (autowiredBeanNames != null) {
+      autowiredBeanNames.addAll(matchingBeans.keySet());
+    }
+    TypeConverter converter = (typeConverter != null ? typeConverter : getTypeConverter());
+    Object result = converter.convertIfNecessary(matchingBeans.values(), type);
+    if (result instanceof List) {
+      if (((List&lt;?>) result).size() > 1) {
+        Comparator&lt;Object> comparator = adaptDependencyComparator(matchingBeans);
+        if (comparator != null) {
+          ((List&lt;?>) result).sort(comparator);
+        }
+      }
+    }
+    return result;
+  }
+  else if (Map.class == type) {  // type = Map
+    ResolvableType mapType = descriptor.getResolvableType().asMap();
+    Class&lt;?> keyType = mapType.resolveGeneric(0);
+    if (String.class != keyType) {
+      return null;
+    }
+    // 解析出Map中value的type
+    Class&lt;?> valueType = mapType.resolveGeneric(1);
+    if (valueType == null) {
+      return null;
+    }
+    // 对value type进行bean搜索，返回
+    Map&lt;String, Object> matchingBeans = findAutowireCandidates(beanName, valueType,
+        new MultiElementDescriptor(descriptor));
+    if (matchingBeans.isEmpty()) {
+      return null;
+    }
+    if (autowiredBeanNames != null) {
+      autowiredBeanNames.addAll(matchingBeans.keySet());
+    }
+    return matchingBeans;
+  }
+  else {
+    return null;
+  }
+}
+
+DefaultListableBeanFactory#findAutowireCandidates​	DefaultListableBeanFactory#findAutowireCandidates 用于查找参数中 beanName（如 Bean A）所依赖的、类型为 requiredType 的所有候选 Bean（如 Bean B）。返回结果为一个 Map&lt;String, Object&gt;，其中 key 是候选 Bean 的名称，value 是对应的实例。
+​		方法内部会先在 BeanFactory 中找出所有类型匹配 requiredType 的 Bean 名称，然后根据限定注解（如 @Qualifier）等条件进行筛选。筛选通过的候选 Bean 会被递归创建并作为依赖返回。
+protected Map&lt;String, Object> findAutowireCandidates(
+    @Nullable String beanName, Class&lt;?> requiredType, DependencyDescriptor descriptor) {
+  // 找出这个type所有的beanName
+  // 内部就是遍历BeanFactory中所有的BeanDefinition，依次进行type匹配判断，在收集结果并缓存
+  String[] candidateNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
+      this, requiredType, true, descriptor.isEager());
+  Map&lt;String, Object> result = new LinkedHashMap&lt;>(candidateNames.length);
+  // 一些特殊bean的处理，比如ApplicationContext之类的bean
+  for (Map.Entry&lt;Class&lt;?>, Object> classObjectEntry : this.resolvableDependencies.entrySet()) {
+    Class&lt;?> autowiringType = classObjectEntry.getKey();
+    if (autowiringType.isAssignableFrom(requiredType)) {
+      Object autowiringValue = classObjectEntry.getValue();
+      autowiringValue = AutowireUtils.resolveAutowiringValue(autowiringValue, requiredType);
+      if (requiredType.isInstance(autowiringValue)) {
+        result.put(ObjectUtils.identityToString(autowiringValue), autowiringValue);
+        break;
+      }
+    }
+  }
+  // 依次判断每个候选beanName，看其是否有资格成为真正的目标bean
+  for (String candidate : candidateNames) {
+    // 非自引用，isAutowireCandidate最终会调用到QualifierAnnotationAutowireCandidateResolver#isAutowireCandidate方法，根据@Qualifier注解来判断是否是目标bean
+    if (!isSelfReference(beanName, candidate) &amp;&amp; isAutowireCandidate(candidate, descriptor)) { 
+      // 目标bean，会使用BeanFactory来获取这个bean。实现递归创建bean
+      addCandidateEntry(result, candidate, descriptor, requiredType);
+    }
+  }
+  if (result.isEmpty()) { // 上面的流程没找到，则进行fallback放宽条件继续找
+    boolean multiple = indicatesMultipleBeans(requiredType);
+    DependencyDescriptor fallbackDescriptor = descriptor.forFallbackMatch();
+    for (String candidate : candidateNames) {
+      if (!isSelfReference(beanName, candidate) &amp;&amp; isAutowireCandidate(candidate, fallbackDescriptor) &amp;&amp;
+          (!multiple || getAutowireCandidateResolver().hasQualifier(descriptor))) {
+        addCandidateEntry(result, candidate, descriptor, requiredType);
+      }
+    }
+    if (result.isEmpty() &amp;&amp; !multiple) { // 继续放宽条件
+      for (String candidate : candidateNames) {
+        if (isSelfReference(beanName, candidate) &amp;&amp;
+            (!(descriptor instanceof MultiElementDescriptor) || !beanName.equals(candidate)) &amp;&amp;
+            isAutowireCandidate(candidate, fallbackDescriptor)) {
+          addCandidateEntry(result, candidate, descriptor, requiredType);
+        }
+      }
+    }
+  }
+  return result;
+}
+
+两个注解总结共同点
+都支持容器类型的Bean解析（比如Stream，数组，集合，Map）
+都支持@Lazy，@Qualifier，@Value等注解
+都支持字段、方法参数
+
+不同点
+@Autowired可以设置required为false，即不强制需要这个bean。而@Resource则必须要对应的bean存在
+@Resource由javax提供，是集byName和byType为一体的注解。框架无关，属于 Java 官方对 IOC 容器的通用约定。在Spring中，当没设置@Resource的name，并且由框架解析出来的name（字段名or去掉set的方法名）不在容器中才会使用byType
+@Autowired本身只能byType，搭配@Qualifier才可实现byName
+
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>BeanPostProcessor</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Spring-Bean的字段填充阶段处理</title>
     <url>/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</url>
     <content><![CDATA[
@@ -4085,6 +4444,1017 @@ public class TransactionSynchronizationCustomizer implements PlatformTransaction
       <categories>
         <category>Spring</category>
       </categories>
+  </entry>
+  <entry>
+    <title>Spring-其他重要的BeanPostProcesor</title>
+    <url>/2021-04-01/spring-qi-ta-chong-yao-de-beanpostprocesor/</url>
+    <content><![CDATA[
+​	AsyncAnnotationBeanPostProcessor和ScheduledAnnotationBeanPostProcessor源码解析
+
+
+Spring-其他重要的BeanPostProcesorAsyncAnnotationBeanPostProcessor@EnableAsync​	其主要功能是向容器中注册AsyncAnnotationBeanPostProcessor这个BeanDefinition，其继承了AbstractBeanFactoryAwareAdvisingPostProcessor，可以处理指定的Advisor以此实现@Async的代理，来开启异步
+主要属性
+
+
+
+属性
+说明
+
+
+
+annotation
+自定义的异步注解，可以用来定制化
+
+
+proxyTargetClass
+是否代理目标类。默认为false，即走jdk代理；为true则用cglib代理
+
+
+mode
+AOP 模式，取值有： PROXY（默认）：使用 Spring 的代理机制 ASPECTJ：使用 AspectJ（需要额外依赖与编译时&#x2F;加载时织入配置）
+
+
+order
+AsyncAnnotationBeanPostProcessor的执行顺序，默认最后才执行
+
+
+AsyncAnnotationAdvisor​	在AsyncAnnotationBeanPostProcessor#setBeanFactory（bean初始化阶段的一个hook方法，用于给bean填充BeanFactory）中设置的Advisor
+
+public class AsyncAnnotationAdvisor extends AbstractPointcutAdvisor implements BeanFactoryAware {
+
+    private Advice advice;
+
+    private Pointcut pointcut;
+
+    public AsyncAnnotationAdvisor(
+            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
+
+        Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes = new LinkedHashSet&lt;>(2);
+        // 支持@Async
+        asyncAnnotationTypes.add(Async.class);
+        try {
+            // 也支持EJB的@Asynchronous
+            asyncAnnotationTypes.add((Class&lt;? extends Annotation>) ClassUtils.forName("javax.ejb.Asynchronous",
+                    AsyncAnnotationAdvisor.class.getClassLoader()));
+        } catch (ClassNotFoundException ex) {
+            // 类路径里不存在@javax.ejb.Asynchronous，也无所谓
+        }
+        this.advice = buildAdvice(executor, exceptionHandler);
+        this.pointcut = buildPointcut(asyncAnnotationTypes);
+    }
+
+    /**
+     * 构建异步拦截器 Advice：用于真正执行异步调用逻辑
+     */
+    protected Advice buildAdvice(
+            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
+
+        AnnotationAsyncExecutionInterceptor interceptor = new AnnotationAsyncExecutionInterceptor(null);
+        interceptor.configure(executor, exceptionHandler);
+        return interceptor;
+    }
+
+    /**
+     * 将asyncAnnotationTypes所有注解构造成一个ComposablePointcut，只要class或method上存在任意一个asyncAnnotationType，即可进行代理
+     */
+    protected Pointcut buildPointcut(Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes) {
+        ComposablePointcut result = null;
+        for (Class&lt;? extends Annotation> asyncAnnotationType : asyncAnnotationTypes) {
+            // AnnotationMatchingPointcut是用于注解进行匹配的Pointcut
+            // cpc用于class匹配（只要class上存在asyncAnnotationType注解就行）
+            Pointcut cpc = new AnnotationMatchingPointcut(asyncAnnotationType, true);
+            // mpc用于方法匹配（只要method上存在asyncAnnotationType注解就行）
+            Pointcut mpc = new AnnotationMatchingPointcut(null, asyncAnnotationType, true);
+            // ComposablePointcut为注解组合，或逻辑。只要内部的ClasaFilter匹配一个就为true。MethodMatcher匹配一个就为true
+            if (result == null) {
+                result = new ComposablePointcut(cpc);
+            } else {
+                result.union(cpc);
+            }
+            result = result.union(mpc);
+        }
+        return (result != null ? result : Pointcut.TRUE);
+    }
+
+}
+
+AnnotationAsyncExecutionInterceptor​	拦截器核心，用于解析指定的执行器，并异步执行目标方法
+public class AnnotationAsyncExecutionInterceptor extends AsyncExecutionInterceptor {
+
+    public Object invoke(final MethodInvocation invocation) throws Throwable {
+        Class&lt;?> targetClass = (invocation.getThis() != null ? AopUtils.getTargetClass(invocation.getThis()) : null);
+        Method specificMethod = ClassUtils.getMostSpecificMethod(invocation.getMethod(), targetClass);
+        final Method userDeclaredMethod = BridgeMethodResolver.findBridgedMethod(specificMethod);
+
+        // 根据@Async的value来获取容器中对象的执行器，准备在这个Executor中执行代理逻辑
+        AsyncTaskExecutor executor = determineAsyncExecutor(userDeclaredMethod);
+        if (executor == null) {
+            throw new IllegalStateException(
+                    "No executor specified and no default executor set on AsyncExecutionInterceptor either");
+        }
+
+        // 构建Callable
+        Callable&lt;Object> task = () -> {
+            try {
+                Object result = invocation.proceed();
+                if (result instanceof Future) {
+                    return ((Future&lt;?>) result).get();
+                }
+            }
+            catch (ExecutionException ex) {
+                handleError(ex.getCause(), userDeclaredMethod, invocation.getArguments());
+            }
+            catch (Throwable ex) {
+                handleError(ex, userDeclaredMethod, invocation.getArguments());
+            }
+            return null;
+        };
+
+        // 提交任务到Executor中
+        return doSubmit(task, executor, invocation.getMethod().getReturnType());
+    }
+
+    /**
+     *  可知对于CompletableFuture，ListenableFuture，Future这三种返回值都是支持的，但对于其他返回值都直接返回null了
+     */
+    protected Object doSubmit(Callable&lt;Object> task, AsyncTaskExecutor executor, Class&lt;?> returnType) {
+        if (CompletableFuture.class.isAssignableFrom(returnType)) {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return task.call();
+                }
+                catch (Throwable ex) {
+                    throw new CompletionException(ex);
+                }
+            }, executor);
+        }
+        else if (ListenableFuture.class.isAssignableFrom(returnType)) {
+            return ((AsyncListenableTaskExecutor) executor).submitListenable(task);
+        }
+        else if (Future.class.isAssignableFrom(returnType)) {
+            return executor.submit(task);
+        }
+        else {
+            executor.submit(task);
+            return null;
+        }
+    }
+}
+
+总结
+方法或类上只要存在@Async或@Asynchronous即可走异步
+可使用@Async的value字段指定异步线程池（前提是要这个线程池在容器中）
+如未指定value，则使用容器中的AsyncConfigurer提供的Executor
+如果容器中没有AsyncConfigurer，则使用默认的SimpleAsyncTaskExecutor。其每次execute都会新开一个线程
+
+
+
+
+只支持CompletableFuture，ListenableFuture，Future这三种返回值。其余返回值都直接返回null
+异步切面会在这个方法中的所有切面里最先执行（因为其AsyncAnnotationBeanPostProcessor.beforeExistingAdvisors &#x3D; true）
+
+ScheduledAnnotationBeanPostProcessor@EnableScheduling​	向容器中注册ScheduledAnnotationBeanPostProcessor这个BeanDefinition，用于@Schedules和@Scheduled的解析和注册
+ScheduledAnnotationBeanPostProcessor核心源码public class ScheduledAnnotationBeanPostProcessor
+        implements ScheduledTaskHolder, MergedBeanDefinitionPostProcessor, DestructionAwareBeanPostProcessor,
+        Ordered, EmbeddedValueResolverAware, BeanNameAware, BeanFactoryAware, ApplicationContextAware,
+        SmartInitializingSingleton, ApplicationListener&lt;ContextRefreshedEvent>, DisposableBean {
+
+    /**
+     * bean初始化完成后的hook，只做定时任务的解析和封装，这里并不执行
+     */
+    public Object postProcessAfterInitialization(Object bean, String beanName) {
+        if (bean instanceof AopInfrastructureBean || bean instanceof TaskScheduler ||
+                bean instanceof ScheduledExecutorService) {
+            // Ignore AOP infrastructure such as scoped proxies.
+            return bean;
+        }
+
+        Class&lt;?> targetClass = AopProxyUtils.ultimateTargetClass(bean);
+        if (!this.nonAnnotatedClasses.contains(targetClass)) {
+            // 解析方法上的@Schedules和@Scheduled
+            Map&lt;Method, Set&lt;Scheduled>> annotatedMethods = MethodIntrospector.selectMethods(targetClass,
+                    (MethodIntrospector.MetadataLookup&lt;Set&lt;Scheduled>>) method -> {
+                        Set&lt;Scheduled> scheduledMethods = AnnotatedElementUtils.getMergedRepeatableAnnotations(
+                                method, Scheduled.class, Schedules.class);
+                        return (!scheduledMethods.isEmpty() ? scheduledMethods : null);
+                    });
+            if (annotatedMethods.isEmpty()) {
+                this.nonAnnotatedClasses.add(targetClass);
+            } else {
+                // 存在注解，对每个定时任务方法进行处理
+                annotatedMethods.forEach((method, scheduledMethods) -> scheduledMethods
+                        .forEach(scheduled -> processScheduled(scheduled, method, bean)));
+            }
+        }
+        return bean;
+    }
+
+    /**
+     * 解析@Scheduled注解，可知其定时字段优先级：cron > fixedDelay > fixedDelayString > fixedRate > fixedRateString
+     */
+    protected void processScheduled(Scheduled scheduled, Method method, Object bean) {
+        try {
+            // 将方法封装为可直接运行的Runnable（方法不能有参数）
+            Runnable runnable = createRunnable(bean, method);
+            // 是否已处理过（一个@Scheduled只能使用一个定时）
+            boolean processedSchedule = false;
+            String errorMessage = "Exactly one of the 'cron', 'fixedDelay(String)', or 'fixedRate(String)' attributes is required";
+
+            Set&lt;ScheduledTask> tasks = new LinkedHashSet&lt;>(4);
+
+            // 解析初始延时
+            long initialDelay = scheduled.initialDelay();
+            String initialDelayString = scheduled.initialDelayString();
+            if (StringUtils.hasText(initialDelayString)) {
+                Assert.isTrue(initialDelay &lt; 0, "Specify 'initialDelay' or 'initialDelayString', not both");
+                if (this.embeddedValueResolver != null) {
+                    initialDelayString = this.embeddedValueResolver.resolveStringValue(initialDelayString);
+                }
+                if (StringUtils.hasLength(initialDelayString)) {
+                    try {
+                        initialDelay = parseDelayAsLong(initialDelayString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid initialDelayString value \"" + initialDelayString
+                                        + "\" - cannot parse into long");
+                    }
+                }
+            }
+
+            // 优先解析cron表达式
+            String cron = scheduled.cron();
+            if (StringUtils.hasText(cron)) {
+                String zone = scheduled.zone();
+                if (this.embeddedValueResolver != null) {
+                    cron = this.embeddedValueResolver.resolveStringValue(cron);
+                    zone = this.embeddedValueResolver.resolveStringValue(zone);
+                }
+                if (StringUtils.hasLength(cron)) {
+                    // 校验cron不支持初始延时
+                    Assert.isTrue(initialDelay == -1, "'initialDelay' not supported for cron triggers");
+                    processedSchedule = true;
+                    if (!Scheduled.CRON_DISABLED.equals(cron)) {
+                        TimeZone timeZone;
+                        if (StringUtils.hasText(zone)) {
+                            timeZone = StringUtils.parseTimeZoneString(zone);
+                        } else {
+                            timeZone = TimeZone.getDefault();
+                        }
+                        // 构造为CronTask，先缓存起来
+                        tasks.add(this.registrar
+                                .scheduleCronTask(new CronTask(runnable, new CronTrigger(cron, timeZone))));
+                    }
+                }
+            }
+
+            if (initialDelay &lt; 0) {
+                initialDelay = 0;
+            }
+
+            // 解析固定周期
+            long fixedDelay = scheduled.fixedDelay();
+            if (fixedDelay >= 0) {
+                Assert.isTrue(!processedSchedule, errorMessage);
+                processedSchedule = true;
+                tasks.add(
+                        this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
+            }
+            String fixedDelayString = scheduled.fixedDelayString();
+            if (StringUtils.hasText(fixedDelayString)) {
+                if (this.embeddedValueResolver != null) {
+                    fixedDelayString = this.embeddedValueResolver.resolveStringValue(fixedDelayString);
+                }
+                if (StringUtils.hasLength(fixedDelayString)) {
+                    Assert.isTrue(!processedSchedule, errorMessage);
+                    processedSchedule = true;
+                    try {
+                        fixedDelay = parseDelayAsLong(fixedDelayString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid fixedDelayString value \"" + fixedDelayString + "\" - cannot parse into long");
+                    }
+                    // 构造为FixedDelayTask，先缓存起来
+                    tasks.add(this.registrar
+                            .scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
+                }
+            }
+
+            // 最后才解析固定频率
+            long fixedRate = scheduled.fixedRate();
+            if (fixedRate >= 0) {
+                Assert.isTrue(!processedSchedule, errorMessage);
+                processedSchedule = true;
+                tasks.add(this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
+            }
+            String fixedRateString = scheduled.fixedRateString();
+            if (StringUtils.hasText(fixedRateString)) {
+                if (this.embeddedValueResolver != null) {
+                    fixedRateString = this.embeddedValueResolver.resolveStringValue(fixedRateString);
+                }
+                if (StringUtils.hasLength(fixedRateString)) {
+                    Assert.isTrue(!processedSchedule, errorMessage);
+                    processedSchedule = true;
+                    try {
+                        fixedRate = parseDelayAsLong(fixedRateString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid fixedRateString value \"" + fixedRateString + "\" - cannot parse into long");
+                    }
+                    // 构造为FixedRateTask，先缓存起来
+                    tasks.add(
+                            this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
+                }
+            }
+
+            // 校验使用了注解的必须有定时任务
+            Assert.isTrue(processedSchedule, errorMessage);
+
+            // Finally register the scheduled tasks
+            synchronized (this.scheduledTasks) {
+                Set&lt;ScheduledTask> regTasks = this.scheduledTasks.computeIfAbsent(bean, key -> new LinkedHashSet&lt;>(4));
+                regTasks.addAll(tasks);
+            }
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException(
+                    "Encountered invalid @Scheduled method '" + method.getName() + "': " + ex.getMessage());
+        }
+    }
+
+    /**
+     * ContextRefreshed事件，表示容器刷新完毕，可以真正的注册定时任务了
+     */
+    public void onApplicationEvent(ContextRefreshedEvent event) {
+        if (event.getApplicationContext() == this.applicationContext) {
+            finishRegistration();
+        }
+    }
+
+    /**
+     * 开始真正的投递定时任务到线程池中。
+     * 定时线程池优先级：
+     * 1. scheduler
+     * 2. TaskScheduler(beanName为taskScheduler) bean
+     * 3. 任意TaskScheduler bean
+     * 4. ScheduledExecutorService(beanName为taskScheduler) bean
+     * 5. 任意ScheduledExecutorService bean
+     * 6. ScheduledThreadPoolExecutor（线程数为1）
+     */
+    private void finishRegistration() {
+        if (this.scheduler != null) {
+            this.registrar.setScheduler(this.scheduler);
+        }
+
+        if (this.beanFactory instanceof ListableBeanFactory) {
+            Map&lt;String, SchedulingConfigurer> beans = ((ListableBeanFactory) this.beanFactory)
+                    .getBeansOfType(SchedulingConfigurer.class);
+            List&lt;SchedulingConfigurer> configurers = new ArrayList&lt;>(beans.values());
+            AnnotationAwareOrderComparator.sort(configurers);
+            for (SchedulingConfigurer configurer : configurers) {
+                configurer.configureTasks(this.registrar);
+            }
+        }
+
+        if (this.registrar.hasTasks() &amp;&amp; this.registrar.getScheduler() == null) {
+            Assert.state(this.beanFactory != null, "BeanFactory must be set to find scheduler by type");
+            try {
+                // 先获取beanName为taskScheduler的TaskScheduler bean
+                this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, false));
+            } catch (NoUniqueBeanDefinitionException ex) {
+                try {
+                    // 再按class获取TaskScheduler bean
+                    this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, true));
+                } catch (NoSuchBeanDefinitionException ex2) {
+
+                }
+            } catch (NoSuchBeanDefinitionException ex) {
+                try {
+                    // 再获取beanName为taskScheduler的ScheduledExecutorService bean
+                    this.registrar.setScheduler(
+                            resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, false));
+                } catch (NoUniqueBeanDefinitionException ex2) {
+                    try {
+                        // 再按class获取ScheduledExecutorService bean
+                        this.registrar.setScheduler(
+                                resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, true));
+                    } catch (NoSuchBeanDefinitionException ex3) {
+
+                    }
+                } catch (NoSuchBeanDefinitionException ex2) {
+
+                }
+            }
+        }
+        // 到这了如果taskScheduler还没有，内部则会创建一个容量为1的ScheduledThreadPoolExecutor去执行定时任务
+        // 将bean解析完成的所有定时任务投递到定时任务线程吃
+        this.registrar.afterPropertiesSet();
+    }
+
+}
+
+总结
+bean初始化完成后解析才@Scheduled和@Schedules（只是解析，并不投递），缓存到统一的ScheduledTaskRegistrar中
+@Scheduled只能解析为一个定时任务，优先级：
+cron
+fixedDelay
+fixedDelayString
+fixedRate
+fixedRateString
+
+
+要定时成多个任务需要使用@Schedules
+
+
+ContextRefreshedEvent事件触发，开始投递任务
+先获取任务定时器，定时线程池优先级：
+ScheduledAnnotationBeanPostProcessor#scheduler（只能为TaskScheduler或ScheduledExecutorService的子类）
+任意TaskScheduler  bean
+TaskScheduler(beanName为taskScheduler)  bean
+任意ScheduledExecutorService  bean
+ScheduledExecutorService(beanName为taskScheduler)  bean
+ScheduledThreadPoolExecutor（线程数为1），即默认线程池
+
+
+将解析阶段ScheduledTaskRegistrar内缓存的Task都投递到定时线程池中
+
+
+重点了解下cron，它会被封装为ReschedulingRunnable，每次执行完后才根据cron计算下一次任务的执行时间，这样循环动态的计算执行时间
+
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>BeanPostProcessor</tag>
+        <tag>Async注解</tag>
+        <tag>Scheduled注解</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Spring-容器refresh</title>
+    <url>/2021-06-03/spring-rong-qi-refresh/</url>
+    <content><![CDATA[
+​	从源码分析了Spring容器的refresh过程，并通过图文的方式记录了整个流程的核心步骤
+
+
+容器refresh核心步骤总结
+准备 BeanFactory（包括类加载器、SPEL解析器等基础设施）
+执行 BeanDefinitionRegistryPostProcessor：优先处理配置类等，动态注册更多 BeanDefinition
+执行 BeanFactoryPostProcessor：可用来修改 BeanDefinition 信息
+注册 BeanPostProcessor：用于后续 Bean 创建生命周期中的扩展
+初始化 MessageSource：国际化消息解析支持
+初始化事件广播器（ApplicationEventMulticaster）并注册为 Bean
+调用 onRefresh()：留给子类扩展（如创建 Web Server）
+注册 ApplicationListener：用于监听容器事件
+实例化非懒加载的单例 Bean
+完成刷新：启动 SmartLifecycle Bean，发布 ContextRefreshedEvent
+
+
+AbstractApplicationContext#refresh-源码分析整体的refreshpublic void refresh() throws BeansException, IllegalStateException {
+    synchronized (this.startupShutdownMonitor) {
+        // 1. 准备上下文环境（包括设置启动时间、状态标志位、初始化环境属性等）
+        prepareRefresh();
+
+        // 2. 创建并刷新 BeanFactory（默认 DefaultListableBeanFactory）
+        ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
+
+        // 3. 对BeanFactory做各种填充
+        prepareBeanFactory(beanFactory);
+
+        try {
+            // 4. hook方法，供子类在 BeanFactory 初始化后、自定义修改它
+            postProcessBeanFactory(beanFactory);
+
+            // 5. 调用 BeanFactoryPostProcessor(BeanDefinitionRegistryPostProcessor >
+            // BeanFactoryPostProcessor)
+            // ConfigurationClassPostProcessor就是这阶段处理的
+            invokeBeanFactoryPostProcessors(beanFactory);
+
+            // 6. 注册 BeanPostProcessor（并非调用），用于后续Bean实例化的hook
+            registerBeanPostProcessors(beanFactory);
+
+            // 7. 为上下文初始化Message源，国际化处理
+            initMessageSource();
+
+            // 8. 初始化事件广播器（默认实现为SimpleApplicationEventMulticaster，专门用来查找对应ApplicationEvent应该使用哪个ApplicationListener（按类型匹配））
+            initApplicationEventMulticaster();
+
+            // 9. 留给子类初始化其他bean（spring boot中子类会初始化web服务器）
+            onRefresh();
+
+            // 10. 注册所有实现了 ApplicationListener 的 Bean 到广播器中
+            registerListeners();
+
+            // 11. 初始化剩下Bean（非lazy 且 singleton）
+            finishBeanFactoryInitialization(beanFactory);
+
+            // 12. SmartLifecycle的Bean可以start了，并且发布ContextRefreshedEvent事件
+            finishRefresh();
+        }
+
+        catch (BeansException ex) {
+            if (logger.isWarnEnabled()) {
+                logger.warn("Exception encountered during context initialization - " +
+                        "cancelling refresh attempt: " + ex);
+            }
+
+            // 异常处理1：销毁已创建的单例 bean，避免资源泄漏
+            destroyBeans();
+
+            // 异常处理2：重置 context 状态标志，保证下次调用 refresh 可以重新开始
+            cancelRefresh(ex);
+
+            throw ex;
+        }
+
+        finally {
+            // 最终清除 Spring 内部使用的一些缓存（如反射、泛型元信息等）
+            resetCommonCaches();
+        }
+    }
+}
+
+关键步骤分析prepareBeanFactory​	目的是对内部 BeanFactory 进行增强配置，注入 ApplicationContext 级别的基础能力，主要包括如下
+
+设置类加载器、SpEL 表达式解析器与资源编辑器
+注册常见 Aware 接口的处理器与特殊依赖的自动解析
+注册内置基础 Bean（如 Spring Environment、系统属性、系统环境变量）
+
+protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) {
+    // 设置类加载器（用于加载 bean 类、AOP 等）
+    beanFactory.setBeanClassLoader(getClassLoader());
+    // 设置beanFactory的表达式语言（SpEL）处理器
+    beanFactory.setBeanExpressionResolver(new StandardBeanExpressionResolver(beanFactory.getBeanClassLoader()));
+    // 设置各种PropertyEditor（用于解析 Resource 等）
+    beanFactory.addPropertyEditorRegistrar(new ResourceEditorRegistrar(this, getEnvironment()));
+
+    // 注册 ApplicationContextAwareProcessor，处理以下几个 Aware 接口注入
+    beanFactory.addBeanPostProcessor(new ApplicationContextAwareProcessor(this));
+    // 设置一些忽略自动装配的接口,上面的ApplicationContextAwareProcessor就已经搞定了
+    beanFactory.ignoreDependencyInterface(EnvironmentAware.class);
+    beanFactory.ignoreDependencyInterface(EmbeddedValueResolverAware.class);
+    beanFactory.ignoreDependencyInterface(ResourceLoaderAware.class);
+    beanFactory.ignoreDependencyInterface(ApplicationEventPublisherAware.class);
+    beanFactory.ignoreDependencyInterface(MessageSourceAware.class);
+    beanFactory.ignoreDependencyInterface(ApplicationContextAware.class);
+
+    // 设置几个特殊的依赖注入值（无需在容器中定义，注入时直接解析为指定对象）
+    beanFactory.registerResolvableDependency(BeanFactory.class, beanFactory);
+    beanFactory.registerResolvableDependency(ResourceLoader.class, this);
+    beanFactory.registerResolvableDependency(ApplicationEventPublisher.class, this);
+    beanFactory.registerResolvableDependency(ApplicationContext.class, this);
+
+    // 添加ApplicationListener的监听器，当单例bean初始化后，且实现了ApplicationListener接口，就将其缓存起来以便使用
+    beanFactory.addBeanPostProcessor(new ApplicationListenerDetector(this));
+
+    // 如果容器中有 LoadTimeWeaver，注册对应的 Aware 处理器，并设置临时 ClassLoader
+    if (beanFactory.containsBean(LOAD_TIME_WEAVER_BEAN_NAME)) {
+        beanFactory.addBeanPostProcessor(new LoadTimeWeaverAwareProcessor(beanFactory));
+        beanFactory.setTempClassLoader(new ContextTypeMatchClassLoader(beanFactory.getBeanClassLoader()));
+    }
+
+    // Spring Environment Bean 注册（当前环境信息）
+    if (!beanFactory.containsLocalBean(ENVIRONMENT_BEAN_NAME)) {
+        beanFactory.registerSingleton(ENVIRONMENT_BEAN_NAME, getEnvironment());
+    }
+    // 系统属性（System.getProperties()）Bean注册
+    if (!beanFactory.containsLocalBean(SYSTEM_PROPERTIES_BEAN_NAME)) {
+        beanFactory.registerSingleton(SYSTEM_PROPERTIES_BEAN_NAME, getEnvironment().getSystemProperties());
+    }
+    // 系统环境变量（System.getenv()）Bean注册
+    if (!beanFactory.containsLocalBean(SYSTEM_ENVIRONMENT_BEAN_NAME)) {
+        beanFactory.registerSingleton(SYSTEM_ENVIRONMENT_BEAN_NAME, getEnvironment().getSystemEnvironment());
+    }
+}
+
+invokeBeanFactoryPostProcessors
+
+先处理 BeanDefinitionRegistryPostProcessor：
+手动传入的优先执行
+容器中的按 PriorityOrdered &gt; Ordered &gt; 剩下的
+若执行过程中有动态注册的后处理器，继续迭代
+
+
+再处理 BeanFactoryPostProcessor：
+优先级一样， PriorityOrdered &gt; Ordered &gt; 剩下的
+
+
+最后清除合并后的 BeanDefinition 缓存，确保后处理器修改生效
+
+
+​	ConfigurationClassPostProcessor 就是最早执行的 BeanDefinitionRegistryPostProcessor之一，其负责解析 @Configuration 等注解并动态注册大量 BeanDefinition。因此，我们可以通过自定义 BeanDefinitionRegistryPostProcessor 在它之后介入，统一处理或修改所有后续注册的 BeanDefinition，实现排除、添加或调整。
+// PostProcessorRegistrationDelegate类
+public static void invokeBeanFactoryPostProcessors(
+        ConfigurableListableBeanFactory beanFactory, List&lt;BeanFactoryPostProcessor> beanFactoryPostProcessors) {
+
+    // 已经处理过了的BeanDefinitionRegistryPostProcessors集和，避免重复处理bean
+    Set&lt;String> processedBeans = new HashSet&lt;>();
+
+    /// 判断 beanFactory 是否支持注册
+    /// BeanDefinition，以优先处理BeanDefinitionRegistryPostProcessor
+    if (beanFactory instanceof BeanDefinitionRegistry) {
+        BeanDefinitionRegistry registry = (BeanDefinitionRegistry) beanFactory;
+        List&lt;BeanFactoryPostProcessor> regularPostProcessors = new ArrayList&lt;>();
+        List&lt;BeanDefinitionRegistryPostProcessor> registryProcessors = new ArrayList&lt;>();
+
+        for (BeanFactoryPostProcessor postProcessor : beanFactoryPostProcessors) {
+            if (postProcessor instanceof BeanDefinitionRegistryPostProcessor) {
+                BeanDefinitionRegistryPostProcessor registryProcessor = (BeanDefinitionRegistryPostProcessor) postProcessor;
+                registryProcessor.postProcessBeanDefinitionRegistry(registry);
+                registryProcessors.add(registryProcessor);
+            } else {
+                regularPostProcessors.add(postProcessor);
+            }
+        }
+
+        // 当前阶段要执行的 BeanDefinitionRegistryPostProcessor 处理器列表，处理的优先级：PriorityOrdered >
+        // Ordered > 剩下的
+        List&lt;BeanDefinitionRegistryPostProcessor> currentRegistryProcessors = new ArrayList&lt;>();
+
+        // =================== 第一轮：处理 PriorityOrdered 的 BD 处理器 ===================
+        String[] postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true,
+                false);
+        for (String ppName : postProcessorNames) {
+            if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
+                currentRegistryProcessors.add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
+                processedBeans.add(ppName);
+            }
+        }
+        sortPostProcessors(currentRegistryProcessors, beanFactory);
+        registryProcessors.addAll(currentRegistryProcessors);
+        invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
+        currentRegistryProcessors.clear();
+
+        // =================== 第二轮：处理 Ordered 的 BD 处理器 ===================
+        postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false);
+        for (String ppName : postProcessorNames) {
+            if (!processedBeans.contains(ppName) &amp;&amp; beanFactory.isTypeMatch(ppName, Ordered.class)) {
+                currentRegistryProcessors.add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
+                processedBeans.add(ppName);
+            }
+        }
+        sortPostProcessors(currentRegistryProcessors, beanFactory);
+        registryProcessors.addAll(currentRegistryProcessors);
+        invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
+        currentRegistryProcessors.clear();
+
+        // =================== 最后：处理剩余的无序 BD 处理器（可能动态注册） ===================
+        boolean reiterate = true;
+        while (reiterate) {
+            reiterate = false;
+            postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true,
+                    false);
+            for (String ppName : postProcessorNames) {
+                if (!processedBeans.contains(ppName)) {
+                    currentRegistryProcessors
+                            .add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
+                    processedBeans.add(ppName);
+                    reiterate = true;
+                }
+            }
+            sortPostProcessors(currentRegistryProcessors, beanFactory);
+            registryProcessors.addAll(currentRegistryProcessors);
+            invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
+            currentRegistryProcessors.clear();
+        }
+
+        // =================== 执行所有已注册 BD 处理器的 postProcessBeanFactory 回调
+        // ===================
+        invokeBeanFactoryPostProcessors(registryProcessors, beanFactory);
+        // =================== 执行用户提供的常规 BeanFactoryPostProcessor ===================
+        invokeBeanFactoryPostProcessors(regularPostProcessors, beanFactory);
+    }
+
+    else {
+        invokeBeanFactoryPostProcessors(beanFactoryPostProcessors, beanFactory);
+    }
+
+    // =================== 从配置中获取剩余的 BeanFactoryPostProcessor ===================
+    String[] postProcessorNames = beanFactory.getBeanNamesForType(BeanFactoryPostProcessor.class, true, false);
+
+    // 分类收集 PriorityOrdered、Ordered、其他的 三类处理器
+    List&lt;BeanFactoryPostProcessor> priorityOrderedPostProcessors = new ArrayList&lt;>();
+    List&lt;String> orderedPostProcessorNames = new ArrayList&lt;>();
+    List&lt;String> nonOrderedPostProcessorNames = new ArrayList&lt;>();
+    for (String ppName : postProcessorNames) {
+        if (processedBeans.contains(ppName)) {
+            // skip - already processed in first phase above
+        } else if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
+            priorityOrderedPostProcessors.add(beanFactory.getBean(ppName, BeanFactoryPostProcessor.class));
+        } else if (beanFactory.isTypeMatch(ppName, Ordered.class)) {
+            orderedPostProcessorNames.add(ppName);
+        } else {
+            nonOrderedPostProcessorNames.add(ppName);
+        }
+    }
+
+    // 执行顺序类似上面的BD处理器
+    // PriorityOrdered
+    sortPostProcessors(priorityOrderedPostProcessors, beanFactory);
+    invokeBeanFactoryPostProcessors(priorityOrderedPostProcessors, beanFactory);
+
+    // Ordered
+    List&lt;BeanFactoryPostProcessor> orderedPostProcessors = new ArrayList&lt;>();
+    for (String postProcessorName : orderedPostProcessorNames) {
+        orderedPostProcessors.add(beanFactory.getBean(postProcessorName, BeanFactoryPostProcessor.class));
+    }
+    sortPostProcessors(orderedPostProcessors, beanFactory);
+    invokeBeanFactoryPostProcessors(orderedPostProcessors, beanFactory);
+
+    // 其他的
+    List&lt;BeanFactoryPostProcessor> nonOrderedPostProcessors = new ArrayList&lt;>();
+    for (String postProcessorName : nonOrderedPostProcessorNames) {
+        nonOrderedPostProcessors.add(beanFactory.getBean(postProcessorName, BeanFactoryPostProcessor.class));
+    }
+    invokeBeanFactoryPostProcessors(nonOrderedPostProcessors, beanFactory);
+    // 清理 BeanDefinition 的缓存，防止元信息过期（如占位符已被替换）
+    beanFactory.clearMetadataCache();
+}
+
+registerBeanPostProcessors​	实例化并注册所有 BeanPostProcessor，按 PriorityOrdered &gt; Ordered &gt; 无序 的优先级添加到容器中，确保 Bean 生命周期中的处理器执行顺序符合预期；内部处理器（MergedBeanDefinitionPostProcessor）统一放在末尾，确保其在所有普通处理器之后执行。
+// PostProcessorRegistrationDelegate类
+public static void registerBeanPostProcessors(
+        ConfigurableListableBeanFactory beanFactory, AbstractApplicationContext applicationContext) {
+    // 获取所有实现了 BeanPostProcessor 接口的 beanName（不实例化）
+    String[] postProcessorNames = beanFactory.getBeanNamesForType(BeanPostProcessor.class, true, false);
+
+    // 记录目标 BeanPostProcessor 总数：现有 + 新注册 + 最终数量
+    int beanProcessorTargetCount = beanFactory.getBeanPostProcessorCount() + 1 + postProcessorNames.length;
+   /*
+     *   专门用来检查普通bean是否走完所有的BeanPostProcessor的
+     *
+     * 一个普通的bean在实例化时，正常情况下应该走完所有的BeanPostProcessor，
+     * 但当只注册了部分的BeanPostProcessor(放到IOC容器中)时，
+     * 此时实例化一个bean可能就导致还未注册的BeanPostProcessor处理不了（看优先级），
+     * 就会由这个checker来日志提醒（仅打印info日志）
+     */
+    beanFactory.addBeanPostProcessor(new BeanPostProcessorChecker(beanFactory, beanProcessorTargetCount));
+
+    // 准备分组存储不同优先级的 BeanPostProcessor
+    List&lt;BeanPostProcessor> priorityOrderedPostProcessors = new ArrayList&lt;>();
+    List&lt;BeanPostProcessor> internalPostProcessors = new ArrayList&lt;>();
+    List&lt;String> orderedPostProcessorNames = new ArrayList&lt;>();
+    List&lt;String> nonOrderedPostProcessorNames = new ArrayList&lt;>();
+    // 分类：根据是否实现 PriorityOrdered / Ordered / 无排序
+    for (String ppName : postProcessorNames) {
+        if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) { // PriorityOrdered的直接实例化
+            BeanPostProcessor pp = beanFactory.getBean(ppName, BeanPostProcessor.class);
+            priorityOrderedPostProcessors.add(pp);
+            if (pp instanceof MergedBeanDefinitionPostProcessor) {
+                internalPostProcessors.add(pp);
+            }
+        } else if (beanFactory.isTypeMatch(ppName, Ordered.class)) {
+            orderedPostProcessorNames.add(ppName);
+        } else {
+            nonOrderedPostProcessorNames.add(ppName);
+        }
+    }
+
+    // PriorityOrdered以及实例化了，就可直接 排序 ->  注册
+    sortPostProcessors(priorityOrderedPostProcessors, beanFactory);
+    registerBeanPostProcessors(beanFactory, priorityOrderedPostProcessors);
+
+    // Ordered，实例化 -> 排序 -> 注册
+    List&lt;BeanPostProcessor> orderedPostProcessors = new ArrayList&lt;>();
+    for (String ppName : orderedPostProcessorNames) {
+        BeanPostProcessor pp = beanFactory.getBean(ppName, BeanPostProcessor.class);
+        orderedPostProcessors.add(pp);
+        if (pp instanceof MergedBeanDefinitionPostProcessor) {
+            internalPostProcessors.add(pp);
+        }
+    }
+    sortPostProcessors(orderedPostProcessors, beanFactory);
+    registerBeanPostProcessors(beanFactory, orderedPostProcessors);
+
+    // 无顺序，实例化 -> 注册
+    List&lt;BeanPostProcessor> nonOrderedPostProcessors = new ArrayList&lt;>();
+    for (String ppName : nonOrderedPostProcessorNames) {
+        BeanPostProcessor pp = beanFactory.getBean(ppName, BeanPostProcessor.class);
+        nonOrderedPostProcessors.add(pp);
+        if (pp instanceof MergedBeanDefinitionPostProcessor) {
+            internalPostProcessors.add(pp);
+        }
+    }
+    registerBeanPostProcessors(beanFactory, nonOrderedPostProcessors);
+
+    // 四、最后统一注册 MergedBeanDefinitionPostProcessor（内部BPP），例如：
+    // - AutowiredAnnotationBeanPostProcessor
+    // - CommonAnnotationBeanPostProcessor
+    // - ApplicationListenerDetector 等
+    sortPostProcessors(internalPostProcessors, beanFactory);
+    registerBeanPostProcessors(beanFactory, internalPostProcessors);
+
+    // 五、重新注册 ApplicationListenerDetector，用来收集ApplicationListener Bean（确保在链末尾执行（避免过早代理））
+    beanFactory.addBeanPostProcessor(new ApplicationListenerDetector(applicationContext));
+}
+
+initApplicationEventMulticaster​	注册的默认事件广播器为SimpleApplicationEventMulticaster，其主要是对所有的ApplicationEvent事件进行分发匹配到对应的ApplicationListener中（支持异步，线程池为SimpleApplicationEventMulticaster.taskExecutor，默认同步分发）
+protected void initApplicationEventMulticaster() {
+    ConfigurableListableBeanFactory beanFactory = getBeanFactory();
+    if (beanFactory.containsLocalBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME)) {
+        this.applicationEventMulticaster =
+                beanFactory.getBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME, ApplicationEventMulticaster.class);
+        if (logger.isTraceEnabled()) {
+            logger.trace("Using ApplicationEventMulticaster [" + this.applicationEventMulticaster + "]");
+        }
+    }
+    else {
+        // 实例化并注册默认的事件广播器Bean：SimpleApplicationEventMulticaster
+        this.applicationEventMulticaster = new SimpleApplicationEventMulticaster(beanFactory);
+        beanFactory.registerSingleton(APPLICATION_EVENT_MULTICASTER_BEAN_NAME, this.applicationEventMulticaster);
+        if (logger.isTraceEnabled()) {
+            logger.trace("No '" + APPLICATION_EVENT_MULTICASTER_BEAN_NAME + "' bean, using " +
+                    "[" + this.applicationEventMulticaster.getClass().getSimpleName() + "]");
+        }
+    }
+}
+
+onRefresh​	一个模板方法（hook），由子类实现，用于在 refresh() 流程中 容器刷新完成、所有 BeanFactory 初始化完毕之后，进行特定上下文的扩展初始化工作。
+​	比如在 Spring Boot 中，AnnotationConfigServletWebServerApplicationContext 会在该方法中创建和启动内嵌的 Web 服务器（默认是 Tomcat，可选 Jetty 或 Undertow），并完成 Web 环境相关的初始化。
+finishBeanFactoryInitialization是 Spring 容器刷新流程中的 核心收尾步骤之一，主要职责如下：
+
+初始化所有非懒加载（non-lazy）、非抽象的单例 Bean
+这一步会触发 Bean 的完整生命周期流程：依赖注入（populate）、初始化方法调用（如 @PostConstruct、InitializingBean#afterPropertiesSet）、AOP 代理包装等
+
+
+触发 SmartInitializingSingleton 回调
+所有实现了 SmartInitializingSingleton 接口的单例 Bean，会在 所有非懒加载的单例 Bean 完成初始化之后 统一回调其 afterSingletonsInstantiated() 方法。
+这是容器中所有 Bean 都就绪之后的 “最后的hook”，用于执行依赖所有 Bean 的集中初始化逻辑
+
+
+
+// AbstractApplicationContext
+protected void finishBeanFactoryInitialization(ConfigurableListableBeanFactory beanFactory) {
+
+    // 清空临时类加载器
+    beanFactory.setTempClassLoader(null);
+
+    // 冻结BeanDefinition的配置，代表需要的地方可以缓存了
+    // 走到这，BeanDefinition都已经处理完毕了，所以可以考虑缓存了
+    beanFactory.freezeConfiguration();
+
+    // 实例化所有非lazy加载的单例bean，并在加载完后调用SmartInitializingSingleton接口
+    // SmartInitializingSingleton这个接口就是在实例化所有非lazy且单例bean完成后需要调用的
+    beanFactory.preInstantiateSingletons();
+}
+
+真正初始化单例bean（DefaultListableBeanFactory#preInstantiateSingletons方法）
+public void preInstantiateSingletons() throws BeansException {
+    List&lt;String> beanNames = new ArrayList&lt;>(this.beanDefinitionNames);
+
+    for (String beanName : beanNames) {
+        RootBeanDefinition bd = getMergedLocalBeanDefinition(beanName);
+        // 非抽象 + 单例 + 非lazy加载
+        if (!bd.isAbstract() &amp;&amp; bd.isSingleton() &amp;&amp; !bd.isLazyInit()) {
+            // 实例化工厂Bean
+            if (isFactoryBean(beanName)) {
+                Object bean = getBean(FACTORY_BEAN_PREFIX + beanName);
+                if (bean instanceof FactoryBean) {
+                    FactoryBean&lt;?> factory = (FactoryBean&lt;?>) bean;
+                    boolean isEagerInit;
+                    if (System.getSecurityManager() != null &amp;&amp; factory instanceof SmartFactoryBean) {
+                        isEagerInit = AccessController.doPrivileged(
+                                (PrivilegedAction&lt;Boolean>) ((SmartFactoryBean&lt;?>) factory)::isEagerInit,
+                                getAccessControlContext());
+                    }
+                    else {
+                        isEagerInit = (factory instanceof SmartFactoryBean &amp;&amp;
+                                ((SmartFactoryBean&lt;?>) factory).isEagerInit());
+                    }
+                    if (isEagerInit) {
+                        getBean(beanName);
+                    }
+                }
+            }
+            else {
+                // 实例化非工厂Bean
+                getBean(beanName);
+            }
+        }
+    }
+
+    // apply所有SmartInitializingSingleton Bean逻辑
+    // 重要的拓展口，可以在这里最早感知到大部分Bean准备完毕，可以放心调用这些bean的各种方法了
+    for (String beanName : beanNames) {
+        Object singletonInstance = getSingleton(beanName);
+        if (singletonInstance instanceof SmartInitializingSingleton) {
+            SmartInitializingSingleton smartSingleton = (SmartInitializingSingleton) singletonInstance;
+            if (System.getSecurityManager() != null) {
+                AccessController.doPrivileged((PrivilegedAction&lt;Object>) () -> {
+                    smartSingleton.afterSingletonsInstantiated();
+                    return null;
+                }, getAccessControlContext());
+            }
+            else {
+                smartSingleton.afterSingletonsInstantiated();
+            }
+        }
+    }
+}
+
+finishRefresh​	这一步结束，容器对外就完全可用了
+protected void finishRefresh() {
+    // 清除上下文级别的缓存资源，例如类扫描过程中缓存的 ASM 元数据。
+    clearResourceCaches();
+
+    // 初始化生命周期处理器（LifecycleProcessor）。
+    // 默认实现为 DefaultLifecycleProcessor，用于统一管理实现了 Lifecycle 接口的 bean 的启动与停止
+    initLifecycleProcessor();
+
+    // 通知生命周期处理器，容器刷新完成
+    // 将启动所有实现了 SmartLifecycle 接口并设置了 autoStartup = true 的 Bean（通常用于自动启动的组件，如消息监听容器、调度器等）
+    getLifecycleProcessor().onRefresh();
+
+    // 广播容器刷新完成事件：ContextRefreshedEvent
+    // 所有实现了 ApplicationListener 接口，监听该事件的 Bean 都会收到通知，可用于执行基于“容器就绪”的后置逻辑。
+    publishEvent(new ContextRefreshedEvent(this));
+
+    // 将当前 ApplicationContext 注册到 JMX 的 LiveBeansView 中（如果启用）
+    // 这允许通过 JMX 客户端动态查看容器中所有 Bean 的状态（例如 VisualVM 插件）
+    LiveBeansView.registerApplicationContext(this);
+}
+
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+  </entry>
+  <entry>
+    <title>谈谈ThreadLocal为什么被设计为弱引用</title>
+    <url>/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</url>
+    <content><![CDATA[
+分析了ThreadLocal为什么要被设计为弱引用，并给出了ThreadLocal的建议使用方法
+
+
+谈谈ThreadLocal为什么被设计为弱引用​	ThreadLocal在用作ThreadLocalMap的key时，是被设计为弱引用的。
+​	ThreadLocalMap的内部类Entry被设计为实现了WeakReference，Entry用来存放数据。在构造Entry对象时，将传进来的ThreadLocal对象包装成了真正的弱引用对象，而Entry对象和内部的value对象本身是强引用的。
+弱引用的解释：
+
+​		只具有弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。
+
+​	简单理解就是当垃圾回收时，该对象只被WeakReference对象的弱引用字段（T reference）所引用，而未被任何强类型的对象引用，那么，该弱引用的对象就会被回收。
+​	注意：WeakReference引用本身是强引用，它内部的（T reference）才是真正的弱引用字段，WeakReference就是一个装弱引用的容器而已。
+1 回收测试示例public class ThreadLocalDemo {
+    public static void main(String[] args) throws InterruptedException {
+        firstStack();
+        System.gc();
+        TimeUnit.SECONDS.sleep(1);
+        Thread thread = Thread.currentThread();
+        System.out.println(thread); // 在这里打断点，观察thread对象里的ThreadLocalMap数据
+
+    }
+    // 通过是否获取返回值观察A对象里的local对象是否被回收
+    private static A firstStack(){
+        A a = new A();
+        System.out.println("value: "+ a.get());
+        return a;
+    }
+    private static class A{
+        private ThreadLocal&lt;String> local = ThreadLocal.withInitial(() -> "in class A");
+
+        public String get(){
+            return local.get();
+        }
+        public void set(String str){
+            local.set(str);
+        }
+
+    }
+}
+
+
+ThreadLocal 被强引用持有，不会被回收
+
+
+ThreadLocal只被弱引用持有，gc后被回收了
+
+​	如上面的代码，当构造一个A对象时，内部的local对象也构造了，之后调用get和set方法对local对象取值和设置值，当A对象不可达时，垃圾收集器就会回收A。
+​	现在我们假设ThreadLocalMap的Entey里的key（ThreadLocal对象）不是弱引用的，且已经调用了A的对象的get或set方法，那么垃圾收集器回收A对象时，一定不会回收里面的local对象，为什么？
+
+因为Entey已近持有了local对象的引用，我们没有设置引用类型，那这个引用就默认是个强引用。
+Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（threadLocal对象）和value
+
+​	引用链如上面所示，这个引用链全是强引用，当这个线程还未结束时，他持有的强引用，包括递归下去的所有强引用都不会被垃圾回收器回收。
+​	那么回到正常情况，ThreadLocalMap里Entey的key是弱引用，在本例中也就是local对象在这里是弱引用，当对象A回收时，由于local对象只剩下被弱引用key所引用，所以local对象也会被回收。
+2 重点来了，key为什么被设计为弱引用？？​	回归本质，ThreadLocalMap是用来存放对象的，在一次线程的执行栈中，存放数据后方便我们在任意的地方取得我们想要的值而不被其他线程干扰。ThreadLocalMap本身并没有为外界提供取出和存放数据的API，我们所能获得数据的方式只有通过ThreadLocal类提供的API来间接的从ThreadLocalMap取出数据，所以，当我们用不了key（ThreadLocal对象）的API也就无法从ThreadLocalMap里取出指定的数据。
+​	在上面的例子中，A对象被回收了，这些get和set方法也访问不到了，也就没法从ThreadLocalMap里取出数据了。没法利用API取出数据，那这个Entry对象还有用吗？？所以最好的方法是在A对象被回收后，系统自动回收对应的Entry对象，但是让Entry对象或其中的value对象做为弱引用都是非常不合理的（这两个要是使用弱引用，都可能造成数据意外丢失）。所以，让key（threadLocal对象）为弱引用，自动被垃圾回收，key就变为null了，下次，我们就可以通过Entry不为null，而key为null来判断该Entry对象该被清理掉了。
+​	至于ThreadLocalMap为什么不给外界提供API来操作数据，我觉得是因为这个Map对于一个线程只有一份，任何地方都在用，为了提供更方便的API和为了我们不破换其他框架保存到里面的数据（数据不被污染），所以才用ThreadLocal作为key和API来操作数据。
+3 总结​	综上，Entry的key被设计为弱引用就是为了让程序自动的对访问不到的数据进行回收提醒。所以，在访问不到的数据被回收之前，内存泄漏确实是存在的，但是我们不用担心，就算我们不调用remove，ThreadLocalMap在内部的set，get和扩容时都会清理掉泄漏的Entry，内存泄漏完全没必要过于担心
+所以，ThreadLocal的建议使用方法：
+
+设计为static的，被class对象给强引用，线程存活期间就不会被回收，也不用remove，完全不用担心内存泄漏
+
+非static的，放置在长对象（比如被spring管理的对象）的内部，也不会被回收
+
+
+​	个人也觉得没必要让创建的ThreadLocal对象生命周期过短，ThreadLocal被设计出来本身就是用来跨方法栈获取当前线程的数据或者无锁的获取线程安全的数据，空间交换了线程安全的上锁时间。只要让ThreadLocal具有线程的生命周期，就完全没必要使用remove方法，也完全不用担心内存泄漏的问题。
+​	另外说一点，HashMap是使用拉链法解决hash冲突的，ThreadLocalMap是使用线性探测解决hash冲突的（内部只维护Entey数组，没有链表）。所以，源码中在清除泄漏的Entry时，会进行rehash，防止数组的当前位置为null后，有hash冲突的Entry访问不到的问题。
+]]></content>
+      <categories>
+        <category>jdk</category>
+      </categories>
+      <tags>
+        <tag>ThreadLocal</tag>
+      </tags>
   </entry>
   <entry>
     <title>Spring-Transactional</title>
@@ -6214,1376 +7584,6 @@ full configration class的增强​	和lite configration class唯一的区别，
         <tag>BeanPostProcessor</tag>
         <tag>BeanDefinitionRegistryPostProcessor</tag>
         <tag>Configuration注解</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Spring-其他重要的BeanPostProcesor</title>
-    <url>/2021-04-01/spring-qi-ta-chong-yao-de-beanpostprocesor/</url>
-    <content><![CDATA[
-​	AsyncAnnotationBeanPostProcessor和ScheduledAnnotationBeanPostProcessor源码解析
-
-
-Spring-其他重要的BeanPostProcesorAsyncAnnotationBeanPostProcessor@EnableAsync​	其主要功能是向容器中注册AsyncAnnotationBeanPostProcessor这个BeanDefinition，其继承了AbstractBeanFactoryAwareAdvisingPostProcessor，可以处理指定的Advisor以此实现@Async的代理，来开启异步
-主要属性
-
-
-
-属性
-说明
-
-
-
-annotation
-自定义的异步注解，可以用来定制化
-
-
-proxyTargetClass
-是否代理目标类。默认为false，即走jdk代理；为true则用cglib代理
-
-
-mode
-AOP 模式，取值有： PROXY（默认）：使用 Spring 的代理机制 ASPECTJ：使用 AspectJ（需要额外依赖与编译时&#x2F;加载时织入配置）
-
-
-order
-AsyncAnnotationBeanPostProcessor的执行顺序，默认最后才执行
-
-
-AsyncAnnotationAdvisor​	在AsyncAnnotationBeanPostProcessor#setBeanFactory（bean初始化阶段的一个hook方法，用于给bean填充BeanFactory）中设置的Advisor
-
-public class AsyncAnnotationAdvisor extends AbstractPointcutAdvisor implements BeanFactoryAware {
-
-    private Advice advice;
-
-    private Pointcut pointcut;
-
-    public AsyncAnnotationAdvisor(
-            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
-
-        Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes = new LinkedHashSet&lt;>(2);
-        // 支持@Async
-        asyncAnnotationTypes.add(Async.class);
-        try {
-            // 也支持EJB的@Asynchronous
-            asyncAnnotationTypes.add((Class&lt;? extends Annotation>) ClassUtils.forName("javax.ejb.Asynchronous",
-                    AsyncAnnotationAdvisor.class.getClassLoader()));
-        } catch (ClassNotFoundException ex) {
-            // 类路径里不存在@javax.ejb.Asynchronous，也无所谓
-        }
-        this.advice = buildAdvice(executor, exceptionHandler);
-        this.pointcut = buildPointcut(asyncAnnotationTypes);
-    }
-
-    /**
-     * 构建异步拦截器 Advice：用于真正执行异步调用逻辑
-     */
-    protected Advice buildAdvice(
-            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
-
-        AnnotationAsyncExecutionInterceptor interceptor = new AnnotationAsyncExecutionInterceptor(null);
-        interceptor.configure(executor, exceptionHandler);
-        return interceptor;
-    }
-
-    /**
-     * 将asyncAnnotationTypes所有注解构造成一个ComposablePointcut，只要class或method上存在任意一个asyncAnnotationType，即可进行代理
-     */
-    protected Pointcut buildPointcut(Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes) {
-        ComposablePointcut result = null;
-        for (Class&lt;? extends Annotation> asyncAnnotationType : asyncAnnotationTypes) {
-            // AnnotationMatchingPointcut是用于注解进行匹配的Pointcut
-            // cpc用于class匹配（只要class上存在asyncAnnotationType注解就行）
-            Pointcut cpc = new AnnotationMatchingPointcut(asyncAnnotationType, true);
-            // mpc用于方法匹配（只要method上存在asyncAnnotationType注解就行）
-            Pointcut mpc = new AnnotationMatchingPointcut(null, asyncAnnotationType, true);
-            // ComposablePointcut为注解组合，或逻辑。只要内部的ClasaFilter匹配一个就为true。MethodMatcher匹配一个就为true
-            if (result == null) {
-                result = new ComposablePointcut(cpc);
-            } else {
-                result.union(cpc);
-            }
-            result = result.union(mpc);
-        }
-        return (result != null ? result : Pointcut.TRUE);
-    }
-
-}
-
-AnnotationAsyncExecutionInterceptor​	拦截器核心，用于解析指定的执行器，并异步执行目标方法
-public class AnnotationAsyncExecutionInterceptor extends AsyncExecutionInterceptor {
-
-    public Object invoke(final MethodInvocation invocation) throws Throwable {
-        Class&lt;?> targetClass = (invocation.getThis() != null ? AopUtils.getTargetClass(invocation.getThis()) : null);
-        Method specificMethod = ClassUtils.getMostSpecificMethod(invocation.getMethod(), targetClass);
-        final Method userDeclaredMethod = BridgeMethodResolver.findBridgedMethod(specificMethod);
-
-        // 根据@Async的value来获取容器中对象的执行器，准备在这个Executor中执行代理逻辑
-        AsyncTaskExecutor executor = determineAsyncExecutor(userDeclaredMethod);
-        if (executor == null) {
-            throw new IllegalStateException(
-                    "No executor specified and no default executor set on AsyncExecutionInterceptor either");
-        }
-
-        // 构建Callable
-        Callable&lt;Object> task = () -> {
-            try {
-                Object result = invocation.proceed();
-                if (result instanceof Future) {
-                    return ((Future&lt;?>) result).get();
-                }
-            }
-            catch (ExecutionException ex) {
-                handleError(ex.getCause(), userDeclaredMethod, invocation.getArguments());
-            }
-            catch (Throwable ex) {
-                handleError(ex, userDeclaredMethod, invocation.getArguments());
-            }
-            return null;
-        };
-
-        // 提交任务到Executor中
-        return doSubmit(task, executor, invocation.getMethod().getReturnType());
-    }
-
-    /**
-     *  可知对于CompletableFuture，ListenableFuture，Future这三种返回值都是支持的，但对于其他返回值都直接返回null了
-     */
-    protected Object doSubmit(Callable&lt;Object> task, AsyncTaskExecutor executor, Class&lt;?> returnType) {
-        if (CompletableFuture.class.isAssignableFrom(returnType)) {
-            return CompletableFuture.supplyAsync(() -> {
-                try {
-                    return task.call();
-                }
-                catch (Throwable ex) {
-                    throw new CompletionException(ex);
-                }
-            }, executor);
-        }
-        else if (ListenableFuture.class.isAssignableFrom(returnType)) {
-            return ((AsyncListenableTaskExecutor) executor).submitListenable(task);
-        }
-        else if (Future.class.isAssignableFrom(returnType)) {
-            return executor.submit(task);
-        }
-        else {
-            executor.submit(task);
-            return null;
-        }
-    }
-}
-
-总结
-方法或类上只要存在@Async或@Asynchronous即可走异步
-可使用@Async的value字段指定异步线程池（前提是要这个线程池在容器中）
-如未指定value，则使用容器中的AsyncConfigurer提供的Executor
-如果容器中没有AsyncConfigurer，则使用默认的SimpleAsyncTaskExecutor。其每次execute都会新开一个线程
-
-
-
-
-只支持CompletableFuture，ListenableFuture，Future这三种返回值。其余返回值都直接返回null
-异步切面会在这个方法中的所有切面里最先执行（因为其AsyncAnnotationBeanPostProcessor.beforeExistingAdvisors &#x3D; true）
-
-ScheduledAnnotationBeanPostProcessor@EnableScheduling​	向容器中注册ScheduledAnnotationBeanPostProcessor这个BeanDefinition，用于@Schedules和@Scheduled的解析和注册
-ScheduledAnnotationBeanPostProcessor核心源码public class ScheduledAnnotationBeanPostProcessor
-        implements ScheduledTaskHolder, MergedBeanDefinitionPostProcessor, DestructionAwareBeanPostProcessor,
-        Ordered, EmbeddedValueResolverAware, BeanNameAware, BeanFactoryAware, ApplicationContextAware,
-        SmartInitializingSingleton, ApplicationListener&lt;ContextRefreshedEvent>, DisposableBean {
-
-    /**
-     * bean初始化完成后的hook，只做定时任务的解析和封装，这里并不执行
-     */
-    public Object postProcessAfterInitialization(Object bean, String beanName) {
-        if (bean instanceof AopInfrastructureBean || bean instanceof TaskScheduler ||
-                bean instanceof ScheduledExecutorService) {
-            // Ignore AOP infrastructure such as scoped proxies.
-            return bean;
-        }
-
-        Class&lt;?> targetClass = AopProxyUtils.ultimateTargetClass(bean);
-        if (!this.nonAnnotatedClasses.contains(targetClass)) {
-            // 解析方法上的@Schedules和@Scheduled
-            Map&lt;Method, Set&lt;Scheduled>> annotatedMethods = MethodIntrospector.selectMethods(targetClass,
-                    (MethodIntrospector.MetadataLookup&lt;Set&lt;Scheduled>>) method -> {
-                        Set&lt;Scheduled> scheduledMethods = AnnotatedElementUtils.getMergedRepeatableAnnotations(
-                                method, Scheduled.class, Schedules.class);
-                        return (!scheduledMethods.isEmpty() ? scheduledMethods : null);
-                    });
-            if (annotatedMethods.isEmpty()) {
-                this.nonAnnotatedClasses.add(targetClass);
-            } else {
-                // 存在注解，对每个定时任务方法进行处理
-                annotatedMethods.forEach((method, scheduledMethods) -> scheduledMethods
-                        .forEach(scheduled -> processScheduled(scheduled, method, bean)));
-            }
-        }
-        return bean;
-    }
-
-    /**
-     * 解析@Scheduled注解，可知其定时字段优先级：cron > fixedDelay > fixedDelayString > fixedRate > fixedRateString
-     */
-    protected void processScheduled(Scheduled scheduled, Method method, Object bean) {
-        try {
-            // 将方法封装为可直接运行的Runnable（方法不能有参数）
-            Runnable runnable = createRunnable(bean, method);
-            // 是否已处理过（一个@Scheduled只能使用一个定时）
-            boolean processedSchedule = false;
-            String errorMessage = "Exactly one of the 'cron', 'fixedDelay(String)', or 'fixedRate(String)' attributes is required";
-
-            Set&lt;ScheduledTask> tasks = new LinkedHashSet&lt;>(4);
-
-            // 解析初始延时
-            long initialDelay = scheduled.initialDelay();
-            String initialDelayString = scheduled.initialDelayString();
-            if (StringUtils.hasText(initialDelayString)) {
-                Assert.isTrue(initialDelay &lt; 0, "Specify 'initialDelay' or 'initialDelayString', not both");
-                if (this.embeddedValueResolver != null) {
-                    initialDelayString = this.embeddedValueResolver.resolveStringValue(initialDelayString);
-                }
-                if (StringUtils.hasLength(initialDelayString)) {
-                    try {
-                        initialDelay = parseDelayAsLong(initialDelayString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid initialDelayString value \"" + initialDelayString
-                                        + "\" - cannot parse into long");
-                    }
-                }
-            }
-
-            // 优先解析cron表达式
-            String cron = scheduled.cron();
-            if (StringUtils.hasText(cron)) {
-                String zone = scheduled.zone();
-                if (this.embeddedValueResolver != null) {
-                    cron = this.embeddedValueResolver.resolveStringValue(cron);
-                    zone = this.embeddedValueResolver.resolveStringValue(zone);
-                }
-                if (StringUtils.hasLength(cron)) {
-                    // 校验cron不支持初始延时
-                    Assert.isTrue(initialDelay == -1, "'initialDelay' not supported for cron triggers");
-                    processedSchedule = true;
-                    if (!Scheduled.CRON_DISABLED.equals(cron)) {
-                        TimeZone timeZone;
-                        if (StringUtils.hasText(zone)) {
-                            timeZone = StringUtils.parseTimeZoneString(zone);
-                        } else {
-                            timeZone = TimeZone.getDefault();
-                        }
-                        // 构造为CronTask，先缓存起来
-                        tasks.add(this.registrar
-                                .scheduleCronTask(new CronTask(runnable, new CronTrigger(cron, timeZone))));
-                    }
-                }
-            }
-
-            if (initialDelay &lt; 0) {
-                initialDelay = 0;
-            }
-
-            // 解析固定周期
-            long fixedDelay = scheduled.fixedDelay();
-            if (fixedDelay >= 0) {
-                Assert.isTrue(!processedSchedule, errorMessage);
-                processedSchedule = true;
-                tasks.add(
-                        this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
-            }
-            String fixedDelayString = scheduled.fixedDelayString();
-            if (StringUtils.hasText(fixedDelayString)) {
-                if (this.embeddedValueResolver != null) {
-                    fixedDelayString = this.embeddedValueResolver.resolveStringValue(fixedDelayString);
-                }
-                if (StringUtils.hasLength(fixedDelayString)) {
-                    Assert.isTrue(!processedSchedule, errorMessage);
-                    processedSchedule = true;
-                    try {
-                        fixedDelay = parseDelayAsLong(fixedDelayString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid fixedDelayString value \"" + fixedDelayString + "\" - cannot parse into long");
-                    }
-                    // 构造为FixedDelayTask，先缓存起来
-                    tasks.add(this.registrar
-                            .scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
-                }
-            }
-
-            // 最后才解析固定频率
-            long fixedRate = scheduled.fixedRate();
-            if (fixedRate >= 0) {
-                Assert.isTrue(!processedSchedule, errorMessage);
-                processedSchedule = true;
-                tasks.add(this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
-            }
-            String fixedRateString = scheduled.fixedRateString();
-            if (StringUtils.hasText(fixedRateString)) {
-                if (this.embeddedValueResolver != null) {
-                    fixedRateString = this.embeddedValueResolver.resolveStringValue(fixedRateString);
-                }
-                if (StringUtils.hasLength(fixedRateString)) {
-                    Assert.isTrue(!processedSchedule, errorMessage);
-                    processedSchedule = true;
-                    try {
-                        fixedRate = parseDelayAsLong(fixedRateString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid fixedRateString value \"" + fixedRateString + "\" - cannot parse into long");
-                    }
-                    // 构造为FixedRateTask，先缓存起来
-                    tasks.add(
-                            this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
-                }
-            }
-
-            // 校验使用了注解的必须有定时任务
-            Assert.isTrue(processedSchedule, errorMessage);
-
-            // Finally register the scheduled tasks
-            synchronized (this.scheduledTasks) {
-                Set&lt;ScheduledTask> regTasks = this.scheduledTasks.computeIfAbsent(bean, key -> new LinkedHashSet&lt;>(4));
-                regTasks.addAll(tasks);
-            }
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalStateException(
-                    "Encountered invalid @Scheduled method '" + method.getName() + "': " + ex.getMessage());
-        }
-    }
-
-    /**
-     * ContextRefreshed事件，表示容器刷新完毕，可以真正的注册定时任务了
-     */
-    public void onApplicationEvent(ContextRefreshedEvent event) {
-        if (event.getApplicationContext() == this.applicationContext) {
-            finishRegistration();
-        }
-    }
-
-    /**
-     * 开始真正的投递定时任务到线程池中。
-     * 定时线程池优先级：
-     * 1. scheduler
-     * 2. TaskScheduler(beanName为taskScheduler) bean
-     * 3. 任意TaskScheduler bean
-     * 4. ScheduledExecutorService(beanName为taskScheduler) bean
-     * 5. 任意ScheduledExecutorService bean
-     * 6. ScheduledThreadPoolExecutor（线程数为1）
-     */
-    private void finishRegistration() {
-        if (this.scheduler != null) {
-            this.registrar.setScheduler(this.scheduler);
-        }
-
-        if (this.beanFactory instanceof ListableBeanFactory) {
-            Map&lt;String, SchedulingConfigurer> beans = ((ListableBeanFactory) this.beanFactory)
-                    .getBeansOfType(SchedulingConfigurer.class);
-            List&lt;SchedulingConfigurer> configurers = new ArrayList&lt;>(beans.values());
-            AnnotationAwareOrderComparator.sort(configurers);
-            for (SchedulingConfigurer configurer : configurers) {
-                configurer.configureTasks(this.registrar);
-            }
-        }
-
-        if (this.registrar.hasTasks() &amp;&amp; this.registrar.getScheduler() == null) {
-            Assert.state(this.beanFactory != null, "BeanFactory must be set to find scheduler by type");
-            try {
-                // 先获取beanName为taskScheduler的TaskScheduler bean
-                this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, false));
-            } catch (NoUniqueBeanDefinitionException ex) {
-                try {
-                    // 再按class获取TaskScheduler bean
-                    this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, true));
-                } catch (NoSuchBeanDefinitionException ex2) {
-
-                }
-            } catch (NoSuchBeanDefinitionException ex) {
-                try {
-                    // 再获取beanName为taskScheduler的ScheduledExecutorService bean
-                    this.registrar.setScheduler(
-                            resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, false));
-                } catch (NoUniqueBeanDefinitionException ex2) {
-                    try {
-                        // 再按class获取ScheduledExecutorService bean
-                        this.registrar.setScheduler(
-                                resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, true));
-                    } catch (NoSuchBeanDefinitionException ex3) {
-
-                    }
-                } catch (NoSuchBeanDefinitionException ex2) {
-
-                }
-            }
-        }
-        // 到这了如果taskScheduler还没有，内部则会创建一个容量为1的ScheduledThreadPoolExecutor去执行定时任务
-        // 将bean解析完成的所有定时任务投递到定时任务线程吃
-        this.registrar.afterPropertiesSet();
-    }
-
-}
-
-总结
-bean初始化完成后解析才@Scheduled和@Schedules（只是解析，并不投递），缓存到统一的ScheduledTaskRegistrar中
-@Scheduled只能解析为一个定时任务，优先级：
-cron
-fixedDelay
-fixedDelayString
-fixedRate
-fixedRateString
-
-
-要定时成多个任务需要使用@Schedules
-
-
-ContextRefreshedEvent事件触发，开始投递任务
-先获取任务定时器，定时线程池优先级：
-ScheduledAnnotationBeanPostProcessor#scheduler（只能为TaskScheduler或ScheduledExecutorService的子类）
-任意TaskScheduler  bean
-TaskScheduler(beanName为taskScheduler)  bean
-任意ScheduledExecutorService  bean
-ScheduledExecutorService(beanName为taskScheduler)  bean
-ScheduledThreadPoolExecutor（线程数为1），即默认线程池
-
-
-将解析阶段ScheduledTaskRegistrar内缓存的Task都投递到定时线程池中
-
-
-重点了解下cron，它会被封装为ReschedulingRunnable，每次执行完后才根据cron计算下一次任务的执行时间，这样循环动态的计算执行时间
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>BeanPostProcessor</tag>
-        <tag>Async注解</tag>
-        <tag>Scheduled注解</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>谈谈ThreadLocal为什么被设计为弱引用</title>
-    <url>/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</url>
-    <content><![CDATA[
-分析了ThreadLocal为什么要被设计为弱引用，并给出了ThreadLocal的建议使用方法
-
-
-谈谈ThreadLocal为什么被设计为弱引用​	ThreadLocal在用作ThreadLocalMap的key时，是被设计为弱引用的。
-​	ThreadLocalMap的内部类Entry被设计为实现了WeakReference，Entry用来存放数据。在构造Entry对象时，将传进来的ThreadLocal对象包装成了真正的弱引用对象，而Entry对象和内部的value对象本身是强引用的。
-弱引用的解释：
-
-​		只具有弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。
-
-​	简单理解就是当垃圾回收时，该对象只被WeakReference对象的弱引用字段（T reference）所引用，而未被任何强类型的对象引用，那么，该弱引用的对象就会被回收。
-​	注意：WeakReference引用本身是强引用，它内部的（T reference）才是真正的弱引用字段，WeakReference就是一个装弱引用的容器而已。
-1 回收测试示例public class ThreadLocalDemo {
-    public static void main(String[] args) throws InterruptedException {
-        firstStack();
-        System.gc();
-        TimeUnit.SECONDS.sleep(1);
-        Thread thread = Thread.currentThread();
-        System.out.println(thread); // 在这里打断点，观察thread对象里的ThreadLocalMap数据
-
-    }
-    // 通过是否获取返回值观察A对象里的local对象是否被回收
-    private static A firstStack(){
-        A a = new A();
-        System.out.println("value: "+ a.get());
-        return a;
-    }
-    private static class A{
-        private ThreadLocal&lt;String> local = ThreadLocal.withInitial(() -> "in class A");
-
-        public String get(){
-            return local.get();
-        }
-        public void set(String str){
-            local.set(str);
-        }
-
-    }
-}
-
-
-ThreadLocal 被强引用持有，不会被回收
-
-
-ThreadLocal只被弱引用持有，gc后被回收了
-
-​	如上面的代码，当构造一个A对象时，内部的local对象也构造了，之后调用get和set方法对local对象取值和设置值，当A对象不可达时，垃圾收集器就会回收A。
-​	现在我们假设ThreadLocalMap的Entey里的key（ThreadLocal对象）不是弱引用的，且已经调用了A的对象的get或set方法，那么垃圾收集器回收A对象时，一定不会回收里面的local对象，为什么？
-
-因为Entey已近持有了local对象的引用，我们没有设置引用类型，那这个引用就默认是个强引用。
-Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（threadLocal对象）和value
-
-​	引用链如上面所示，这个引用链全是强引用，当这个线程还未结束时，他持有的强引用，包括递归下去的所有强引用都不会被垃圾回收器回收。
-​	那么回到正常情况，ThreadLocalMap里Entey的key是弱引用，在本例中也就是local对象在这里是弱引用，当对象A回收时，由于local对象只剩下被弱引用key所引用，所以local对象也会被回收。
-2 重点来了，key为什么被设计为弱引用？？​	回归本质，ThreadLocalMap是用来存放对象的，在一次线程的执行栈中，存放数据后方便我们在任意的地方取得我们想要的值而不被其他线程干扰。ThreadLocalMap本身并没有为外界提供取出和存放数据的API，我们所能获得数据的方式只有通过ThreadLocal类提供的API来间接的从ThreadLocalMap取出数据，所以，当我们用不了key（ThreadLocal对象）的API也就无法从ThreadLocalMap里取出指定的数据。
-​	在上面的例子中，A对象被回收了，这些get和set方法也访问不到了，也就没法从ThreadLocalMap里取出数据了。没法利用API取出数据，那这个Entry对象还有用吗？？所以最好的方法是在A对象被回收后，系统自动回收对应的Entry对象，但是让Entry对象或其中的value对象做为弱引用都是非常不合理的（这两个要是使用弱引用，都可能造成数据意外丢失）。所以，让key（threadLocal对象）为弱引用，自动被垃圾回收，key就变为null了，下次，我们就可以通过Entry不为null，而key为null来判断该Entry对象该被清理掉了。
-​	至于ThreadLocalMap为什么不给外界提供API来操作数据，我觉得是因为这个Map对于一个线程只有一份，任何地方都在用，为了提供更方便的API和为了我们不破换其他框架保存到里面的数据（数据不被污染），所以才用ThreadLocal作为key和API来操作数据。
-3 总结​	综上，Entry的key被设计为弱引用就是为了让程序自动的对访问不到的数据进行回收提醒。所以，在访问不到的数据被回收之前，内存泄漏确实是存在的，但是我们不用担心，就算我们不调用remove，ThreadLocalMap在内部的set，get和扩容时都会清理掉泄漏的Entry，内存泄漏完全没必要过于担心
-所以，ThreadLocal的建议使用方法：
-
-设计为static的，被class对象给强引用，线程存活期间就不会被回收，也不用remove，完全不用担心内存泄漏
-
-非static的，放置在长对象（比如被spring管理的对象）的内部，也不会被回收
-
-
-​	个人也觉得没必要让创建的ThreadLocal对象生命周期过短，ThreadLocal被设计出来本身就是用来跨方法栈获取当前线程的数据或者无锁的获取线程安全的数据，空间交换了线程安全的上锁时间。只要让ThreadLocal具有线程的生命周期，就完全没必要使用remove方法，也完全不用担心内存泄漏的问题。
-​	另外说一点，HashMap是使用拉链法解决hash冲突的，ThreadLocalMap是使用线性探测解决hash冲突的（内部只维护Entey数组，没有链表）。所以，源码中在清除泄漏的Entry时，会进行rehash，防止数组的当前位置为null后，有hash冲突的Entry访问不到的问题。
-]]></content>
-      <categories>
-        <category>jdk</category>
-      </categories>
-      <tags>
-        <tag>ThreadLocal</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>Spring-容器refresh</title>
-    <url>/2021-06-03/spring-rong-qi-refresh/</url>
-    <content><![CDATA[
-​	从源码分析了Spring容器的refresh过程，并通过图文的方式记录了整个流程的核心步骤
-
-
-容器refresh核心步骤总结
-准备 BeanFactory（包括类加载器、SPEL解析器等基础设施）
-执行 BeanDefinitionRegistryPostProcessor：优先处理配置类等，动态注册更多 BeanDefinition
-执行 BeanFactoryPostProcessor：可用来修改 BeanDefinition 信息
-注册 BeanPostProcessor：用于后续 Bean 创建生命周期中的扩展
-初始化 MessageSource：国际化消息解析支持
-初始化事件广播器（ApplicationEventMulticaster）并注册为 Bean
-调用 onRefresh()：留给子类扩展（如创建 Web Server）
-注册 ApplicationListener：用于监听容器事件
-实例化非懒加载的单例 Bean
-完成刷新：启动 SmartLifecycle Bean，发布 ContextRefreshedEvent
-
-
-AbstractApplicationContext#refresh-源码分析整体的refreshpublic void refresh() throws BeansException, IllegalStateException {
-    synchronized (this.startupShutdownMonitor) {
-        // 1. 准备上下文环境（包括设置启动时间、状态标志位、初始化环境属性等）
-        prepareRefresh();
-
-        // 2. 创建并刷新 BeanFactory（默认 DefaultListableBeanFactory）
-        ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
-
-        // 3. 对BeanFactory做各种填充
-        prepareBeanFactory(beanFactory);
-
-        try {
-            // 4. hook方法，供子类在 BeanFactory 初始化后、自定义修改它
-            postProcessBeanFactory(beanFactory);
-
-            // 5. 调用 BeanFactoryPostProcessor(BeanDefinitionRegistryPostProcessor >
-            // BeanFactoryPostProcessor)
-            // ConfigurationClassPostProcessor就是这阶段处理的
-            invokeBeanFactoryPostProcessors(beanFactory);
-
-            // 6. 注册 BeanPostProcessor（并非调用），用于后续Bean实例化的hook
-            registerBeanPostProcessors(beanFactory);
-
-            // 7. 为上下文初始化Message源，国际化处理
-            initMessageSource();
-
-            // 8. 初始化事件广播器（默认实现为SimpleApplicationEventMulticaster，专门用来查找对应ApplicationEvent应该使用哪个ApplicationListener（按类型匹配））
-            initApplicationEventMulticaster();
-
-            // 9. 留给子类初始化其他bean（spring boot中子类会初始化web服务器）
-            onRefresh();
-
-            // 10. 注册所有实现了 ApplicationListener 的 Bean 到广播器中
-            registerListeners();
-
-            // 11. 初始化剩下Bean（非lazy 且 singleton）
-            finishBeanFactoryInitialization(beanFactory);
-
-            // 12. SmartLifecycle的Bean可以start了，并且发布ContextRefreshedEvent事件
-            finishRefresh();
-        }
-
-        catch (BeansException ex) {
-            if (logger.isWarnEnabled()) {
-                logger.warn("Exception encountered during context initialization - " +
-                        "cancelling refresh attempt: " + ex);
-            }
-
-            // 异常处理1：销毁已创建的单例 bean，避免资源泄漏
-            destroyBeans();
-
-            // 异常处理2：重置 context 状态标志，保证下次调用 refresh 可以重新开始
-            cancelRefresh(ex);
-
-            throw ex;
-        }
-
-        finally {
-            // 最终清除 Spring 内部使用的一些缓存（如反射、泛型元信息等）
-            resetCommonCaches();
-        }
-    }
-}
-
-关键步骤分析prepareBeanFactory​	目的是对内部 BeanFactory 进行增强配置，注入 ApplicationContext 级别的基础能力，主要包括如下
-
-设置类加载器、SpEL 表达式解析器与资源编辑器
-注册常见 Aware 接口的处理器与特殊依赖的自动解析
-注册内置基础 Bean（如 Spring Environment、系统属性、系统环境变量）
-
-protected void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory) {
-    // 设置类加载器（用于加载 bean 类、AOP 等）
-    beanFactory.setBeanClassLoader(getClassLoader());
-    // 设置beanFactory的表达式语言（SpEL）处理器
-    beanFactory.setBeanExpressionResolver(new StandardBeanExpressionResolver(beanFactory.getBeanClassLoader()));
-    // 设置各种PropertyEditor（用于解析 Resource 等）
-    beanFactory.addPropertyEditorRegistrar(new ResourceEditorRegistrar(this, getEnvironment()));
-
-    // 注册 ApplicationContextAwareProcessor，处理以下几个 Aware 接口注入
-    beanFactory.addBeanPostProcessor(new ApplicationContextAwareProcessor(this));
-    // 设置一些忽略自动装配的接口,上面的ApplicationContextAwareProcessor就已经搞定了
-    beanFactory.ignoreDependencyInterface(EnvironmentAware.class);
-    beanFactory.ignoreDependencyInterface(EmbeddedValueResolverAware.class);
-    beanFactory.ignoreDependencyInterface(ResourceLoaderAware.class);
-    beanFactory.ignoreDependencyInterface(ApplicationEventPublisherAware.class);
-    beanFactory.ignoreDependencyInterface(MessageSourceAware.class);
-    beanFactory.ignoreDependencyInterface(ApplicationContextAware.class);
-
-    // 设置几个特殊的依赖注入值（无需在容器中定义，注入时直接解析为指定对象）
-    beanFactory.registerResolvableDependency(BeanFactory.class, beanFactory);
-    beanFactory.registerResolvableDependency(ResourceLoader.class, this);
-    beanFactory.registerResolvableDependency(ApplicationEventPublisher.class, this);
-    beanFactory.registerResolvableDependency(ApplicationContext.class, this);
-
-    // 添加ApplicationListener的监听器，当单例bean初始化后，且实现了ApplicationListener接口，就将其缓存起来以便使用
-    beanFactory.addBeanPostProcessor(new ApplicationListenerDetector(this));
-
-    // 如果容器中有 LoadTimeWeaver，注册对应的 Aware 处理器，并设置临时 ClassLoader
-    if (beanFactory.containsBean(LOAD_TIME_WEAVER_BEAN_NAME)) {
-        beanFactory.addBeanPostProcessor(new LoadTimeWeaverAwareProcessor(beanFactory));
-        beanFactory.setTempClassLoader(new ContextTypeMatchClassLoader(beanFactory.getBeanClassLoader()));
-    }
-
-    // Spring Environment Bean 注册（当前环境信息）
-    if (!beanFactory.containsLocalBean(ENVIRONMENT_BEAN_NAME)) {
-        beanFactory.registerSingleton(ENVIRONMENT_BEAN_NAME, getEnvironment());
-    }
-    // 系统属性（System.getProperties()）Bean注册
-    if (!beanFactory.containsLocalBean(SYSTEM_PROPERTIES_BEAN_NAME)) {
-        beanFactory.registerSingleton(SYSTEM_PROPERTIES_BEAN_NAME, getEnvironment().getSystemProperties());
-    }
-    // 系统环境变量（System.getenv()）Bean注册
-    if (!beanFactory.containsLocalBean(SYSTEM_ENVIRONMENT_BEAN_NAME)) {
-        beanFactory.registerSingleton(SYSTEM_ENVIRONMENT_BEAN_NAME, getEnvironment().getSystemEnvironment());
-    }
-}
-
-invokeBeanFactoryPostProcessors
-
-先处理 BeanDefinitionRegistryPostProcessor：
-手动传入的优先执行
-容器中的按 PriorityOrdered &gt; Ordered &gt; 剩下的
-若执行过程中有动态注册的后处理器，继续迭代
-
-
-再处理 BeanFactoryPostProcessor：
-优先级一样， PriorityOrdered &gt; Ordered &gt; 剩下的
-
-
-最后清除合并后的 BeanDefinition 缓存，确保后处理器修改生效
-
-
-​	ConfigurationClassPostProcessor 就是最早执行的 BeanDefinitionRegistryPostProcessor之一，其负责解析 @Configuration 等注解并动态注册大量 BeanDefinition。因此，我们可以通过自定义 BeanDefinitionRegistryPostProcessor 在它之后介入，统一处理或修改所有后续注册的 BeanDefinition，实现排除、添加或调整。
-// PostProcessorRegistrationDelegate类
-public static void invokeBeanFactoryPostProcessors(
-        ConfigurableListableBeanFactory beanFactory, List&lt;BeanFactoryPostProcessor> beanFactoryPostProcessors) {
-
-    // 已经处理过了的BeanDefinitionRegistryPostProcessors集和，避免重复处理bean
-    Set&lt;String> processedBeans = new HashSet&lt;>();
-
-    /// 判断 beanFactory 是否支持注册
-    /// BeanDefinition，以优先处理BeanDefinitionRegistryPostProcessor
-    if (beanFactory instanceof BeanDefinitionRegistry) {
-        BeanDefinitionRegistry registry = (BeanDefinitionRegistry) beanFactory;
-        List&lt;BeanFactoryPostProcessor> regularPostProcessors = new ArrayList&lt;>();
-        List&lt;BeanDefinitionRegistryPostProcessor> registryProcessors = new ArrayList&lt;>();
-
-        for (BeanFactoryPostProcessor postProcessor : beanFactoryPostProcessors) {
-            if (postProcessor instanceof BeanDefinitionRegistryPostProcessor) {
-                BeanDefinitionRegistryPostProcessor registryProcessor = (BeanDefinitionRegistryPostProcessor) postProcessor;
-                registryProcessor.postProcessBeanDefinitionRegistry(registry);
-                registryProcessors.add(registryProcessor);
-            } else {
-                regularPostProcessors.add(postProcessor);
-            }
-        }
-
-        // 当前阶段要执行的 BeanDefinitionRegistryPostProcessor 处理器列表，处理的优先级：PriorityOrdered >
-        // Ordered > 剩下的
-        List&lt;BeanDefinitionRegistryPostProcessor> currentRegistryProcessors = new ArrayList&lt;>();
-
-        // =================== 第一轮：处理 PriorityOrdered 的 BD 处理器 ===================
-        String[] postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true,
-                false);
-        for (String ppName : postProcessorNames) {
-            if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
-                currentRegistryProcessors.add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
-                processedBeans.add(ppName);
-            }
-        }
-        sortPostProcessors(currentRegistryProcessors, beanFactory);
-        registryProcessors.addAll(currentRegistryProcessors);
-        invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
-        currentRegistryProcessors.clear();
-
-        // =================== 第二轮：处理 Ordered 的 BD 处理器 ===================
-        postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false);
-        for (String ppName : postProcessorNames) {
-            if (!processedBeans.contains(ppName) &amp;&amp; beanFactory.isTypeMatch(ppName, Ordered.class)) {
-                currentRegistryProcessors.add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
-                processedBeans.add(ppName);
-            }
-        }
-        sortPostProcessors(currentRegistryProcessors, beanFactory);
-        registryProcessors.addAll(currentRegistryProcessors);
-        invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
-        currentRegistryProcessors.clear();
-
-        // =================== 最后：处理剩余的无序 BD 处理器（可能动态注册） ===================
-        boolean reiterate = true;
-        while (reiterate) {
-            reiterate = false;
-            postProcessorNames = beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true,
-                    false);
-            for (String ppName : postProcessorNames) {
-                if (!processedBeans.contains(ppName)) {
-                    currentRegistryProcessors
-                            .add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
-                    processedBeans.add(ppName);
-                    reiterate = true;
-                }
-            }
-            sortPostProcessors(currentRegistryProcessors, beanFactory);
-            registryProcessors.addAll(currentRegistryProcessors);
-            invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry);
-            currentRegistryProcessors.clear();
-        }
-
-        // =================== 执行所有已注册 BD 处理器的 postProcessBeanFactory 回调
-        // ===================
-        invokeBeanFactoryPostProcessors(registryProcessors, beanFactory);
-        // =================== 执行用户提供的常规 BeanFactoryPostProcessor ===================
-        invokeBeanFactoryPostProcessors(regularPostProcessors, beanFactory);
-    }
-
-    else {
-        invokeBeanFactoryPostProcessors(beanFactoryPostProcessors, beanFactory);
-    }
-
-    // =================== 从配置中获取剩余的 BeanFactoryPostProcessor ===================
-    String[] postProcessorNames = beanFactory.getBeanNamesForType(BeanFactoryPostProcessor.class, true, false);
-
-    // 分类收集 PriorityOrdered、Ordered、其他的 三类处理器
-    List&lt;BeanFactoryPostProcessor> priorityOrderedPostProcessors = new ArrayList&lt;>();
-    List&lt;String> orderedPostProcessorNames = new ArrayList&lt;>();
-    List&lt;String> nonOrderedPostProcessorNames = new ArrayList&lt;>();
-    for (String ppName : postProcessorNames) {
-        if (processedBeans.contains(ppName)) {
-            // skip - already processed in first phase above
-        } else if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
-            priorityOrderedPostProcessors.add(beanFactory.getBean(ppName, BeanFactoryPostProcessor.class));
-        } else if (beanFactory.isTypeMatch(ppName, Ordered.class)) {
-            orderedPostProcessorNames.add(ppName);
-        } else {
-            nonOrderedPostProcessorNames.add(ppName);
-        }
-    }
-
-    // 执行顺序类似上面的BD处理器
-    // PriorityOrdered
-    sortPostProcessors(priorityOrderedPostProcessors, beanFactory);
-    invokeBeanFactoryPostProcessors(priorityOrderedPostProcessors, beanFactory);
-
-    // Ordered
-    List&lt;BeanFactoryPostProcessor> orderedPostProcessors = new ArrayList&lt;>();
-    for (String postProcessorName : orderedPostProcessorNames) {
-        orderedPostProcessors.add(beanFactory.getBean(postProcessorName, BeanFactoryPostProcessor.class));
-    }
-    sortPostProcessors(orderedPostProcessors, beanFactory);
-    invokeBeanFactoryPostProcessors(orderedPostProcessors, beanFactory);
-
-    // 其他的
-    List&lt;BeanFactoryPostProcessor> nonOrderedPostProcessors = new ArrayList&lt;>();
-    for (String postProcessorName : nonOrderedPostProcessorNames) {
-        nonOrderedPostProcessors.add(beanFactory.getBean(postProcessorName, BeanFactoryPostProcessor.class));
-    }
-    invokeBeanFactoryPostProcessors(nonOrderedPostProcessors, beanFactory);
-    // 清理 BeanDefinition 的缓存，防止元信息过期（如占位符已被替换）
-    beanFactory.clearMetadataCache();
-}
-
-registerBeanPostProcessors​	实例化并注册所有 BeanPostProcessor，按 PriorityOrdered &gt; Ordered &gt; 无序 的优先级添加到容器中，确保 Bean 生命周期中的处理器执行顺序符合预期；内部处理器（MergedBeanDefinitionPostProcessor）统一放在末尾，确保其在所有普通处理器之后执行。
-// PostProcessorRegistrationDelegate类
-public static void registerBeanPostProcessors(
-        ConfigurableListableBeanFactory beanFactory, AbstractApplicationContext applicationContext) {
-    // 获取所有实现了 BeanPostProcessor 接口的 beanName（不实例化）
-    String[] postProcessorNames = beanFactory.getBeanNamesForType(BeanPostProcessor.class, true, false);
-
-    // 记录目标 BeanPostProcessor 总数：现有 + 新注册 + 最终数量
-    int beanProcessorTargetCount = beanFactory.getBeanPostProcessorCount() + 1 + postProcessorNames.length;
-   /*
-     *   专门用来检查普通bean是否走完所有的BeanPostProcessor的
-     *
-     * 一个普通的bean在实例化时，正常情况下应该走完所有的BeanPostProcessor，
-     * 但当只注册了部分的BeanPostProcessor(放到IOC容器中)时，
-     * 此时实例化一个bean可能就导致还未注册的BeanPostProcessor处理不了（看优先级），
-     * 就会由这个checker来日志提醒（仅打印info日志）
-     */
-    beanFactory.addBeanPostProcessor(new BeanPostProcessorChecker(beanFactory, beanProcessorTargetCount));
-
-    // 准备分组存储不同优先级的 BeanPostProcessor
-    List&lt;BeanPostProcessor> priorityOrderedPostProcessors = new ArrayList&lt;>();
-    List&lt;BeanPostProcessor> internalPostProcessors = new ArrayList&lt;>();
-    List&lt;String> orderedPostProcessorNames = new ArrayList&lt;>();
-    List&lt;String> nonOrderedPostProcessorNames = new ArrayList&lt;>();
-    // 分类：根据是否实现 PriorityOrdered / Ordered / 无排序
-    for (String ppName : postProcessorNames) {
-        if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) { // PriorityOrdered的直接实例化
-            BeanPostProcessor pp = beanFactory.getBean(ppName, BeanPostProcessor.class);
-            priorityOrderedPostProcessors.add(pp);
-            if (pp instanceof MergedBeanDefinitionPostProcessor) {
-                internalPostProcessors.add(pp);
-            }
-        } else if (beanFactory.isTypeMatch(ppName, Ordered.class)) {
-            orderedPostProcessorNames.add(ppName);
-        } else {
-            nonOrderedPostProcessorNames.add(ppName);
-        }
-    }
-
-    // PriorityOrdered以及实例化了，就可直接 排序 ->  注册
-    sortPostProcessors(priorityOrderedPostProcessors, beanFactory);
-    registerBeanPostProcessors(beanFactory, priorityOrderedPostProcessors);
-
-    // Ordered，实例化 -> 排序 -> 注册
-    List&lt;BeanPostProcessor> orderedPostProcessors = new ArrayList&lt;>();
-    for (String ppName : orderedPostProcessorNames) {
-        BeanPostProcessor pp = beanFactory.getBean(ppName, BeanPostProcessor.class);
-        orderedPostProcessors.add(pp);
-        if (pp instanceof MergedBeanDefinitionPostProcessor) {
-            internalPostProcessors.add(pp);
-        }
-    }
-    sortPostProcessors(orderedPostProcessors, beanFactory);
-    registerBeanPostProcessors(beanFactory, orderedPostProcessors);
-
-    // 无顺序，实例化 -> 注册
-    List&lt;BeanPostProcessor> nonOrderedPostProcessors = new ArrayList&lt;>();
-    for (String ppName : nonOrderedPostProcessorNames) {
-        BeanPostProcessor pp = beanFactory.getBean(ppName, BeanPostProcessor.class);
-        nonOrderedPostProcessors.add(pp);
-        if (pp instanceof MergedBeanDefinitionPostProcessor) {
-            internalPostProcessors.add(pp);
-        }
-    }
-    registerBeanPostProcessors(beanFactory, nonOrderedPostProcessors);
-
-    // 四、最后统一注册 MergedBeanDefinitionPostProcessor（内部BPP），例如：
-    // - AutowiredAnnotationBeanPostProcessor
-    // - CommonAnnotationBeanPostProcessor
-    // - ApplicationListenerDetector 等
-    sortPostProcessors(internalPostProcessors, beanFactory);
-    registerBeanPostProcessors(beanFactory, internalPostProcessors);
-
-    // 五、重新注册 ApplicationListenerDetector，用来收集ApplicationListener Bean（确保在链末尾执行（避免过早代理））
-    beanFactory.addBeanPostProcessor(new ApplicationListenerDetector(applicationContext));
-}
-
-initApplicationEventMulticaster​	注册的默认事件广播器为SimpleApplicationEventMulticaster，其主要是对所有的ApplicationEvent事件进行分发匹配到对应的ApplicationListener中（支持异步，线程池为SimpleApplicationEventMulticaster.taskExecutor，默认同步分发）
-protected void initApplicationEventMulticaster() {
-    ConfigurableListableBeanFactory beanFactory = getBeanFactory();
-    if (beanFactory.containsLocalBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME)) {
-        this.applicationEventMulticaster =
-                beanFactory.getBean(APPLICATION_EVENT_MULTICASTER_BEAN_NAME, ApplicationEventMulticaster.class);
-        if (logger.isTraceEnabled()) {
-            logger.trace("Using ApplicationEventMulticaster [" + this.applicationEventMulticaster + "]");
-        }
-    }
-    else {
-        // 实例化并注册默认的事件广播器Bean：SimpleApplicationEventMulticaster
-        this.applicationEventMulticaster = new SimpleApplicationEventMulticaster(beanFactory);
-        beanFactory.registerSingleton(APPLICATION_EVENT_MULTICASTER_BEAN_NAME, this.applicationEventMulticaster);
-        if (logger.isTraceEnabled()) {
-            logger.trace("No '" + APPLICATION_EVENT_MULTICASTER_BEAN_NAME + "' bean, using " +
-                    "[" + this.applicationEventMulticaster.getClass().getSimpleName() + "]");
-        }
-    }
-}
-
-onRefresh​	一个模板方法（hook），由子类实现，用于在 refresh() 流程中 容器刷新完成、所有 BeanFactory 初始化完毕之后，进行特定上下文的扩展初始化工作。
-​	比如在 Spring Boot 中，AnnotationConfigServletWebServerApplicationContext 会在该方法中创建和启动内嵌的 Web 服务器（默认是 Tomcat，可选 Jetty 或 Undertow），并完成 Web 环境相关的初始化。
-finishBeanFactoryInitialization是 Spring 容器刷新流程中的 核心收尾步骤之一，主要职责如下：
-
-初始化所有非懒加载（non-lazy）、非抽象的单例 Bean
-这一步会触发 Bean 的完整生命周期流程：依赖注入（populate）、初始化方法调用（如 @PostConstruct、InitializingBean#afterPropertiesSet）、AOP 代理包装等
-
-
-触发 SmartInitializingSingleton 回调
-所有实现了 SmartInitializingSingleton 接口的单例 Bean，会在 所有非懒加载的单例 Bean 完成初始化之后 统一回调其 afterSingletonsInstantiated() 方法。
-这是容器中所有 Bean 都就绪之后的 “最后的hook”，用于执行依赖所有 Bean 的集中初始化逻辑
-
-
-
-// AbstractApplicationContext
-protected void finishBeanFactoryInitialization(ConfigurableListableBeanFactory beanFactory) {
-
-    // 清空临时类加载器
-    beanFactory.setTempClassLoader(null);
-
-    // 冻结BeanDefinition的配置，代表需要的地方可以缓存了
-    // 走到这，BeanDefinition都已经处理完毕了，所以可以考虑缓存了
-    beanFactory.freezeConfiguration();
-
-    // 实例化所有非lazy加载的单例bean，并在加载完后调用SmartInitializingSingleton接口
-    // SmartInitializingSingleton这个接口就是在实例化所有非lazy且单例bean完成后需要调用的
-    beanFactory.preInstantiateSingletons();
-}
-
-真正初始化单例bean（DefaultListableBeanFactory#preInstantiateSingletons方法）
-public void preInstantiateSingletons() throws BeansException {
-    List&lt;String> beanNames = new ArrayList&lt;>(this.beanDefinitionNames);
-
-    for (String beanName : beanNames) {
-        RootBeanDefinition bd = getMergedLocalBeanDefinition(beanName);
-        // 非抽象 + 单例 + 非lazy加载
-        if (!bd.isAbstract() &amp;&amp; bd.isSingleton() &amp;&amp; !bd.isLazyInit()) {
-            // 实例化工厂Bean
-            if (isFactoryBean(beanName)) {
-                Object bean = getBean(FACTORY_BEAN_PREFIX + beanName);
-                if (bean instanceof FactoryBean) {
-                    FactoryBean&lt;?> factory = (FactoryBean&lt;?>) bean;
-                    boolean isEagerInit;
-                    if (System.getSecurityManager() != null &amp;&amp; factory instanceof SmartFactoryBean) {
-                        isEagerInit = AccessController.doPrivileged(
-                                (PrivilegedAction&lt;Boolean>) ((SmartFactoryBean&lt;?>) factory)::isEagerInit,
-                                getAccessControlContext());
-                    }
-                    else {
-                        isEagerInit = (factory instanceof SmartFactoryBean &amp;&amp;
-                                ((SmartFactoryBean&lt;?>) factory).isEagerInit());
-                    }
-                    if (isEagerInit) {
-                        getBean(beanName);
-                    }
-                }
-            }
-            else {
-                // 实例化非工厂Bean
-                getBean(beanName);
-            }
-        }
-    }
-
-    // apply所有SmartInitializingSingleton Bean逻辑
-    // 重要的拓展口，可以在这里最早感知到大部分Bean准备完毕，可以放心调用这些bean的各种方法了
-    for (String beanName : beanNames) {
-        Object singletonInstance = getSingleton(beanName);
-        if (singletonInstance instanceof SmartInitializingSingleton) {
-            SmartInitializingSingleton smartSingleton = (SmartInitializingSingleton) singletonInstance;
-            if (System.getSecurityManager() != null) {
-                AccessController.doPrivileged((PrivilegedAction&lt;Object>) () -> {
-                    smartSingleton.afterSingletonsInstantiated();
-                    return null;
-                }, getAccessControlContext());
-            }
-            else {
-                smartSingleton.afterSingletonsInstantiated();
-            }
-        }
-    }
-}
-
-finishRefresh​	这一步结束，容器对外就完全可用了
-protected void finishRefresh() {
-    // 清除上下文级别的缓存资源，例如类扫描过程中缓存的 ASM 元数据。
-    clearResourceCaches();
-
-    // 初始化生命周期处理器（LifecycleProcessor）。
-    // 默认实现为 DefaultLifecycleProcessor，用于统一管理实现了 Lifecycle 接口的 bean 的启动与停止
-    initLifecycleProcessor();
-
-    // 通知生命周期处理器，容器刷新完成
-    // 将启动所有实现了 SmartLifecycle 接口并设置了 autoStartup = true 的 Bean（通常用于自动启动的组件，如消息监听容器、调度器等）
-    getLifecycleProcessor().onRefresh();
-
-    // 广播容器刷新完成事件：ContextRefreshedEvent
-    // 所有实现了 ApplicationListener 接口，监听该事件的 Bean 都会收到通知，可用于执行基于“容器就绪”的后置逻辑。
-    publishEvent(new ContextRefreshedEvent(this));
-
-    // 将当前 ApplicationContext 注册到 JMX 的 LiveBeansView 中（如果启用）
-    // 这允许通过 JMX 客户端动态查看容器中所有 Bean 的状态（例如 VisualVM 插件）
-    LiveBeansView.registerApplicationContext(this);
-}
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-  </entry>
-  <entry>
-    <title>Spring-Bean的Scope</title>
-    <url>/2021-06-28/spring-bean-de-scope/</url>
-    <content><![CDATA[
-​	分析了Spring Scope的作用和实现类。并从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证。重点应该关注基于代理的其他作用域Bean注册的两个BeanDefinition异同点，以及为何会注册两个BeanDefinition
-
-
-Spring-Bean的Scope​	在 Spring 中，所有组件本质上都是 Bean，虽然它们的创建方式一致，但生命周期和缓存策略并不统一。为了支持不同的使用场景，Spring 设计了 Scope（作用域）机制，来决定 Bean 实例在容器中的缓存行为。
-常见的 Scope
-通用环境
-
-
-
-singleton：默认作用域。单例bean，由Spring进行全局缓存
-prototype：很多博客翻译为多例，其实容易误导，因为session和request中的bean也算多例。翻译为原型bean更好，因为它是基于 Bean 定义模板进行实例化 的原型模式，每次获取Bean时都会创建一个新的实例（即取即创建）。因此，它不能被缓存，也不能被循环依赖
-
-
-
-
-
-web环境
-
-
-session：web环境下的缓存在Session里的bean
-
-request：web环境下的缓存在Request里的bean。意味着每次新的Request，都需要创建新的bean
-application：web环境下缓存在ServletContext里的bean。是存在于另一个容器里单例bean
-
-
-
-
-
-cloud环境
-
-
- refresh：spring colud环境下的一种作用域，在这个作用域里的bean意味着每次环境刷新后（RefreshEvent事件触发），都需要创建新的bean，并destory以前bean。例如cloud环境下如果配置中心支持动态更改kv，每次修改kv后就出触发RefreshEvent事件
-
-
-
-
-
-Scope实现​	在 AbstractBeanFactory#doGetBean 方法中，所有非默认作用域（非 singleton&#x2F;prototype）的 Bean 获取，均通过 Scope 接口实现支持。每种运行环境对应一个 Scope 实例，由它统一负责该环境下 Bean 的 创建、缓存与销毁。Spring提供的常见Scope实现如下
-
-SessionScope：session域的实现
-
-RequestScope：request域的实现
-
-ServletContextScope：application域的实现
-
-RefreshScope：refresh域的实现
-
-SimpleThreadScope：用ThreadLocal实现的Bean的缓存域。即线程可见Bean
-
-SimpleTransactionScope：事务作用域，将 Bean 缓存绑定到当前事务，内部存储在 TransactionSynchronizationManager.resources 中
-
-
-session域主要逻辑为获取当前request的HttpSession，从内部中获取bean，没有则再实例化bean并缓存到当前Session里
-public class SessionScope extends AbstractRequestAttributesScope {
-
-    @Override
-    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
-        Object mutex = RequestContextHolder.currentRequestAttributes().getSessionMutex();
-        synchronized (mutex) { // 加锁，避免多线程同时创建bean
-            return super.get(name, objectFactory);
-        }
-    }
-
-    // 父类中的AbstractRequestAttributesScope方法
-    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
-        RequestAttributes attributes = RequestContextHolder.currentRequestAttributes();
-        // 对于session域，是通过HttpSession#getAttribute方法操作的
-        Object scopedObject = attributes.getAttribute(name, getScope());
-        if (scopedObject == null) {
-            // 创建bean
-            scopedObject = objectFactory.getObject();
-            attributes.setAttribute(name, scopedObject, getScope());
-            Object retrievedObject = attributes.getAttribute(name, getScope());
-            if (retrievedObject != null) {
-                scopedObject = retrievedObject;
-            }
-        }
-        return scopedObject;
-    }
-
-}
-
-@Scope注解用于定义 Spring 容器中 Bean 的作用域（Scope）。该注解通常配合 @Component 或 @Bean 使用，控制 Bean 在容器中的生命周期及缓存策略
-
-value：指定当前 Bean 的作用域名称，可以使用我们自定义的scope。Spring解析时不会校验
-scopeName：同value
-proxyMode：指定当前 Bean 是否需要通过代理方式注入。枚举类型为 ScopedProxyMode，常用值包括：
-DEFAULT（默认值）：等价于 NO
-NO：不使用代理。意味着当前Bean不能被其他singleton bean给依赖注入
-INTERFACES：JDK 动态代理，即接口代理
-TARGET_CLASS：CGLIB 代理，即继承代理
-
-
-
-Scope代理​	还有个重要的问题，Spring 中非 singleton 作用域的 Bean 无法直接注入到 singleton Bean 中，原因在于singleton Bean一旦被创建，其内部的依赖也随之固定。而诸如 request、session 等作用域下的 Bean 生命周期较短，其实例在运行时可能会动态变化。
-​	所以为了解决这种作用域不一致带来的注入问题，Spring 提供了 作用域代理机制（Scoped Proxy）。核心思想为将实际的Scope Bean 包装成一个代理对象，注入到 singleton Bean 中；每次通过该代理访问时，都会根据当前上下文（如当前request或session）动态获取真实的目标 Bean。这样，从开发者视角来看，这个 Bean 就像是 singleton 一样稳定可用，但实际底层访问的却是随作用域动态变化的目标实例。
-ScopedProxyUtils​	是 Spring 在注册特定作用域（如 request、session）BeanDefinition 之前，用于创建作用域代理的工具类。它的核心作用是：在注册 BeanDefinition 前，将其包装成作用域代理，从而允许非 singleton Bean 被注入到 singleton Bean 中。其最终会在容器中注册一下两个 Bean
-
-代理 Bean（Scoped Proxy）
-
-类型为 ScopedProxyFactoryBean，作用域为 singleton
-Bean 名为原始 Bean 的名称（例如 userService）
-负责在运行时根据当前作用域动态获取实际 Bean 实例
-保留原始 Bean 的自动注入相关属性（如 @Primary、限定符），因此它才是被注入到其他 Bean 中的“主 Bean”
-
-  目标 Bean（Target Bean）
-
-Bean 名为 &quot;scopedTarget.&quot; + 原始名称（如 scopedTarget.userService）
-保持原有的作用域定义（如 request、session 等）
-被设置为不可自动注入（autowireCandidate = false）。都注入代理bean
-
-
-
-核心源码public abstract class ScopedProxyUtils {
-
-    // 代理目标 Bean 的命名前缀
-    private static final String TARGET_NAME_PREFIX = "scopedTarget.";
-
-    private static final int TARGET_NAME_PREFIX_LENGTH = TARGET_NAME_PREFIX.length();
-
-    /**
-     * 创建作用域代理：将一个具有非单例作用域的 Bean 包装为一个 ScopedProxyFactoryBean，
-     * 用于在注入到 singleton Bean 时仍保持作用域语义。
-     *
-     * 实现原理：将原始 Bean 注册为一个带前缀的新 Bean，然后为原始 Bean 名称注册一个代理 Bean，
-     * 每次访问这个代理 Bean 时，都会动态地从容器中获取当前作用域下的真实 Bean。
-     */
-    public static BeanDefinitionHolder createScopedProxy(BeanDefinitionHolder definition,
-            BeanDefinitionRegistry registry, boolean proxyTargetClass) {
-
-        String originalBeanName = definition.getBeanName();
-        BeanDefinition targetDefinition = definition.getBeanDefinition();
-        // 原bean修改后的目标beanName： scopedTarget. + 原beanName
-        String targetBeanName = getTargetBeanName(originalBeanName);
-
-        // 创建 ScopedProxyFactoryBean 的定义，用于代理原始 Bean
-        RootBeanDefinition proxyDefinition = new RootBeanDefinition(ScopedProxyFactoryBean.class);
-        proxyDefinition.setDecoratedDefinition(new BeanDefinitionHolder(targetDefinition, targetBeanName));
-        proxyDefinition.setOriginatingBeanDefinition(targetDefinition);
-        proxyDefinition.setSource(definition.getSource());
-        proxyDefinition.setRole(targetDefinition.getRole());
-
-        // 设置代理bean中targetBeanName（用来在BeanFactory中原始bean）
-        proxyDefinition.getPropertyValues().add("targetBeanName", targetBeanName);
-        if (proxyTargetClass) { // cglib proxy
-            targetDefinition.setAttribute(AutoProxyUtils.PRESERVE_TARGET_CLASS_ATTRIBUTE, Boolean.TRUE);
-        } else { // jdk proxy
-            proxyDefinition.getPropertyValues().add("proxyTargetClass", Boolean.FALSE);
-        }
-
-        // 复制原始 Bean 的自动注入相关属性
-        proxyDefinition.setAutowireCandidate(targetDefinition.isAutowireCandidate());
-        proxyDefinition.setPrimary(targetDefinition.isPrimary());
-        if (targetDefinition instanceof AbstractBeanDefinition) {
-            proxyDefinition.copyQualifiersFrom((AbstractBeanDefinition) targetDefinition);
-        }
-
-        // 将原始 Bean 设为非primary且不可自动注入（避免与代理冲突，这样Spring注册的这个bean始终是代理bean）
-        targetDefinition.setAutowireCandidate(false);
-        targetDefinition.setPrimary(false);
-
-        // 注册原bean到容器中，此时beanName已被替换
-        registry.registerBeanDefinition(targetBeanName, targetDefinition);
-
-        // 返回代理 Bean 的定义（仍然使用原始Bean的beanName）
-        return new BeanDefinitionHolder(proxyDefinition, originalBeanName, definition.getAliases());
-    }
-
-}
-
-ScopedProxyFactoryBean​	它构建了一个用于作用域代理的单例增强 Bean，这个bean具有如下特点
-
-**TargetSource 为 SimpleBeanTargetSource**：每次方法调用时，动态从 BeanFactory 获取目标 bean 实例（不做任何缓存）
-代理类实现了目标 bean 的所有接口和类：对外表现为原始 bean，可被其他 bean 正常依赖和注入（作为主 bean 使用）。
-实现了 AopInfrastructureBean 接口：标记为基础设施类，避免再次被 AOP、事务、异步等机制增强。
-**仅使用一个拦截器：DelegatingIntroductionInterceptor**：
-对被“引入”的接口方法（如 ScopedObject#getTargetObject()）进行特殊处理；
-对其他方法则调用 MethodInvocation#proceed()，由原始 bean 执行具体逻辑。
-
-
-
-核心源码public class ScopedProxyFactoryBean extends ProxyConfig
-        implements FactoryBean&lt;Object>, BeanFactoryAware, AopInfrastructureBean {
-    public void setBeanFactory(BeanFactory beanFactory) {
-        if (!(beanFactory instanceof ConfigurableBeanFactory)) {
-            throw new IllegalStateException("Not running in a ConfigurableBeanFactory: " + beanFactory);
-        }
-        ConfigurableBeanFactory cbf = (ConfigurableBeanFactory) beanFactory;
-
-        // 将 BeanFactory 注入目标作用域对象（这样才有能力从BeanFactory中获取目标作用域对象）
-        this.scopedTargetSource.setBeanFactory(beanFactory);
-
-        ProxyFactory pf = new ProxyFactory();
-        pf.copyFrom(this);
-        // 设置代理目标为 scopedTargetSource（默认为SimpleBeanTargetSource，其获取目标对象每次都调用BeanFactory#getBean）
-        // 且scopedTargetSource的getTargetClass()方法会解析并返回原始bean的class，用于代理增强
-        pf.setTargetSource(this.scopedTargetSource);
-
-        Assert.notNull(this.targetBeanName, "Property 'targetBeanName' is required");
-        Class&lt;?> beanType = beanFactory.getType(this.targetBeanName);
-        if (beanType == null) {
-            throw new IllegalStateException("Cannot create scoped proxy for bean '" + this.targetBeanName +
-                    "': Target type could not be determined at the time of proxy creation.");
-        }
-        // jdk代理判断
-        if (!isProxyTargetClass() || beanType.isInterface() || Modifier.isPrivate(beanType.getModifiers())) {
-            pf.setInterfaces(ClassUtils.getAllInterfacesForClass(beanType, cbf.getBeanClassLoader()));
-        }
-
-        // Add an introduction that implements only the methods on ScopedObject.
-        ScopedObject scopedObject = new DefaultScopedObject(cbf, this.scopedTargetSource.getTargetBeanName());
-        pf.addAdvice(new DelegatingIntroductionInterceptor(scopedObject));
-
-        // 设置该bean不会被其他自动代理 代理了
-        /*
-         * 为什么会这么设置？
-         * 这个bean以及是个代理增强bean了，它所需要增强的地方也是唯一的地方就是找到目标scope里真实的bean，并将方法的调用行为转移到目标作用域的真实的bean中去
-         *
-         * 例：session域的bean，该bean被自动注入的就应该是这个代理bean，这个bean存在的目的也只是找到session域
-         * 里对应的真实bean，然后调用该bean的方法全走session域的真实bean的方法，且由这个真实bean来进行其他自动代理的增强
-         */
-        pf.addInterface(AopInfrastructureBean.class);
-
-        // 创建好代理对象
-        this.proxy = pf.getProxy(cbf.getBeanClassLoader());
-    }
-
-    /**
-     * 单例
-     */
-    public boolean isSingleton() {
-        return true;
-    }
-}
-
-arthas验证测试类package site.shanzhao.config;
-
-@Component
-@SessionScope
-public class SessionScopeDemo {
-    
-}
-
-class信息查询用sc -d site.shanzhao.config.SessionScopeDemo命令，我这里只展示了增强的class，重点观察到
-
-父类为site.shanzhao.config.SessionScopeDemo
-相比普通AOP，多增加的接口有：
-org.springframework.aop.scope.ScopedObject
-org.springframework.aop.framework.AopInfrastructureBean
-
-
-
- class-info        site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- code-source       /Users/reef/IdeaProjects/soil/target/classes/
- name              site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- isInterface       false
- isAnnotation      false
- isEnum            false
- isAnonymousClass  false
- isArray           false
- isLocalClass      false
- isMemberClass     false
- isPrimitive       false
- isSynthetic       false
- simple-name       SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- modifier          public
- annotation
- interfaces        org.springframework.aop.scope.ScopedObject,java.io.Serializable,org.springframework.aop.framework.AopInfrastructureBean,org.springframework.aop.SpringProxy,org.springframework.aop.framework.
-                   Advised,org.springframework.cglib.proxy.Factory
- super-class       +-site.shanzhao.config.SessionScopeDemo
-                     +-java.lang.Object
- class-loader      +-jdk.internal.loader.ClassLoaders$AppClassLoader@311d617d
-                     +-jdk.internal.loader.ClassLoaders$PlatformClassLoader@1b4ae4e0
- classLoaderHash   311d617d
-
-ognl查询beanName# 使用ApplicationContext.getBeanNamesForType()方法，可知有两个SessionScopeDemo class的BeanDefinition
-[arthas@35578]$ ognl "@site.shanzhao.util.ApplicationContextUtils@applicationContext.getBeanNamesForType(@site.shanzhao.config.SessionScopeDemo@class)"
-@String[][
-    @String[scopedTarget.sessionScopeDemo],
-    @String[sessionScopeDemo],
-]
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-  </entry>
-  <entry>
-    <title>CloudFlare-CDN缓存清除</title>
-    <url>/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/</url>
-    <content><![CDATA[
-​	给出了一些api用于清除Cloudflare的CDN缓存方式
- 
-
-CloudFlare-CDN缓存清除​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
-1 purgeUrl
-2 使用ApiKey清除（不推荐）
-ZONE_ID：区域id，即你在CF上托管的根域名id
-EMAIL：你的邮箱
-API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
-
-2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{"purge_everything": true}'
-
-2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
-
-3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
-
-3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
-     -H "Authorization: Bearer $API_TOKEN" \
-     -H "Content-Type:application/json"
-
-3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{"purge_everything": true}'
-
-3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
-
-4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
-5 参考链接
-官方清除缓存文档
-cloudflare dashboard创建token和查看ApiKey
-ZoneId获取
-
-]]></content>
-      <categories>
-        <category>cloudflare</category>
-      </categories>
-      <tags>
-        <tag>cdn缓存清除</tag>
       </tags>
   </entry>
 </search>

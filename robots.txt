@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /archives/
+Allow: /categories/
+Allow: /tags/
+
+Disallow: /css/
+Disallow: /js/
+Disallow: /vendors/
+Disallow: /fonts/
+Sitemap: https://blog.shanzhao.site/sitemap.xml

@@ -194,10 +194,10 @@
 </div>
   <div class="links-of-author animated">
       <span class="links-of-author-item">
-        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
       </span>
       <span class="links-of-author-item">
-        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
       </span>
   </div>
 
@@ -357,7 +357,7 @@
 <p>​	<strong>原始快照只处理对灰色对象C删除白色对象D的情况（将D记录到SATB缓冲区），重新标记阶段会在将D标为活跃。但不处理黑色新增引用，需要依赖其他机制保证（一般都是依赖写屏障，将B直接标为存活）</strong></p>
 <p>​	<strong>G1使用原始快照能完全避免对象漏标</strong>，因为它就是用写屏障直接标记白色对象为存活的方式来处理给黑色对象新增的白色对象这种漏标情况。即<strong>SATB处理删除，写屏障兜底新增</strong>。虽不可避免的会增加浮动垃圾，但肯定不会漏标</p>
 <h2 id="3-cms-gc触发条件"><a href="#3-cms-gc触发条件" class="headerlink" title="3 cms gc触发条件"></a>3 cms gc触发条件</h2><ul>
-<li><a target="_blank" rel="noopener" href="https://heapdump.cn/article/190389">原文</a></li>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://heapdump.cn/article/190389">原文</a></li>
 <li>foreground collector  ：空间分配不够触发</li>
 <li>background collector<ul>
 <li>显式调用 <code>System.gc()</code>，且配置了 <code>-XX:+ExplicitGCInvokesConcurrent</code></li>
