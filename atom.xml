@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-  <title>reef&#39;s blog</title>
+  <title>Reef&#39;s Blog</title>
   
   <subtitle>hello world</subtitle>
   <link href="https://blog.shanzhao.site/atom.xml" rel="self"/>
@@ -49,6 +49,46 @@
     
     
     <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>Tomcat-Server和Service</title>
+    <link href="https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/"/>
+    <id>https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/</id>
+    <published>2021-09-04T12:43:45.000Z</published>
+    <updated>2025-09-11T07:22:45.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	对Tomcat中Server，Service的init和start方法 + 核心字段进行了分析，并&lt;strong&gt;重点分析了Connector-NioEndpoint内部的Acceptor和Poller线程，并用图文的方法做了总结&lt;/strong&gt;。并简单总结了Mapper和MapperListener的作用&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
+    
+    
+    <category term="Acceptor" scheme="https://blog.shanzhao.site/tags/Acceptor/"/>
+    
+    <category term="Poller" scheme="https://blog.shanzhao.site/tags/Poller/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Tomcat-整体架构和Lifecycle</title>
+    <link href="https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/"/>
+    <id>https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/</id>
+    <published>2021-08-19T13:21:06.000Z</published>
+    <updated>2022-03-12T06:33:07.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	基于Tomcat-8.5.x版本，简单分析了整体的架构和核心组件。并详细分析和总结了Lifecycle机制&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
     
     
   </entry>
@@ -377,47 +417,6 @@
     
     
     <category term="多线程" scheme="https://blog.shanzhao.site/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Java源码篇-锁</title>
-    <link href="https://blog.shanzhao.site/2020-04-18/java-yuan-ma-pian-suo/"/>
-    <id>https://blog.shanzhao.site/2020-04-18/java-yuan-ma-pian-suo/</id>
-    <published>2020-04-18T13:13:10.000Z</published>
-    <updated>2020-04-18T13:13:10.000Z</updated>
-    
-    
-    <summary type="html">&lt;p&gt;​	jdk中AQS实现类相关源码解析。包括 ReentrantLock，Condition，CountDownLatch，Semaphore，ReentrantReadWriteLock&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
-    
-    
-    <category term="AQS实现类" scheme="https://blog.shanzhao.site/tags/AQS%E5%AE%9E%E7%8E%B0%E7%B1%BB/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Java源码篇-AQS</title>
-    <link href="https://blog.shanzhao.site/2020-04-17/java-yuan-ma-pian-aqs/"/>
-    <id>https://blog.shanzhao.site/2020-04-17/java-yuan-ma-pian-aqs/</id>
-    <published>2020-04-17T13:13:10.000Z</published>
-    <updated>2025-04-19T10:22:38.466Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	总结了LockSupport的作用，并从源码分析了AbstractQueuedSynchronizer的实现逻辑&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
-    
-    
-    <category term="LockSupport" scheme="https://blog.shanzhao.site/tags/LockSupport/"/>
-    
-    <category term="AQS" scheme="https://blog.shanzhao.site/tags/AQS/"/>
     
   </entry>
   

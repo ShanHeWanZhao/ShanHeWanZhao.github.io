@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	基于Tomcat-8.5.x版本，简单分析了整体的架构和核心组件。并详细分析和总结了Lifecycle机制">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat-整体架构和Lifecycle">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	基于Tomcat-8.5.x版本，简单分析了整体的架构和核心组件。并详细分析和总结了Lifecycle机制">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://img.shanzhao.site/file/1748326195967_tomcat-architecture.png">
+<meta property="og:image" content="https://img.shanzhao.site/file/1748332081804_tomcat-lifecycle.png">
+<meta property="article:published_time" content="2021-08-19T13:21:06.000Z">
+<meta property="article:modified_time" content="2022-03-12T06:33:07.000Z">
+<meta property="article:author" content="reef">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://img.shanzhao.site/file/1748326195967_tomcat-architecture.png">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/","path":"2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/","title":"Tomcat-整体架构和Lifecycle"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Tomcat-整体架构和Lifecycle | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Tomcat-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84%E5%92%8CLifecycle"><span class="nav-number">1.</span> <span class="nav-text">Tomcat-整体架构和Lifecycle</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6%E5%92%8C%E6%9E%B6%E6%9E%84"><span class="nav-number">1.1.</span> <span class="nav-text">核心组件和架构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Lifecycle"><span class="nav-number">1.2.</span> <span class="nav-text">Lifecycle</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#LifecycleState"><span class="nav-number">1.2.1.</span> <span class="nav-text">LifecycleState</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#LifecycleBase"><span class="nav-number">1.2.2.</span> <span class="nav-text">LifecycleBase</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">1.2.3.</span> <span class="nav-text">总结</span></a></li></ol></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">24</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">24</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Tomcat-整体架构和Lifecycle | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Tomcat-整体架构和Lifecycle
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-08-19 21:21:06" itemprop="dateCreated datePublished" datetime="2021-08-19T21:21:06+08:00">2021-08-19</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-03-12 14:33:07" itemprop="dateModified" datetime="2022-03-12T14:33:07+08:00">2022-03-12</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>5.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	基于Tomcat-8.5.x版本，简单分析了整体的架构和核心组件。并详细分析和总结了Lifecycle机制</p>
+<span id="more"></span>
+
+<h1 id="Tomcat-整体架构和Lifecycle"><a href="#Tomcat-整体架构和Lifecycle" class="headerlink" title="Tomcat-整体架构和Lifecycle"></a>Tomcat-整体架构和Lifecycle</h1><h2 id="核心组件和架构"><a href="#核心组件和架构" class="headerlink" title="核心组件和架构"></a>核心组件和架构</h2><p>Tomcat 的架构可以抽象为一棵树，核心组件结构如下：</p>
+<ul>
+<li><strong>根节点是 Server</strong>，表示整个 Tomcat 实例（即一个 JVM 进程）</li>
+<li><strong>Server 下包含一个或多个 Service</strong>，代表一组 Web 服务</li>
+<li>每个 <code>Service</code> 包含：<ul>
+<li><strong>一个或多个 Connector</strong>，负责监听不同协议&#x2F;端口的请求（如 HTTP、HTTPS）</li>
+<li><strong>唯一的一个 Engine，与Service一对一的关系</strong>，用于处理由 Connector 接收到的请求</li>
+</ul>
+</li>
+<li><strong>Engine 下包含多个 Host</strong>，每个 <code>Host</code> 对应一个虚拟主机（通过域名区分）</li>
+<li><strong>每个 Host管理多个 Context</strong>，每个 <code>Context</code> 对应一个 Web 应用（即一个 war）</li>
+<li><strong>每个 Context 下包含多个 Wrapper</strong>，每个 <code>Wrapper</code> 对应一个具体的 Servlet</li>
+</ul>
+<p><img src="https://img.shanzhao.site/file/1748326195967_tomcat-architecture.png" alt="tomcat-architecture.png"></p>
+<h2 id="Lifecycle"><a href="#Lifecycle" class="headerlink" title="Lifecycle"></a>Lifecycle</h2><p>​	<code>Lifecycle</code> 是 Tomcat 中最核心的接口之一。所有关键组件都实现了该接口，以便<strong>在生命周期事件（如init、start、stop等）到来时执行自身的职责，并将事件级联传递给子组件</strong>。因此，深入理解 <code>Lifecycle</code> 的作用和机制，是阅读和掌握 Tomcat 源码的基础。</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">Lifecycle</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// ======================== 生命周期事件常量 ========================</span>
+
+    String BEFORE_INIT_EVENT <span class="token operator">=</span> <span class="token string">"before_init"</span><span class="token punctuation">;</span>
+    String AFTER_INIT_EVENT <span class="token operator">=</span> <span class="token string">"after_init"</span><span class="token punctuation">;</span>
+
+    String BEFORE_START_EVENT <span class="token operator">=</span> <span class="token string">"before_start"</span><span class="token punctuation">;</span>
+    String START_EVENT <span class="token operator">=</span> <span class="token string">"start"</span><span class="token punctuation">;</span>
+    String AFTER_START_EVENT <span class="token operator">=</span> <span class="token string">"after_start"</span><span class="token punctuation">;</span>
+
+    String BEFORE_STOP_EVENT <span class="token operator">=</span> <span class="token string">"before_stop"</span><span class="token punctuation">;</span>
+    String STOP_EVENT <span class="token operator">=</span> <span class="token string">"stop"</span><span class="token punctuation">;</span>
+    String AFTER_STOP_EVENT <span class="token operator">=</span> <span class="token string">"after_stop"</span><span class="token punctuation">;</span>
+
+    String BEFORE_DESTROY_EVENT <span class="token operator">=</span> <span class="token string">"before_destroy"</span><span class="token punctuation">;</span>
+    String AFTER_DESTROY_EVENT <span class="token operator">=</span> <span class="token string">"after_destroy"</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/** 周期性事件（如后台定时任务触发） */</span>
+    String PERIODIC_EVENT <span class="token operator">=</span> <span class="token string">"periodic"</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/** 配置启动事件（内部扩展使用） */</span>
+    String CONFIGURE_START_EVENT <span class="token operator">=</span> <span class="token string">"configure_start"</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">/** 配置停止事件（内部扩展使用） */</span>
+    String CONFIGURE_STOP_EVENT <span class="token operator">=</span> <span class="token string">"configure_stop"</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// ======================== 生命周期监听器相关方法 ========================</span>
+
+    <span class="token keyword">void</span> <span class="token function">addLifecycleListener</span><span class="token punctuation">(</span>LifecycleListener listener<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    LifecycleListener<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token function">findLifecycleListeners</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">void</span> <span class="token function">removeLifecycleListener</span><span class="token punctuation">(</span>LifecycleListener listener<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// ======================== 生命周期控制方法 ========================</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 初始化组件。组件只能初始化一次，且必须在启动前完成。
+     */</span>
+    <span class="token keyword">void</span> <span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 启动组件。如果未初始化，会隐式调用 init()
+     */</span>
+    <span class="token keyword">void</span> <span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 停止组件。可在调用 start() 后再次调用以恢复运行
+     */</span>
+    <span class="token keyword">void</span> <span class="token function">stop</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 销毁组件，释放资源。此操作不可逆。
+     */</span>
+    <span class="token keyword">void</span> <span class="token function">destroy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException<span class="token punctuation">;</span>
+
+    LifecycleState <span class="token function">getState</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    String <span class="token function">getStateName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 标记接口：表示该组件只能使用一次（单次使用后即不可重启）
+     */</span>
+    <span class="token keyword">interface</span> <span class="token class-name">SingleUse</span> <span class="token punctuation">{</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="LifecycleState"><a href="#LifecycleState" class="headerlink" title="LifecycleState"></a>LifecycleState</h3><p>​	组件的生命周期状态枚举。每个状态标记了当前组件是否处于“可用”状态（available），以及对应的生命周期事件名（lifecycleEvent）</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">enum</span> LifecycleState <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 初始状态，尚未进行任何初始化操作</span>
+    <span class="token function">NEW</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// ================= 初始化阶段 =================</span>
+
+    <span class="token comment" spellcheck="true">// 初始化中，调用 init() 时进入此状态，发布 before_init 事件</span>
+    <span class="token function">INITIALIZING</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>BEFORE_INIT_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// 初始化完成，进入 INITIALIZED 状态，发布 after_init 事件</span>
+    <span class="token function">INITIALIZED</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>AFTER_INIT_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// ================= 启动阶段 =================</span>
+
+    <span class="token comment" spellcheck="true">// 启动准备中，准备启动前进入该状态，发布 before_start 事件</span>
+    <span class="token function">STARTING_PREP</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>BEFORE_START_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// 正在启动，执行 startInternal() 时进入此状态，发布 start 事件</span>
+    <span class="token function">STARTING</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>START_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// 启动完成，组件已处于工作状态，发布 after_start 事件</span>
+    <span class="token function">STARTED</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>AFTER_START_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// ================= 停止阶段 =================</span>
+
+    <span class="token comment" spellcheck="true">// 停止准备阶段，准备停止时进入该状态，发布 before_stop 事件</span>
+    <span class="token function">STOPPING_PREP</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>BEFORE_STOP_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// 正在停止，组件关闭过程中进入该状态，发布 stop 事件</span>
+    <span class="token function">STOPPING</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>STOP_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// 停止完成，组件已不可用，发布 after_stop 事件</span>
+    <span class="token function">STOPPED</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>AFTER_STOP_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// ================= 销毁阶段 =================</span>
+
+    <span class="token comment" spellcheck="true">// 销毁准备阶段，发布 before_destroy 事件</span>
+    <span class="token function">DESTROYING</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>BEFORE_DESTROY_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// 销毁完成，组件进入不可恢复终态，发布 after_destroy 事件</span>
+    <span class="token function">DESTROYED</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> Lifecycle<span class="token punctuation">.</span>AFTER_DESTROY_EVENT<span class="token punctuation">)</span><span class="token punctuation">,</span>
+
+    <span class="token comment" spellcheck="true">// ================= 异常状态 =================</span>
+
+    <span class="token comment" spellcheck="true">// 异常失败状态，组件启动或运行中发生未处理异常，进入失败态。无生命周期事件发布</span>
+    <span class="token function">FAILED</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 当前状态是否为组件的“可用”状态，即是否可对外提供服务（如 STARTING、STARTED 等）
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token keyword">boolean</span> available<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> String lifecycleEvent<span class="token punctuation">;</span>
+
+    <span class="token function">LifecycleState</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> available<span class="token punctuation">,</span> String lifecycleEvent<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>available <span class="token operator">=</span> available<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>lifecycleEvent <span class="token operator">=</span> lifecycleEvent<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">isAvailable</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> available<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> String <span class="token function">getLifecycleEvent</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> lifecycleEvent<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="LifecycleBase"><a href="#LifecycleBase" class="headerlink" title="LifecycleBase"></a>LifecycleBase</h3><p>​	<code>LifecycleBase</code> 是 <code>Lifecycle</code> 接口的基础实现类，提供了生命周期控制方法（如 <code>init()</code>、<code>start()</code>、<code>stop()</code>、<code>destroy()</code>）的通用模板逻辑。Tomcat 中绝大多数实现了 <code>Lifecycle</code> 接口的核心组件，都会继承该类，从而复用其统一的状态管理和事件分发机制。</p>
+<p>​	核心start方法分析如下，（其余的init，stop等方法差不太多，就不做详细的分析了）</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">LifecycleBase</span> <span class="token keyword">implements</span> <span class="token class-name">Lifecycle</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">/**
+     * 启动组件。线程安全，具备幂等性。
+     * 
+     * 生命周期状态迁移如下：
+     * NEW -> INITIALIZED -> STARTING_PREP -> STARTING -> STARTED
+     * 如果启动失败，将进入 FAILED 状态。
+     */</span>
+    <span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">synchronized</span> <span class="token keyword">void</span> <span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException <span class="token punctuation">{</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STARTING_PREP<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>state<span class="token punctuation">)</span> <span class="token operator">||</span> LifecycleState<span class="token punctuation">.</span>STARTING<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>state<span class="token punctuation">)</span> <span class="token operator">||</span>
+                LifecycleState<span class="token punctuation">.</span>STARTED<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>state<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 正在启动中或已启动，无视直接返回</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// ============= 前置状态判断 =================</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>state<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>NEW<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 如果还是初始化状态，就先初始化</span>
+            <span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>state<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>FAILED<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 若之前启动失败，先尝试停止，清理资源后重新启动</span>
+            <span class="token function">stop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>state<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>INITIALIZED<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span>
+                <span class="token operator">!</span>state<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STOPPED<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 其余非法前置状态，直接异常</span>
+            <span class="token function">invalidTransition</span><span class="token punctuation">(</span>Lifecycle<span class="token punctuation">.</span>BEFORE_START_EVENT<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// ============== 到这表示前置状态处理完毕，可以真正start了 ===================</span>
+
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 设置状态为 STARTING_PREP，并发布 before_start 事件</span>
+            <span class="token function">setStateInternal</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STARTING_PREP<span class="token punctuation">,</span> null<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 调用子类实现的实际启动逻辑（模板方法模式）</span>
+            <span class="token function">startInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// ============ 走到这，正常情况state就应该为STARTING了 =================</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>state<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>FAILED<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 启动失败，执行stop</span>
+                <span class="token function">stop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>state<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STARTING<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 非STARTING（正常不应该出现，避免子类实现不规范的一种fallback），直接抛异常</span>
+                <span class="token function">invalidTransition</span><span class="token punctuation">(</span>Lifecycle<span class="token punctuation">.</span>AFTER_START_EVENT<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 正常会走到这，状态自动置为STARTED。并发布 after_start 事件</span>
+                <span class="token function">setStateInternal</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STARTED<span class="token punctuation">,</span> null<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">handleSubClassException</span><span class="token punctuation">(</span>t<span class="token punctuation">,</span> <span class="token string">"lifecycleBase.startFail"</span><span class="token punctuation">,</span> <span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p><img src="https://img.shanzhao.site/file/1748332081804_tomcat-lifecycle.png" alt="tomcat-lifecycle.png"></p>
+<p align="center" style="color: #888;">Lifecycle状态转换图</p>
+
+<p>状态机核心要点：</p>
+<ul>
+<li><strong>启动组件必定要先init，也只会调用一次init</strong></li>
+<li><strong>start和stop状态可以循环相互转化（即STOPPED状态不是终态）</strong></li>
+<li>NEW可直接到STOPPED状态（很少这么用）</li>
+<li><strong>DESTROYED才是终态，不可逆转</strong>（FAILED都不是终态，它还可以stop() -&gt; startI()，虽然不一定成功）</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021-06-28/spring-bean-de-scope/" rel="prev" title="Spring-Bean的Scope">
+                  <i class="fa fa-angle-left"></i> Spring-Bean的Scope
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2021-09-04/tomcat-server-he-service/" rel="next" title="Tomcat-Server和Service">
+                  Tomcat-Server和Service <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">257k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">7:47</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

@@ -22,9 +22,9 @@
 
     <meta name="description" content="Chasing freedom where the horizon meets the sea">
 <meta property="og:type" content="website">
-<meta property="og:title" content="reef&#39;s blog">
+<meta property="og:title" content="Reef&#39;s Blog">
 <meta property="og:url" content="https://blog.shanzhao.site/page/2/index.html">
-<meta property="og:site_name" content="reef&#39;s blog">
+<meta property="og:site_name" content="Reef&#39;s Blog">
 <meta property="og:description" content="Chasing freedom where the horizon meets the sea">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:author" content="reef">
@@ -37,7 +37,7 @@
 <script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":true,"isPost":false,"lang":"zh-CN","comments":"","permalink":"","path":"page/2/index.html","title":""}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
-<title>reef's blog</title>
+<title>Reef's Blog</title>
   
 
 
@@ -69,7 +69,7 @@
   <noscript>
     <link rel="stylesheet" href="/css/noscript.css">
   </noscript>
-<link rel="alternate" href="/atom.xml" title="reef's blog" type="application/atom+xml">
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
 <link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
 <link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
 
@@ -91,7 +91,7 @@
 
     <a href="/" class="brand" rel="start">
       <i class="logo-line"></i>
-      <h1 class="site-title">reef's blog</h1>
+      <h1 class="site-title">Reef's Blog</h1>
       <i class="logo-line"></i>
     </a>
       <p class="site-subtitle" itemprop="description">hello world</p>
@@ -172,18 +172,18 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">22</span>
+          <span class="site-state-item-count">24</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
       <div class="site-state-item site-state-categories">
           <a href="/categories/">
-        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-count">6</span>
         <span class="site-state-item-name">分类</span></a>
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">22</span>
+        <span class="site-state-item-count">24</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
@@ -217,6 +217,215 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/" class="post-title-link" itemprop="url">Spring-Bean的字段填充阶段处理</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-01-14 12:33:58" itemprop="dateCreated datePublished" datetime="2021-01-14T12:33:58+08:00">2021-01-14</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Spring/" itemprop="url" rel="index"><span itemprop="name">Spring</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>9.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>18 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <hr>
+<p>​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-01-08/spring-bean-de-chu-shi-hua/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2021-01-08/spring-bean-de-chu-shi-hua/" class="post-title-link" itemprop="url">Spring-Bean初始化</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-01-08 20:40:58" itemprop="dateCreated datePublished" datetime="2021-01-08T20:40:58+08:00">2021-01-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2021-01-15 15:40:33" itemprop="dateModified" datetime="2021-01-15T15:40:33+08:00">2021-01-15</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Spring/" itemprop="url" rel="index"><span itemprop="name">Spring</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>10k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>19 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <hr>
+<p>​	整体分析了BeanFactory和ApplicationContext的区别。并从Spring Bean创建流程源码分析了bean的创建流程并对其进行总结，并分析了三级缓存的作用</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021-01-08/spring-bean-de-chu-shi-hua/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
     <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2020-12-18/jvm-can-shu/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -225,12 +434,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -332,12 +541,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -433,12 +642,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -541,12 +750,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -642,12 +851,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -749,12 +958,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -857,12 +1066,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -957,12 +1166,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -1065,12 +1274,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -1172,12 +1381,12 @@
     </span>
 
     <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="reef's blog">
+      <meta itemprop="name" content="Reef's Blog">
       <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | reef's blog">
+      <meta itemprop="name" content="undefined | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
@@ -1287,14 +1496,14 @@
       <i class="fa fa-chart-line"></i>
     </span>
       <span>站点总字数：</span>
-    <span title="站点总字数">239k</span>
+    <span title="站点总字数">257k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">7:14</span>
+    <span title="站点阅读时长">7:47</span>
   </span>
 </div>
 

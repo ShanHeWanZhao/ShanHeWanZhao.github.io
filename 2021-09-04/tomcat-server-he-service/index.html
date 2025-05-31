@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	对Tomcat中Server，Service的init和start方法 + 核心字段进行了分析，并重点分析了Connector-NioEndpoint内部的Acceptor和Poller线程，并用图文的方法做了总结。并简单总结了Mapper和MapperListener的作用">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat-Server和Service">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	对Tomcat中Server，Service的init和start方法 + 核心字段进行了分析，并重点分析了Connector-NioEndpoint内部的Acceptor和Poller线程，并用图文的方法做了总结。并简单总结了Mapper和MapperListener的作用">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://img.shanzhao.site/file/1748695204947_tomcat-connector-handle.png">
+<meta property="article:published_time" content="2021-09-04T12:43:45.000Z">
+<meta property="article:modified_time" content="2025-09-11T07:22:45.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="Acceptor">
+<meta property="article:tag" content="Poller">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://img.shanzhao.site/file/1748695204947_tomcat-connector-handle.png">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/","path":"2021-09-04/tomcat-server-he-service/","title":"Tomcat-Server和Service"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Tomcat-Server和Service | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Tomcat-Server%E5%92%8CService"><span class="nav-number">1.</span> <span class="nav-text">Tomcat-Server和Service</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Server"><span class="nav-number">1.1.</span> <span class="nav-text">Server</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.1.</span> <span class="nav-text">核心源码</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Service"><span class="nav-number">1.2.</span> <span class="nav-text">Service</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E6%96%B9%E6%B3%95"><span class="nav-number">1.2.1.</span> <span class="nav-text">核心生命周期方法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-1"><span class="nav-number">1.2.2.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Connector"><span class="nav-number">1.2.3.</span> <span class="nav-text">Connector</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#ProtocolHandler"><span class="nav-number">1.2.3.1.</span> <span class="nav-text">ProtocolHandler</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#NioEndpoint"><span class="nav-number">1.2.3.1.1.</span> <span class="nav-text">NioEndpoint</span></a><ol class="nav-child"><li class="nav-item nav-level-6"><a class="nav-link" href="#Acceptor%EF%BC%88%E8%BF%9E%E6%8E%A5%E5%A4%84%E7%90%86%E5%99%A8%EF%BC%89"><span class="nav-number">1.2.3.1.1.1.</span> <span class="nav-text">Acceptor（连接处理器）</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#Poller%EF%BC%88%E4%BA%8B%E4%BB%B6%E8%BD%AE%E8%AF%A2%E5%99%A8%EF%BC%89"><span class="nav-number">1.2.3.1.1.2.</span> <span class="nav-text">Poller（事件轮询器）</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#init"><span class="nav-number">1.2.3.1.1.3.</span> <span class="nav-text">init()</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#start"><span class="nav-number">1.2.3.1.1.4.</span> <span class="nav-text">start()</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#MapperListener"><span class="nav-number">1.2.4.</span> <span class="nav-text">MapperListener</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Mapper"><span class="nav-number">1.2.5.</span> <span class="nav-text">Mapper</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">1.3.</span> <span class="nav-text">总结</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">24</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">24</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Tomcat-Server和Service | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Tomcat-Server和Service
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-09-04 20:43:45" itemprop="dateCreated datePublished" datetime="2021-09-04T20:43:45+08:00">2021-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2025-09-11 15:22:45" itemprop="dateModified" datetime="2025-09-11T15:22:45+08:00">2025-09-11</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>13k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>24 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	对Tomcat中Server，Service的init和start方法 + 核心字段进行了分析，并<strong>重点分析了Connector-NioEndpoint内部的Acceptor和Poller线程，并用图文的方法做了总结</strong>。并简单总结了Mapper和MapperListener的作用</p>
+<span id="more"></span>
+
+<h1 id="Tomcat-Server和Service"><a href="#Tomcat-Server和Service" class="headerlink" title="Tomcat-Server和Service"></a>Tomcat-Server和Service</h1><h2 id="Server"><a href="#Server" class="headerlink" title="Server"></a>Server</h2><p>​	<code>Server</code> 表示 Tomcat 的顶层容器，默认实现为 <code>StandardServer</code>。它的职责相对简单，主要包括</p>
+<ul>
+<li><p>负责管理整个 Tomcat 的生命周期事件（如 <code>start()</code>、<code>stop()</code> 等），并将其传递给所有子组件 <code>Service</code></p>
+</li>
+<li><p><strong>监听关闭端口</strong>：默认会在 <code>8005</code> 端口监听本地连接，用于接收特定的 <code>SHUTDOWN</code> 命令，从而实现优雅关闭</p>
+</li>
+<li><p>监听行为可通过配置项（如 <code>port</code> 和 <code>shutdown</code>）启用、关闭或修改shutdown命令</p>
+</li>
+<li><p>当监听到SHUTDOWN命令，await()则返回，main线程会退出。<strong>可以推测出，tomcat启动的其他线程池应该是daemon线程的，否则整个进程是不会退出的</strong>。后续我会陆续验证这个猜想</p>
+</li>
+</ul>
+<h3 id="核心源码"><a href="#核心源码" class="headerlink" title="核心源码"></a>核心源码</h3><p>​	我这里只展示了部分优化后的核心源码，不重要的我都删了</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">class</span> <span class="token class-name">StandardServer</span> <span class="token keyword">extends</span> <span class="token class-name">LifecycleMBeanBase</span> <span class="token keyword">implements</span> <span class="token class-name">Server</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// shutdown监听端口</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> port <span class="token operator">=</span> <span class="token number">8005</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> String address <span class="token operator">=</span> <span class="token string">"localhost"</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 内部所有的Service</span>
+    <span class="token keyword">private</span> Service services<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Service</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Object servicesLock <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Object</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// shutdown命令，默认就是SHUTDOWN</span>
+    <span class="token keyword">private</span> String shutdown <span class="token operator">=</span> <span class="token string">"SHUTDOWN"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">volatile</span> <span class="token keyword">boolean</span> stopAwait <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> Catalina catalina <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 监听shutdown端口的ServerSocket</span>
+    <span class="token keyword">private</span> <span class="token keyword">volatile</span> ServerSocket awaitSocket <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">startInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException <span class="token punctuation">{</span>
+
+        <span class="token function">fireLifecycleEvent</span><span class="token punctuation">(</span>CONFIGURE_START_EVENT<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">setState</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STARTING<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        globalNamingResources<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 依次启动内部所有的Service</span>
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>servicesLock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Service service <span class="token operator">:</span> services<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                service<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">await</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// -2：完全不等待（可用于嵌入式）</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>port <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">2</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// -1：无限睡眠轮询（用于不想用端口，但主线程又不能退出的场景）</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>port <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                awaitThread <span class="token operator">=</span> Thread<span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token operator">!</span>stopAwait<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                        Thread<span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">10000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">InterruptedException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// continue and check the flag</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                awaitThread <span class="token operator">=</span> null<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 启动ServerSocket，监听本地端口（默认8005），用于接收 SHUTDOWN 命令</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            awaitSocket <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ServerSocket</span><span class="token punctuation">(</span>port<span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> InetAddress<span class="token punctuation">.</span><span class="token function">getByName</span><span class="token punctuation">(</span>address<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            awaitThread <span class="token operator">=</span> Thread<span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 循环</span>
+            <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token operator">!</span>stopAwait<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                ServerSocket serverSocket <span class="token operator">=</span> awaitSocket<span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>serverSocket <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">break</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                Socket socket <span class="token operator">=</span> null<span class="token punctuation">;</span>
+                StringBuilder command <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">StringBuilder</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    InputStream stream<span class="token punctuation">;</span>
+                    <span class="token keyword">long</span> acceptStartTime <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token comment" spellcheck="true">// 阻塞，等待连接建立（当返回时表示已获取到客户端的连接）</span>
+                    socket <span class="token operator">=</span> serverSocket<span class="token punctuation">.</span><span class="token function">accept</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    socket<span class="token punctuation">.</span><span class="token function">setSoTimeout</span><span class="token punctuation">(</span><span class="token number">10</span> <span class="token operator">*</span> <span class="token number">1000</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// Ten seconds</span>
+                    stream <span class="token operator">=</span> socket<span class="token punctuation">.</span><span class="token function">getInputStream</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                    <span class="token comment" spellcheck="true">// 安全防御：预设最大读取长度，防止 DOS 攻击</span>
+                    <span class="token keyword">int</span> expected <span class="token operator">=</span> <span class="token number">1024</span><span class="token punctuation">;</span>
+                    <span class="token keyword">while</span> <span class="token punctuation">(</span>expected <span class="token operator">&lt;</span> shutdown<span class="token punctuation">.</span><span class="token function">length</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>random <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            random <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Random</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                        expected <span class="token operator">+=</span> <span class="token punctuation">(</span>random<span class="token punctuation">.</span><span class="token function">nextInt</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">%</span> <span class="token number">1024</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    <span class="token comment" spellcheck="true">// 读取字符，直到遇到控制字符/EOF</span>
+                    <span class="token keyword">while</span> <span class="token punctuation">(</span>expected <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">int</span> ch <span class="token operator">=</span> stream<span class="token punctuation">.</span><span class="token function">read</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>ch <span class="token operator">&lt;</span> <span class="token number">32</span> <span class="token operator">||</span> ch <span class="token operator">==</span> <span class="token number">127</span><span class="token punctuation">)</span>
+                            <span class="token keyword">break</span><span class="token punctuation">;</span>
+                        command<span class="token punctuation">.</span><span class="token function">append</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token keyword">char</span><span class="token punctuation">)</span> ch<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        expected<span class="token operator">--</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 接受完一次请求就关闭客户端的连接</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>socket <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        socket<span class="token punctuation">.</span><span class="token function">close</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 判断是否是合法的 SHUTDOWN 命令</span>
+                <span class="token keyword">boolean</span> match <span class="token operator">=</span> command<span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>shutdown<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>match<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 跳出循环，结束main</span>
+                    <span class="token keyword">break</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 清理资源</span>
+            ServerSocket serverSocket <span class="token operator">=</span> awaitSocket<span class="token punctuation">;</span>
+            awaitThread <span class="token operator">=</span> null<span class="token punctuation">;</span>
+            awaitSocket <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>serverSocket <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    serverSocket<span class="token punctuation">.</span><span class="token function">close</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// Ignore</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Service"><a href="#Service" class="headerlink" title="Service"></a>Service</h2><p>​	<code>Service</code> 是 Tomcat 中的一个核心组件，其默认实现类为 <code>StandardService</code>，表示一个具体的服务实例。它与最顶层的容器 <code>Engine</code> 是一对一的</p>
+<p>​	<strong>一个 <code>Service</code> 通常包含多个 <code>Connector</code>，每个 <code>Connector</code> 监听一个本地端口，支持特定协议（如 HTTP、AJP），接收客户端请求。请求经过 <code>Mapper</code> 映射到对应的 <code>Host</code>、<code>Context</code>、<code>Wrapper</code>，最终交由目标 <code>Servlet</code> 处理</strong></p>
+<h3 id="核心生命周期方法"><a href="#核心生命周期方法" class="headerlink" title="核心生命周期方法"></a>核心生命周期方法</h3><ul>
+<li>initInternal()<ul>
+<li>初始化绑定的 <code>Engine</code> 容器</li>
+<li>等待 <code>Engine</code> 及其子容器完成初始化后，注册相关 MBean（用于 JMX 监控）</li>
+<li>初始化所有 <code>Connector</code>（<strong>主要是是创建并绑定 <code>ServerSocketChannel</code> 到指定端口</strong>）</li>
+</ul>
+</li>
+<li>startInternal()<ul>
+<li>启动关联的 <code>Engine</code></li>
+<li>启动 <code>MapperListener</code>（用于监听容器结构变化并更新路由）</li>
+<li>启动所有 <code>Connector</code>（<strong>主要是启动Acceptor和Poller线程，开始监听端口并接受请求</strong>）</li>
+</ul>
+</li>
+</ul>
+<h3 id="核心源码-1"><a href="#核心源码-1" class="headerlink" title="核心源码"></a>核心源码</h3><pre class="line-numbers language-java"><code class="language-java">
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">StandardService</span> <span class="token keyword">extends</span> <span class="token class-name">LifecycleMBeanBase</span> <span class="token keyword">implements</span> <span class="token class-name">Service</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 当前Service名名</span>
+    <span class="token keyword">private</span> String name <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 关联的Server</span>
+    <span class="token keyword">private</span> Server server <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 当前 Service 管理的所有 Connector（支持 HTTP、AJP 等协议）</span>
+    <span class="token keyword">protected</span> Connector connectors<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Connector</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Object connectorsLock <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Object</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 当前 Service 下配置的所有线程池 Executor（一般为空，由 Connector 自带）</span>
+    <span class="token keyword">protected</span> <span class="token keyword">final</span> ArrayList<span class="token operator">&lt;</span>Executor<span class="token operator">></span> executors <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 当前 Service 使用的 Engine（容器的顶层容器，代表整个虚拟主机群）</span>
+    <span class="token keyword">private</span> Engine engine <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 我把它叫请求路由器，用于将请求映射到对应的 Wrapper（最终的 Servlet）。
+     * 由 Connector 配置协议解析后交给 Mapper 做 URI 到容器层级的映射。
+     */</span>
+    <span class="token keyword">protected</span> <span class="token keyword">final</span> Mapper mapper <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Mapper</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// Mapper 的生命周期监听器。主要注册 MBean，不参与请求处理。</span>
+    <span class="token keyword">protected</span> <span class="token keyword">final</span> MapperListener mapperListener <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">MapperListener</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">initInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException <span class="token punctuation">{</span>
+
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">initInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 初始化容器结构</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>engine <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            engine<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// Service下的Executor节点，默认没有</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>Executor executor <span class="token operator">:</span> <span class="token function">findExecutors</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>executor <span class="token keyword">instanceof</span> <span class="token class-name">JmxEnabled</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token punctuation">(</span><span class="token punctuation">(</span>JmxEnabled<span class="token punctuation">)</span> executor<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setDomain</span><span class="token punctuation">(</span><span class="token function">getDomain</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            executor<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 没做啥有用的事，仅仅注册个MBean</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 没做啥有用的事，仅仅注册个MBean</span>
+        mapperListener<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// Initialize our defined Connectors</span>
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>connectorsLock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Connector connector <span class="token operator">:</span> connectors<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 构建ProtocolHandler和Endpoint，绑定服务器端口</span>
+                    connector<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>Boolean<span class="token punctuation">.</span><span class="token function">getBoolean</span><span class="token punctuation">(</span><span class="token string">"org.apache.catalina.startup.EXIT_ON_INIT_FAILURE"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">LifecycleException</span><span class="token punctuation">(</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">startInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException <span class="token punctuation">{</span>
+
+        <span class="token function">setState</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STARTING<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 启动容器 Engine，进而递归启动 Host、Context、Wrapper</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>engine <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>engine<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                engine<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 启动所有线程池 Executor（默认为空）</span>
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>executors<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Executor executor <span class="token operator">:</span> executors<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                executor<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        mapperListener<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>connectorsLock<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Connector connector <span class="token operator">:</span> connectors<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>connector<span class="token punctuation">.</span><span class="token function">getState</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> LifecycleState<span class="token punctuation">.</span>FAILED<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 启动底层 ProtocolHandler 和 Acceptor 线程</span>
+                    connector<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="Connector"><a href="#Connector" class="headerlink" title="Connector"></a>Connector</h3><p>​	用来处理Socket的抽象，主要关注内部的ProtocolHandler和Adapter</p>
+<h4 id="ProtocolHandler"><a href="#ProtocolHandler" class="headerlink" title="ProtocolHandler"></a>ProtocolHandler</h4><p>​	用来处理具体协议，默认处理http1.1协议使用的是Http11NioProtocol这个类，内部通过NioEndpoint来真正操作Soeket，封装了Socket的相关操作Mapper</p>
+<h5 id="NioEndpoint"><a href="#NioEndpoint" class="headerlink" title="NioEndpoint"></a>NioEndpoint</h5><h6 id="Acceptor（连接处理器）"><a href="#Acceptor（连接处理器）" class="headerlink" title="Acceptor（连接处理器）"></a>Acceptor（连接处理器）</h6><p>​	一个处理连接的专用线程（默认线程名为 <code>http-nio-8080-Acceptor</code>），负责监听客户端连接，职责类似 Netty 中的 <code>ServerBootstrapAcceptor</code>。其核心流程如下：</p>
+<ul>
+<li><strong>阻塞监听客户端连接请求</strong>（调用 <code>ServerSocketChannel.accept()</code>）</li>
+<li>建立连接后，封装为 <code>SocketChannel</code>，并设置相应的 socket 参数（如非阻塞、超时等）</li>
+<li><strong>构造 <code>PollerEvent</code> 对象，设为对 <code>OP_READ</code> 事件感兴趣</strong></li>
+<li><strong>将事件投递至 <code>Poller</code> 线程，由其负责后续的事件注册和处理</strong></li>
+</ul>
+<blockquote>
+<p>补充说明：Acceptor 只负责连接建立，不处理任何 I&#x2F;O 数据交互，也不触发SocketChannel向Selector注册感兴趣的事件</p>
+</blockquote>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// Acceptor线程核心源码，只保留了一些核心逻辑</span>
+
+<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 主循环：阻塞接收客户端连接请求</span>
+    <span class="token keyword">while</span> <span class="token punctuation">(</span>running<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+
+            <span class="token comment" spellcheck="true">// 连接限制计数（默认10000）</span>
+            <span class="token function">countUpOrAwaitConnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            SocketChannel socket <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+            <span class="token comment" spellcheck="true">// 阻塞等待客户端连接（accept）</span>
+            socket <span class="token operator">=</span> serverSock<span class="token punctuation">.</span><span class="token function">accept</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>running <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>paused<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 初始化客户端连接并注册到 Poller</span>
+                <span class="token comment" spellcheck="true">// 若失败则关闭 socket 并增加可用的LimitLatch</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">setSocketOptions</span><span class="token punctuation">(</span>socket<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token function">closeSocket</span><span class="token punctuation">(</span>socket<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                <span class="token function">closeSocket</span><span class="token punctuation">(</span>socket<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            ExceptionUtils<span class="token punctuation">.</span><span class="token function">handleThrowable</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">protected</span> <span class="token keyword">boolean</span> <span class="token function">setSocketOptions</span><span class="token punctuation">(</span>SocketChannel socket<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 设置客户端 socket 为非阻塞模式</span>
+        socket<span class="token punctuation">.</span><span class="token function">configureBlocking</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Socket sock <span class="token operator">=</span> socket<span class="token punctuation">.</span><span class="token function">socket</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 设置Socket参数</span>
+        socketProperties<span class="token punctuation">.</span><span class="token function">setProperties</span><span class="token punctuation">(</span>sock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 从缓存中获取或创建 NioChannel（用于封装 SocketChannel + Buffer）</span>
+        NioChannel channel <span class="token operator">=</span> nioChannels<span class="token punctuation">.</span><span class="token function">pop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>channel <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            SocketBufferHandler bufhandler <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SocketBufferHandler</span><span class="token punctuation">(</span>
+                    socketProperties<span class="token punctuation">.</span><span class="token function">getAppReadBufSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    socketProperties<span class="token punctuation">.</span><span class="token function">getAppWriteBufSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    socketProperties<span class="token punctuation">.</span><span class="token function">getDirectBuffer</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">isSSLEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                channel <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SecureNioChannel</span><span class="token punctuation">(</span>socket<span class="token punctuation">,</span> bufhandler<span class="token punctuation">,</span> selectorPool<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                channel <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">NioChannel</span><span class="token punctuation">(</span>socket<span class="token punctuation">,</span> bufhandler<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 有缓存，就重置</span>
+            channel<span class="token punctuation">.</span><span class="token function">setIOChannel</span><span class="token punctuation">(</span>socket<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            channel<span class="token punctuation">.</span><span class="token function">reset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 注册到 Poller，由其负责后续事件驱动处理</span>
+        <span class="token function">getPoller0</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">register</span><span class="token punctuation">(</span>channel<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">register</span><span class="token punctuation">(</span><span class="token keyword">final</span> NioChannel socket<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 绑定所属 poller</span>
+    socket<span class="token punctuation">.</span><span class="token function">setPoller</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 包装为 NioSocketWrapper，承载 socket 的 I/O 状态管理</span>
+    NioSocketWrapper ka <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">NioSocketWrapper</span><span class="token punctuation">(</span>socket<span class="token punctuation">,</span> NioEndpoint<span class="token punctuation">.</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    socket<span class="token punctuation">.</span><span class="token function">setSocketWrapper</span><span class="token punctuation">(</span>ka<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ka<span class="token punctuation">.</span><span class="token function">setPoller</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// socket参数设置（超时等）</span>
+    ka<span class="token punctuation">.</span><span class="token function">setReadTimeout</span><span class="token punctuation">(</span><span class="token function">getSocketProperties</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getSoTimeout</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ka<span class="token punctuation">.</span><span class="token function">setWriteTimeout</span><span class="token punctuation">(</span><span class="token function">getSocketProperties</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getSoTimeout</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ka<span class="token punctuation">.</span><span class="token function">setKeepAliveLeft</span><span class="token punctuation">(</span>NioEndpoint<span class="token punctuation">.</span><span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getMaxKeepAliveRequests</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ka<span class="token punctuation">.</span><span class="token function">setReadTimeout</span><span class="token punctuation">(</span><span class="token function">getConnectionTimeout</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ka<span class="token punctuation">.</span><span class="token function">setWriteTimeout</span><span class="token punctuation">(</span><span class="token function">getConnectionTimeout</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    PollerEvent r <span class="token operator">=</span> eventCache<span class="token punctuation">.</span><span class="token function">pop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 设置其能监听的可读事件（当SocketChannel可读时触发）</span>
+    ka<span class="token punctuation">.</span><span class="token function">interestOps</span><span class="token punctuation">(</span>SelectionKey<span class="token punctuation">.</span>OP_READ<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>r <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        r <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">PollerEvent</span><span class="token punctuation">(</span>socket<span class="token punctuation">,</span> ka<span class="token punctuation">,</span> OP_REGISTER<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        r<span class="token punctuation">.</span><span class="token function">reset</span><span class="token punctuation">(</span>socket<span class="token punctuation">,</span> ka<span class="token punctuation">,</span> OP_REGISTER<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 投递到 Poller 的事件队列，等待 selector 执行注册</span>
+    <span class="token function">addEvent</span><span class="token punctuation">(</span>r<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h6 id="Poller（事件轮询器）"><a href="#Poller（事件轮询器）" class="headerlink" title="Poller（事件轮询器）"></a>Poller（事件轮询器）</h6><p>​	<code>Poller</code> 是 NIO 模型中负责事件监听的线程，线程名一般为 <code>http-nio-8080-ClientPoller</code>。它持续轮询 <code>Selector</code>，将感兴趣的 IO 事件分发出去，核心流程如下：</p>
+<ul>
+<li><strong>接收来自 <code>Acceptor</code> 的 SocketChannel，将其注册到 Selector 中，关注 OP_READ 等事件</strong></li>
+<li><strong>循环调用 <code>Selector.select()</code> 等待事件就绪</strong></li>
+<li><strong>对于就绪事件，将对应连接封装为 <code>SocketProcessor</code>，提交给 Worker 线程池处理（负责请求解析与响应）</strong></li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// Poller关键部分源码</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">Poller</span> <span class="token keyword">implements</span> <span class="token class-name">Runnable</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">private</span> Selector selector<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// PollerEvent事件队列</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> SynchronizedQueue<span class="token operator">&lt;</span>PollerEvent<span class="token operator">></span> events <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SynchronizedQueue</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> AtomicLong wakeupCounter <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">AtomicLong</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token function">Poller</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> IOException <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>selector <span class="token operator">=</span> Selector<span class="token punctuation">.</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 添加 PollerEvent 到事件队列，并根据 wakeupCounter 唤醒 Selector，
+     * 以确保 selector 能及时处理注册/取消等变更
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">addEvent</span><span class="token punctuation">(</span>PollerEvent event<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        events<span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span>event<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>wakeupCounter<span class="token punctuation">.</span><span class="token function">incrementAndGet</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            selector<span class="token punctuation">.</span><span class="token function">wakeup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 循环处理事件监听</span>
+        <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">boolean</span> hasEvents <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>close<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 处理事件队列中的注册/取消请求</span>
+                hasEvents <span class="token operator">=</span> <span class="token function">events</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>wakeupCounter<span class="token punctuation">.</span><span class="token function">getAndSet</span><span class="token punctuation">(</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// wakeupCounter值大于0，代表Acceptor向事件队列里push了新对象，</span>
+                    <span class="token comment" spellcheck="true">// 说明有新的连接，则立即执行非阻塞 select</span>
+                    keyCount <span class="token operator">=</span> selector<span class="token punctuation">.</span><span class="token function">selectNow</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 否则阻塞等待一定时间（默认1秒）以监听 I/O 事件</span>
+                    keyCount <span class="token operator">=</span> selector<span class="token punctuation">.</span><span class="token function">select</span><span class="token punctuation">(</span>selectorTimeout<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// 重置</span>
+                wakeupCounter<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 如果没有事件触发，检查是否还有待处理的注册事件</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>keyCount <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                hasEvents <span class="token operator">=</span> <span class="token punctuation">(</span>hasEvents <span class="token operator">|</span> <span class="token function">events</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 遍历触发的事件（如 OP_READ）</span>
+            Iterator<span class="token operator">&lt;</span>SelectionKey<span class="token operator">></span> iterator <span class="token operator">=</span> keyCount <span class="token operator">></span> <span class="token number">0</span> <span class="token operator">?</span> selector<span class="token punctuation">.</span><span class="token function">selectedKeys</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">iterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">:</span> null<span class="token punctuation">;</span>
+            <span class="token keyword">while</span> <span class="token punctuation">(</span>iterator <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> iterator<span class="token punctuation">.</span><span class="token function">hasNext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                SelectionKey sk <span class="token operator">=</span> iterator<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                iterator<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                NioSocketWrapper socketWrapper <span class="token operator">=</span> <span class="token punctuation">(</span>NioSocketWrapper<span class="token punctuation">)</span> sk<span class="token punctuation">.</span><span class="token function">attachment</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>socketWrapper <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">/**
+                     * 将就绪事件交由 Worker 线程处理（例如封装为 SocketProcessor 执行 OP_READ）
+                     * 实际业务处理在 Processor 中完成
+                     */</span>
+                    <span class="token function">processKey</span><span class="token punctuation">(</span>sk<span class="token punctuation">,</span> socketWrapper<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 扫描并关闭超时连接</span>
+            <span class="token function">timeout</span><span class="token punctuation">(</span>keyCount<span class="token punctuation">,</span> hasEvents<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token function">getStopLatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">countDown</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h6 id="init"><a href="#init" class="headerlink" title="init()"></a>init()</h6><p>初始化阶段会触发的方法，调用路径：<strong>StandardService#init -&gt; Connector#init -&gt; ProtocolHandler#init -&gt; AbstractEndpoint#init -&gt; NioEndpoint#bind</strong>，核心作用如下</p>
+<ul>
+<li>创建 <code>ServerSocketChannel</code>，并绑定至指定端口（默认 8080）</li>
+<li>将 <code>ServerSocketChannel</code> 配置为 <strong>阻塞模式</strong>（<code>accept()</code> 会阻塞直到有连接）</li>
+<li>初始化 Selector 池，管理 I&#x2F;O 多路复用</li>
+<li>启动 <strong>BlockPoller  后台线程</strong>，异步检测空闲连接、关闭已超时 socket 等后台任务</li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">bind</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 若未启用继承的 channel（默认如此），则创建新的 ServerSocketChannel</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">getUseInheritedChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        serverSock <span class="token operator">=</span> ServerSocketChannel<span class="token punctuation">.</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        socketProperties<span class="token punctuation">.</span><span class="token function">setProperties</span><span class="token punctuation">(</span>serverSock<span class="token punctuation">.</span><span class="token function">socket</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        InetSocketAddress addr <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token function">getAddress</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">!=</span>null<span class="token operator">?</span><span class="token keyword">new</span> <span class="token class-name">InetSocketAddress</span><span class="token punctuation">(</span><span class="token function">getAddress</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">getPort</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token operator">:</span><span class="token keyword">new</span> <span class="token class-name">InetSocketAddress</span><span class="token punctuation">(</span><span class="token function">getPort</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        serverSock<span class="token punctuation">.</span><span class="token function">socket</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">bind</span><span class="token punctuation">(</span>addr<span class="token punctuation">,</span><span class="token function">getAcceptCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        Channel ic <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">inheritedChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ic <span class="token keyword">instanceof</span> <span class="token class-name">ServerSocketChannel</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            serverSock <span class="token operator">=</span> <span class="token punctuation">(</span>ServerSocketChannel<span class="token punctuation">)</span> ic<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>serverSock <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">IllegalArgumentException</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"endpoint.init.bind.inherited"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 配置为阻塞模式，accept时期阻塞（重要）</span>
+    serverSock<span class="token punctuation">.</span><span class="token function">configureBlocking</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 合理化接收线程数（默认为 1）</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>acceptorThreadCount <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        acceptorThreadCount <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 合理化Poller线程数</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>pollerThreadCount <span class="token operator">&lt;=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        pollerThreadCount <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 初始化关闭控制器，用于 await Poller 线程退出</span>
+    <span class="token function">setStopLatch</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">CountDownLatch</span><span class="token punctuation">(</span>pollerThreadCount<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token function">initialiseSsl</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 初始化 Selector 池，启动BlockPoller线程</span>
+    selectorPool<span class="token punctuation">.</span><span class="token function">open</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h6 id="start"><a href="#start" class="headerlink" title="start()"></a>start()</h6><p>启动阶段触发的核心方法，调用路径：<strong>StandardService#start -&gt; Connector#start -&gt; ProtocolHandler#start -&gt; AbstractEndpoint#start</strong>，核心步骤如下</p>
+<ul>
+<li>用栈的数据结构初始化Processor、Event、Nio缓存池</li>
+<li><strong>初始化 Worker 线程池（事件处理线程池）</strong></li>
+<li>初始化LimitLatch，用来限制连接个数</li>
+<li><strong>创建并启动Poller线程（Poller是事件轮询器，SocketChannel会将READ事件注册，并让其轮询）</strong></li>
+<li><strong>创建并启动Acceptor线程（连接接收器），专用来处理连接</strong></li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">startInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>running<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        running <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+        paused <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// =========== 初始化各类缓存栈（预分配池），提升对象复用效率，减少 GC 压力 ================</span>
+        <span class="token comment" spellcheck="true">// 请求处理器缓存池</span>
+        processorCache <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SynchronizedStack</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>SynchronizedStack<span class="token punctuation">.</span>DEFAULT_SIZE<span class="token punctuation">,</span> socketProperties<span class="token punctuation">.</span><span class="token function">getProcessorCache</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 事件对象缓存池</span>
+        eventCache <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SynchronizedStack</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>SynchronizedStack<span class="token punctuation">.</span>DEFAULT_SIZE<span class="token punctuation">,</span> socketProperties<span class="token punctuation">.</span><span class="token function">getEventCache</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// NIO Channel 缓存池</span>
+        nioChannels <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SynchronizedStack</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>SynchronizedStack<span class="token punctuation">.</span>DEFAULT_SIZE<span class="token punctuation">,</span> socketProperties<span class="token punctuation">.</span><span class="token function">getBufferPool</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">/*
+         * 初始化工作线程池（Worker Thread Pool）
+         * - 若 server.xml里的Connector 节点未指定 executor，则使用默认实现。
+         * - 实际线程为 daemon，线程名格式：http-nio-端口号-exec-索引
+         * - 线程池大小由 AbstractEndpoint 的 minSpareThreads 和 maxThreads 控制
+         */</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getExecutor</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">createExecutor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 初始化连接限制器（内部用 Semaphore 控制最大连接数）</span>
+        <span class="token function">initializeConnectionLatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 启动 Poller 线程（其数量可通过 server.xml 中 Connector 属性 `pollerThreadCount`配置）</span>
+        pollers <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Poller</span><span class="token punctuation">[</span><span class="token function">getPollerThreadCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> pollers<span class="token punctuation">.</span>length<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            pollers<span class="token punctuation">[</span>i<span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Poller</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            Thread pollerThread <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Thread</span><span class="token punctuation">(</span>pollers<span class="token punctuation">[</span>i<span class="token punctuation">]</span><span class="token punctuation">,</span> <span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"-ClientPoller-"</span> <span class="token operator">+</span> i<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            pollerThread<span class="token punctuation">.</span><span class="token function">setPriority</span><span class="token punctuation">(</span>threadPriority<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            pollerThread<span class="token punctuation">.</span><span class="token function">setDaemon</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 也是daemon线程</span>
+            pollerThread<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 启动 Acceptor 线程</span>
+        <span class="token function">startAcceptorThreads</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="MapperListener"><a href="#MapperListener" class="headerlink" title="MapperListener"></a>MapperListener</h3><p>​	这个组件理解其作用就行，源码不值得深入分析，价值不大。<strong>它是一个用于监听容器结构变化、并同步更新到<code>Mapper</code> 组件中映射关系的辅助组件</strong>。其核心作用如下：</p>
+<ul>
+<li><strong>启动时注册</strong><ul>
+<li>在 <code>startInternal()</code> 中：<ul>
+<li>将自身注册为 <code>Engine</code>、<code>Host</code>、<code>Context</code>、<code>Wrapper</code> 容器的 <code>ContainerListener</code></li>
+<li>遍历并将当前 <code>Engine</code> 及其所有子容器的路由信息（如 host name、context path、wrapper mapping 等）注册进 <code>Mapper</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>监听容器事件</strong><ul>
+<li>实现 <code>containerEvent()</code> 方法，监听容器结构变化事件（如 Host 增加 alias、Context 增加&#x2F;移除 Wrapper 等），<strong>当结构变更时，自动将变化同步更新到 <code>Mapper</code>，保证路由信息的时效性</strong></li>
+</ul>
+</li>
+</ul>
+<h3 id="Mapper"><a href="#Mapper" class="headerlink" title="Mapper"></a>Mapper</h3><p>​	同上面的MapperListener，理解作用即可，源码深入分析的价值不大。我把它叫做路由器，其<strong>负责将 HTTP 请求路径快速匹配到对应的 <code>Servlet</code>。其本身不参与请求处理，仅提供路径与容器结构之间的高性能映射机制。</strong></p>
+<p>​	内部通过 <code>MapperListener</code> 监听容器层级（Engine → Host → Context → Wrapper）的结构变更，动态构建和维护内部的映射模型。其<strong>内部将Container抽象为轻量级MapElement结构体并按层级关系嵌套组织，构建出一棵用于快速匹配的树状结构</strong>。当请求到来时，根据url从左至右快速的查找到对应唯一的Host -&gt; Context -&gt; Wrapper，让它们来处理对应的请求。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><img src="https://img.shanzhao.site/file/1748695204947_tomcat-connector-handle.png" alt="tomcat-connector-handle.png"></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Acceptor/" rel="tag"># Acceptor</a>
+              <a href="/tags/Poller/" rel="tag"># Poller</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/" rel="prev" title="Tomcat-整体架构和Lifecycle">
+                  <i class="fa fa-angle-left"></i> Tomcat-整体架构和Lifecycle
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="next" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  Spring-事物NOT_SUPPORTED策略下多数据源切换的问题 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">257k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">7:47</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>
