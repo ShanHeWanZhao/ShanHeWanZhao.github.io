@@ -54,6 +54,26 @@
   </entry>
   
   <entry>
+    <title>Tomcat-Engine,Host和HostConfig</title>
+    <link href="https://blog.shanzhao.site/2021-09-23/tomcat-engine-host-he-hostconfig/"/>
+    <id>https://blog.shanzhao.site/2021-09-23/tomcat-engine-host-he-hostconfig/</id>
+    <published>2021-09-23T02:35:44.000Z</published>
+    <updated>2021-10-02T07:33:44.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	从源码分析了ContainerBase，StandardEngine，StandardHost和HostConfig的实现逻辑。需要&lt;strong&gt;重点注意HostConfig的作用和部署流程&lt;/strong&gt;&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
+    
+    
+    <category term="Container" scheme="https://blog.shanzhao.site/tags/Container/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Tomcat-Server和Service</title>
     <link href="https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/"/>
     <id>https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/</id>
@@ -397,26 +417,6 @@
     
     
     <category term="线程池" scheme="https://blog.shanzhao.site/tags/%E7%BA%BF%E7%A8%8B%E6%B1%A0/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Java源码篇-Future</title>
-    <link href="https://blog.shanzhao.site/2020-05-09/java-yuan-ma-pian-future/"/>
-    <id>https://blog.shanzhao.site/2020-05-09/java-yuan-ma-pian-future/</id>
-    <published>2020-05-09T02:43:53.000Z</published>
-    <updated>2020-05-11T07:41:01.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	jdk中Future接口实现类相关源码解析。包括FutureTask和 ScheduledFutureTask&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
-    
-    
-    <category term="多线程" scheme="https://blog.shanzhao.site/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/"/>
     
   </entry>
   
