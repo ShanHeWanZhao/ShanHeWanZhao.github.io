@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	StandardContext、ContextConfig以及StandardWrapper的核心逻辑源码解析及总结">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat-Context,ContextConfig和Wrapper">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	StandardContext、ContextConfig以及StandardWrapper的核心逻辑源码解析及总结">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-10-03T10:39:39.000Z">
+<meta property="article:modified_time" content="2021-10-07T06:31:39.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="Container">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/","path":"2021-10-03/tomcat-context-contextconfig-he-wrapper/","title":"Tomcat-Context,ContextConfig和Wrapper"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Tomcat-Context,ContextConfig和Wrapper | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Tomcat-Context-ContextConfig%E5%92%8CWrapper"><span class="nav-number">1.</span> <span class="nav-text">Tomcat-Context,ContextConfig和Wrapper</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Context"><span class="nav-number">1.1.</span> <span class="nav-text">Context</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#start%E6%A0%B8%E5%BF%83%E6%B5%81%E7%A8%8B%E6%80%BB%E7%BB%93"><span class="nav-number">1.1.1.</span> <span class="nav-text">start核心流程总结</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.2.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ContextConfig"><span class="nav-number">1.1.3.</span> <span class="nav-text">ContextConfig</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#webConfig-%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91"><span class="nav-number">1.1.3.1.</span> <span class="nav-text">webConfig()核心逻辑</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#webConfig-%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.3.2.</span> <span class="nav-text">webConfig()源码</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Wrapper"><span class="nav-number">1.2.</span> <span class="nav-text">Wrapper</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-1"><span class="nav-number">1.2.1.</span> <span class="nav-text">核心源码</span></a></li></ol></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">26</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">25</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Tomcat-Context,ContextConfig和Wrapper | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Tomcat-Context,ContextConfig和Wrapper
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-10-03 18:39:39" itemprop="dateCreated datePublished" datetime="2021-10-03T18:39:39+08:00">2021-10-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2021-10-07 14:31:39" itemprop="dateModified" datetime="2021-10-07T14:31:39+08:00">2021-10-07</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>13k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>23 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	StandardContext、ContextConfig以及StandardWrapper的核心逻辑源码解析及总结</p>
+<span id="more"></span>
+
+<h1 id="Tomcat-Context-ContextConfig和Wrapper"><a href="#Tomcat-Context-ContextConfig和Wrapper" class="headerlink" title="Tomcat-Context,ContextConfig和Wrapper"></a>Tomcat-Context,ContextConfig和Wrapper</h1><h2 id="Context"><a href="#Context" class="headerlink" title="Context"></a>Context</h2><p>​	<code>Context</code> 是 Tomcat 中最关键的容器组件，默认实现为 <code>StandardContext</code>。<strong>每一个 <code>Context</code> 实例代表一个独立的 Web 应用</strong>。在内部，<code>Context</code> 承担了大量与 Web 应用生命周期相关的工作，比如<strong>类加载器的初始化、<code>web.xml</code> 的解析、<code>Servlet</code>&#x2F;<code>Filter</code>&#x2F;<code>Listener</code> 的注册与实例化等</strong>。</p>
+<p>​	<strong>每个 <code>Context</code> 对应一个唯一的 <code>ServletContext</code>，用于代表当前 Web 应用的上下文环境</strong>。通过 <code>StandardContext</code> 的 <code>startInternal</code> 方法，我们可以深入了解 Tomcat 是如何逐步构建一个 Web 应用的，并是在哪一步触发Spring启动的。</p>
+<h3 id="start核心流程总结"><a href="#start核心流程总结" class="headerlink" title="start核心流程总结"></a>start核心流程总结</h3><ol>
+<li>初始化和设置类加载器<ul>
+<li>设置StandardContext.loader为WebappLoader（和当前Context的使用的类加载器有关）</li>
+<li>启动WebappLoader（内部会创建ParallelWebappClassLoader）</li>
+<li><strong>切换当前线程的类加载器为上述的ParallelWebappClassLoader，为后续类的隔离加载做准备（尤其是 SPI 加载）</strong></li>
+</ul>
+</li>
+<li>触发配置解析流程<ul>
+<li>发布 <code>Lifecycle.CONFIGURE_START_EVENT</code> 事件，触发内部的 ContextConfig 监听器</li>
+<li><strong>ContextConfig开始解析当前项目的web.xml和其他jar包里的web-fragment.xml，并将解析后的结果合并放到StandardContext中</strong>（比如将servlet配置构造成Warpper添加到Context中作为其子容器）</li>
+</ul>
+</li>
+<li>tomcat 内部组件设置与启动<ul>
+<li>启动Warpper（StandardWrapper启动阶段不会做什么，不是实例化关联的Servlet）</li>
+<li>触发当前contxet的Pipeline#start</li>
+<li><strong>创建StandardManager作为session的默认管理器</strong></li>
+</ul>
+</li>
+<li><strong>实例和初始化关键Servlet相关组件</strong><ul>
+<li>调用ServletContainerInitializer#onStartup</li>
+<li><strong>实例化并调用ServletContextListener#contextInitialized（Spring + Tomcat组合时用到的ContextLoaderListener就会在这时启动。所以，这里就是spring开始实例化的开始）</strong></li>
+<li><strong>调用Manager#start（内部会恢复上一次context中持久化的session）</strong></li>
+<li><strong>实例化所有 Filter，并调用其init()方法</strong></li>
+<li><strong>实例全部loadOnStartup &gt; 0的Servlet，并调用其init()方法</strong></li>
+</ul>
+</li>
+</ol>
+<h3 id="核心源码"><a href="#核心源码" class="headerlink" title="核心源码"></a>核心源码</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">StandardContext</span> <span class="token keyword">extends</span> <span class="token class-name">ContainerBase</span>
+        <span class="token keyword">implements</span> <span class="token class-name">Context</span><span class="token punctuation">,</span> NotificationEmitter <span class="token punctuation">{</span>
+
+    <span class="token keyword">public</span> <span class="token function">StandardContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+        <span class="token keyword">super</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        pipeline<span class="token punctuation">.</span><span class="token function">setBasic</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">StandardContextValve</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// web.xml里的listener标签里配置的各种监听器className</span>
+    <span class="token keyword">private</span> String applicationListeners<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// ServletContextListener集和</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Set<span class="token operator">&lt;</span>Object<span class="token operator">></span> noPluggabilityListeners <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// ServletContext实现</span>
+    <span class="token keyword">protected</span> ApplicationContext context <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 在当前tomcat实例中，是否允许javax.servlet.ServletContext#getContext方法跨context获取当前context的ServletContext</span>
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> crossContext <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 当前web的path（即 URL 前缀）</span>
+    <span class="token keyword">private</span> String path <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// Filter 实例与其配置类之间的映射（FilterConfig），用于实际调用</span>
+    <span class="token keyword">private</span> HashMap<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> ApplicationFilterConfig<span class="token operator">></span> filterConfigs <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// Filter配置的抽象集和（在wel.xml里配置的Filter）</span>
+    <span class="token keyword">private</span> HashMap<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> FilterDef<span class="token operator">></span> filterDefs <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 默认为StandardManager（管理和持久化Session）</span>
+    <span class="token keyword">protected</span> Manager manager <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 是否开启可重新加载的检测</span>
+    <span class="token comment" spellcheck="true">// 为true时，当当前环境的Class文件或jar有改变时（增加或修改），会重新加载当前Context</span>
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> reloadable <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// Servlet 映射关系，key 为 URL pattern，value 为 Servlet 名称</span>
+    <span class="token keyword">private</span> HashMap<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> String<span class="token operator">></span> servletMappings <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// session超时事件（分钟单位）</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> sessionTimeout <span class="token operator">=</span> <span class="token number">30</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// ============ Cookie相关配置 ================</span>
+    <span class="token keyword">private</span> String sessionCookieName<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> useHttpOnly <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token keyword">private</span> String sessionCookieDomain<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> String sessionCookiePath<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 是否在cookie1路径最后面添加/，默认否（比如路径为/foo，避免请求/foobar也带上这个cookie）</span>
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> sessionCookiePathUsesTrailingSlash <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 是否接受客户端提供的（但服务端不存在的）Session ID 并创建新的 Session。设为false和context path为 / 才会生效</span>
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> validateClientProvidedNewSessionId <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * start方法，可以说是整个tomcat中最关键的部分
+     */</span>
+    <span class="token keyword">protected</span> <span class="token keyword">synchronized</span> <span class="token keyword">void</span> <span class="token function">startInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException <span class="token punctuation">{</span>
+
+        <span class="token keyword">boolean</span> ok <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 初始化资源对象：WebResourceRoot（提供静态资源访问、JAR管理等），Loader会用到</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getResources</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token function">setResources</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">StandardRoot</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IllegalArgumentException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                ok <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 启动资源对象，确保资源可用</span>
+            <span class="token function">resourcesStart</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 设置Loader。这时当前组件的state为STARTING_PREP，不会触发Loader的start</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            WebappLoader webappLoader <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">WebappLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            webappLoader<span class="token punctuation">.</span><span class="token function">setDelegate</span><span class="token punctuation">(</span><span class="token function">getDelegate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token function">setLoader</span><span class="token punctuation">(</span>webappLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 初始化 Cookie 解析器（符合 RFC6265）</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>cookieProcessor <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            cookieProcessor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Rfc6265CookieProcessor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 绑定ClassLoader到当前线程，并返回旧的classLoader</span>
+        ClassLoader oldCCL <span class="token operator">=</span> <span class="token function">bindThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 启动 WebappLoader，内部会创建 ParallelWebappClassLoader</span>
+                Loader loader <span class="token operator">=</span> <span class="token function">getLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>loader <span class="token keyword">instanceof</span> <span class="token class-name">Lifecycle</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token punctuation">(</span><span class="token punctuation">(</span>Lifecycle<span class="token punctuation">)</span> loader<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token function">unbindThread</span><span class="token punctuation">(</span>oldCCL<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 将ParallelWebappClassLoader绑定到当前线程上线文里，作为当前context的类加载器</span>
+                oldCCL <span class="token operator">=</span> <span class="token function">bindThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                <span class="token comment" spellcheck="true">// 通知 ContextConfig 进行 web.xml（当前项目）、web-fragment.xml（其他依赖jar包） 等配置解析和组合</span>
+                <span class="token function">fireLifecycleEvent</span><span class="token punctuation">(</span>Lifecycle<span class="token punctuation">.</span>CONFIGURE_START_EVENT<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                <span class="token comment" spellcheck="true">// ================ 走到这，xml里的所有Servlet,Filter,Listener等配置都解析完毕，放置到当前Context内部中了</span>
+
+                <span class="token comment" spellcheck="true">// 启动所有Wrapper（内部基本不会做什么）</span>
+                <span class="token keyword">for</span> <span class="token punctuation">(</span>Container child <span class="token operator">:</span> <span class="token function">findChildren</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>child<span class="token punctuation">.</span><span class="token function">getState</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isAvailable</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        child<span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 启动当前context的pipeline</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>pipeline <span class="token keyword">instanceof</span> <span class="token class-name">Lifecycle</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token punctuation">(</span><span class="token punctuation">(</span>Lifecycle<span class="token punctuation">)</span> pipeline<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 创建并设置 Session 管理器（如 StandardManager）</span>
+                Manager contextManager <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">StandardManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>contextManager <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token function">setManager</span><span class="token punctuation">(</span>contextManager<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 检查配置是否成功（由 ContextConfig 设置）</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">getConfigured</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"standardContext.configurationFail"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                ok <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 调用所有的ServletContainerInitializer</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Map<span class="token punctuation">.</span>Entry<span class="token operator">&lt;</span>ServletContainerInitializer<span class="token punctuation">,</span> Set<span class="token operator">&lt;</span>Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">>>></span> entry <span class="token operator">:</span> initializers<span class="token punctuation">.</span><span class="token function">entrySet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    entry<span class="token punctuation">.</span><span class="token function">getKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">onStartup</span><span class="token punctuation">(</span>entry<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                            <span class="token function">getServletContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ServletException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    ok <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                    <span class="token keyword">break</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 调用ServletContextListener的contextInitialized方法</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">listenerStart</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"standardContext.listenerFail"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    ok <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 启动 Session 管理器</span>
+                Manager manager <span class="token operator">=</span> <span class="token function">getManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>manager <span class="token keyword">instanceof</span> <span class="token class-name">Lifecycle</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token punctuation">(</span><span class="token punctuation">(</span>Lifecycle<span class="token punctuation">)</span> manager<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                ok <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 实例化并配置好当前context的全部Filter，并触发其init方法</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">filterStart</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    ok <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 加载并实例化各种loadOnStartup > 0 的Servlet（并执行init方法）</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">loadOnStartup</span><span class="token punctuation">(</span><span class="token function">findChildren</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    ok <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 默认不会启动Context的backgroundProcessor（由Engine处理）</span>
+            <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">threadStart</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 恢复线程上下文类加载器</span>
+            <span class="token function">unbindThread</span><span class="token punctuation">(</span>oldCCL<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 清理 Web 资源缓存（避免 JAR 文件句柄未释放）</span>
+        <span class="token function">getResources</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">gc</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 设置最终状态</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">setState</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>FAILED<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// Send j2ee.object.failed notification</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getObjectName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                Notification notification <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Notification</span><span class="token punctuation">(</span><span class="token string">"j2ee.object.failed"</span><span class="token punctuation">,</span>
+                        <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getObjectName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> sequenceNumber<span class="token punctuation">.</span><span class="token function">getAndIncrement</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                broadcaster<span class="token punctuation">.</span><span class="token function">sendNotification</span><span class="token punctuation">(</span>notification<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            <span class="token function">setState</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STARTING<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ContextConfig"><a href="#ContextConfig" class="headerlink" title="ContextConfig"></a>ContextConfig</h3><p>​	当 <code>HostConfig</code> 实例化并部署 <code>Context</code> 时，会自动注册 <code>ContextConfig</code> 作为 <code>Context</code> 的一个 <code>LifecycleListener</code>。<strong>其主要职责是在 <code>Context</code> 启动（<code>startInternal()</code>）期间解析各种配置（web.xml、注解、SCI 等），并将解析结果装配到 <code>StandardContext</code> 中，以保证 Web 应用能完整启动</strong></p>
+<p>​	核心方法主要在ContextConfig#webConfig()中，被调用的链路为:</p>
+<blockquote>
+<ol>
+<li>StandardContext#startInternal()中触发Lifecycle.CONFIGURE_START_EVENT事件</li>
+<li>ContextConfig#lifecycleEvent</li>
+<li>ContextConfig#configureStart</li>
+<li>ContextConfig#webConfig</li>
+</ol>
+</blockquote>
+<h4 id="webConfig-核心逻辑"><a href="#webConfig-核心逻辑" class="headerlink" title="webConfig()核心逻辑"></a>webConfig()核心逻辑</h4><ol>
+<li><p><strong>web.xml解析</strong></p>
+<ul>
+<li><strong>${catalina.base}&#x2F;conf&#x2F;web.xml：server级别</strong>，即全局级别</li>
+<li><strong>${catalina.base}&#x2F;conf&#x2F;Catalina&#x2F;{hostname}&#x2F;web.xml.default：host级别</strong></li>
+<li><strong>WEB-INF&#x2F;web.xml：当前context级</strong>，在context根目录下</li>
+<li><strong>WEB-INF&#x2F;lib&#x2F;*.jar!&#x2F;META-INF&#x2F;web-fragment.xml：fragment级别</strong>，当前web的依赖jar（WEB-INF&#x2F;lib&#x2F;目录）包里</li>
+</ul>
+</li>
+<li><p><strong>Servlet 3.0特性支持</strong></p>
+<ul>
+<li><p>识别并加载 ServletContainerInitializer（WEB-INF&#x2F;lib&#x2F;*.jar!&#x2F;META-INF&#x2F;services&#x2F;javax.servlet.ServletContainerInitializer）</p>
+</li>
+<li><p><strong>使用字节码技术解析项目class和jar包里的@WebServlet, @WebFilter, @WebListener，@HandlesType等注解，避免无用的class被加载进JVM</strong></p>
+</li>
+</ul>
+</li>
+<li><p><strong>web.xml合并注册</strong></p>
+<ul>
+<li><strong>将第1步里解析到的全部WebXml按优先级合并为一个WebXml对象，优先级： context &gt; fragment &gt; host &gt; server</strong></li>
+<li>将<strong>合并后的WebXml注册到StandardContext中</strong>（Filter、Listener、Wrapper、Session config、欢迎页等）</li>
+</ul>
+</li>
+</ol>
+<h4 id="webConfig-源码"><a href="#webConfig-源码" class="headerlink" title="webConfig()源码"></a>webConfig()源码</h4><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">webConfig</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// web.xml的解析器</span>
+    WebXmlParser webXmlParser <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">WebXmlParser</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getXmlNamespaceAware</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            context<span class="token punctuation">.</span><span class="token function">getXmlValidation</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> context<span class="token punctuation">.</span><span class="token function">getXmlBlockExternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    Set<span class="token operator">&lt;</span>WebXml<span class="token operator">></span> defaults <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 1. 解析全局默认的web.xml，即conf/web.xml文件</span>
+    <span class="token comment" spellcheck="true">// 2. 解析host级别默认的web.xml，即conf/Catalina/{hostname}/web.xml.default 文件</span>
+    defaults<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token function">getDefaultWebXmlFragment</span><span class="token punctuation">(</span>webXmlParser<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// web.xml的解析结果</span>
+    WebXml webXml <span class="token operator">=</span> <span class="token function">createWebXml</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 将当前context级别的 WEB-INF/web.xml文件解析到webXml对象里</span>
+    InputSource contextWebXml <span class="token operator">=</span> <span class="token function">getContextWebXmlSource</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>webXmlParser<span class="token punctuation">.</span><span class="token function">parseWebXml</span><span class="token punctuation">(</span>contextWebXml<span class="token punctuation">,</span> webXml<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        ok <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    ServletContext sContext <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getServletContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 将Web应用中的所有jar包（即WEB-INF/lib/ 目录）里的META-INF/web-fragment.xml 解析为一个个的WebXml对象</span>
+    Map<span class="token operator">&lt;</span>String<span class="token punctuation">,</span>WebXml<span class="token operator">></span> fragments <span class="token operator">=</span> <span class="token function">processJarsForWebFragments</span><span class="token punctuation">(</span>webXml<span class="token punctuation">,</span> webXmlParser<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 排序</span>
+    Set<span class="token operator">&lt;</span>WebXml<span class="token operator">></span> orderedFragments <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    orderedFragments <span class="token operator">=</span>
+            WebXml<span class="token punctuation">.</span><span class="token function">orderWebFragments</span><span class="token punctuation">(</span>webXml<span class="token punctuation">,</span> fragments<span class="token punctuation">,</span> sContext<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 实例化META-INF/services/javax.servlet.ServletContainerInitializer文件里的SCI</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token function">processServletContainerInitializers</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span>  <span class="token punctuation">(</span><span class="token operator">!</span>webXml<span class="token punctuation">.</span><span class="token function">isMetadataComplete</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">||</span> typeInitializerMap<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 1. 使用字节码方式解析class文件并处理相关注解（@WebServlet, @WebFilter, @WebListener等）</span>
+        <span class="token comment" spellcheck="true">// 2. 找出符合 @HandlesType 的类</span>
+        <span class="token function">processClasses</span><span class="token punctuation">(</span>webXml<span class="token punctuation">,</span> orderedFragments<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>webXml<span class="token punctuation">.</span><span class="token function">isMetadataComplete</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 先合并jar包里web-fragment.xml配置到当前context的web.xml里</span>
+            ok <span class="token operator">=</span> webXml<span class="token punctuation">.</span><span class="token function">merge</span><span class="token punctuation">(</span>orderedFragments<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 再将全局默认和host的合并到当前context的web.xml里</span>
+        webXml<span class="token punctuation">.</span><span class="token function">merge</span><span class="token punctuation">(</span>defaults<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">convertJsps</span><span class="token punctuation">(</span>webXml<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 将合并完成的web.xml信息注册到当前StandardContext中</span>
+            <span class="token function">configureContext</span><span class="token punctuation">(</span>webXml<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        webXml<span class="token punctuation">.</span><span class="token function">merge</span><span class="token punctuation">(</span>defaults<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">convertJsps</span><span class="token punctuation">(</span>webXml<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">configureContext</span><span class="token punctuation">(</span>webXml<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 暴露出jar包中META-INF/resources/的静态资源，让其可以直接通过url访问</span>
+        Set<span class="token operator">&lt;</span>WebXml<span class="token operator">></span> resourceJars <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LinkedHashSet</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>orderedFragments<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>WebXml fragment <span class="token operator">:</span> fragments<span class="token punctuation">.</span><span class="token function">values</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>resourceJars<span class="token punctuation">.</span><span class="token function">contains</span><span class="token punctuation">(</span>fragment<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                resourceJars<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>fragment<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token function">processResourceJARs</span><span class="token punctuation">(</span>resourceJars<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 注册 ServletContainerInitializer 到 Context</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>ok<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>Map<span class="token punctuation">.</span>Entry<span class="token operator">&lt;</span>ServletContainerInitializer<span class="token punctuation">,</span>
+                Set<span class="token operator">&lt;</span>Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">>>></span> entry <span class="token operator">:</span>
+                    initializerClassMap<span class="token punctuation">.</span><span class="token function">entrySet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>entry<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                context<span class="token punctuation">.</span><span class="token function">addServletContainerInitializer</span><span class="token punctuation">(</span>
+                        entry<span class="token punctuation">.</span><span class="token function">getKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                context<span class="token punctuation">.</span><span class="token function">addServletContainerInitializer</span><span class="token punctuation">(</span>
+                        entry<span class="token punctuation">.</span><span class="token function">getKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> entry<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Wrapper"><a href="#Wrapper" class="headerlink" title="Wrapper"></a>Wrapper</h2><p>​	Wrapper即Servlet，默认实现为StandardWrapper，其主要任务为：</p>
+<blockquote>
+<ul>
+<li>管理 Servlet 的 <strong>生命周期</strong>（加载、初始化、分配和销毁）</li>
+<li>支持 <strong>线程安全策略</strong>（如 <code>SingleThreadModel</code>）</li>
+</ul>
+</blockquote>
+<p>​	<strong>Servlet 的实例化不依赖 StandardWrapper的 <code>init()</code> 或 <code>start()</code> 方法，而是由 <code>loadOnStartup</code>字段决定</strong>。也就没必要分析着两个生命周期方法</p>
+<blockquote>
+<ul>
+<li>loadOnStartup &gt;&#x3D; 0：在应用启动阶段就会实例化并初始化 Servlet（StandardContext内的start阶段）</li>
+<li>loadOnStartup &lt; 0（默认）：延迟到首次请求时才实例化</li>
+</ul>
+</blockquote>
+<p>​	值得关注allocate()方法，这是在http请求到来时分配当前Wrapper的Servlet方法，其实现了SingleThreadModel（即STM，尽管已被废弃）逻辑的支持。内部<strong>利用栈进行缓存，让每个运行在当前STM Servlet里的线程能独享一个Servlet，默认最多20个缓存</strong>，到达最大数量时当前请求会被阻塞，只能等deallocate()方法（归还Servlet）来唤醒。</p>
+<p>​	所以，可以得出一个关键结论：<strong>对STM Servlet来说，其http请求的最大并发数为Min(StandardWrapper.maxInstances, tomcat的worker线程池最大线程数)</strong></p>
+<h3 id="核心源码-1"><a href="#核心源码-1" class="headerlink" title="核心源码"></a>核心源码</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">StandardWrapper</span> <span class="token keyword">extends</span> <span class="token class-name">ContainerBase</span>
+        <span class="token keyword">implements</span> <span class="token class-name">ServletConfig</span><span class="token punctuation">,</span> Wrapper<span class="token punctuation">,</span> NotificationEmitter <span class="token punctuation">{</span>
+    <span class="token keyword">public</span> <span class="token function">StandardWrapper</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 向pipeline添加StandardWrapperValve，这个valve主要实例化servlet并构造filter来处理请求</span>
+        swValve <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">StandardWrapperValve</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        pipeline<span class="token punctuation">.</span><span class="token function">setBasic</span><span class="token punctuation">(</span>swValve<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// servlet实例（针对多线程共用时的）</span>
+    <span class="token keyword">protected</span> <span class="token keyword">volatile</span> Servlet instance <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 当前servlet是否已经初始化（就是调用了init接口）</span>
+    <span class="token keyword">protected</span> <span class="token keyword">volatile</span> <span class="token keyword">boolean</span> instanceInitialized <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">protected</span> <span class="token keyword">int</span> loadOnStartup <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 当前servlet的InitParam参数缓存</span>
+    <span class="token keyword">protected</span> HashMap<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> String<span class="token operator">></span> parameters <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 是否是单线程模式。默认false，表示为单例Servlet。如果为true，代表Servlet在每个运行的线程中是不同的，即多例</span>
+    <span class="token keyword">protected</span> <span class="token keyword">volatile</span> <span class="token keyword">boolean</span> singleThreadModel <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 单线程模式下默认最多20个单线程servlet</span>
+    <span class="token keyword">protected</span> <span class="token keyword">int</span> maxInstances <span class="token operator">=</span> <span class="token number">20</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 单线程模式下servlet的实例树</span>
+    <span class="token keyword">protected</span> <span class="token keyword">int</span> nInstances <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 单线程模式下基于栈实现的servlet实例池</span>
+    <span class="token keyword">protected</span> Stack<span class="token operator">&lt;</span>Servlet<span class="token operator">></span> instancePool <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+     <span class="token comment" spellcheck="true">/**
+     * 根据singleThreadModel采用不同的分配策略，进行Servlet实例的分配
+     */</span>
+    <span class="token keyword">public</span> Servlet <span class="token function">allocate</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> ServletException <span class="token punctuation">{</span>
+
+
+        <span class="token keyword">boolean</span> newInstance <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 非STM的，每次都返回相同的servlet（多线程共用这个对象）</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>singleThreadModel<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>instance <span class="token operator">==</span> null <span class="token operator">||</span> <span class="token operator">!</span>instanceInitialized<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>instance <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                            <span class="token comment" spellcheck="true">// 实例化</span>
+                            instance <span class="token operator">=</span> <span class="token function">loadServlet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            newInstance <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>singleThreadModel<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                countAllocated<span class="token punctuation">.</span><span class="token function">incrementAndGet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span>
+                        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ServletException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            ExceptionUtils<span class="token punctuation">.</span><span class="token function">handleThrowable</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ServletException</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"standardWrapper.allocate"</span><span class="token punctuation">)</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                    <span class="token comment" spellcheck="true">// 如果未初始化，则调用Servlet#init方法</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>instanceInitialized<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token function">initServlet</span><span class="token punctuation">(</span>instance<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 再次检测STM（Servlet第一次实例化时才会设置这个值），如果是STM则先入栈（即缓存）</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>singleThreadModel<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>newInstance<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>instancePool<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        instancePool<span class="token punctuation">.</span><span class="token function">push</span><span class="token punctuation">(</span>instance<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        nInstances<span class="token operator">++</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 非STM则直接返回</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>newInstance<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    countAllocated<span class="token punctuation">.</span><span class="token function">incrementAndGet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">return</span> instance<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// ================== 走到这，表示为STM Servlet ==================</span>
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>instancePool<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">while</span> <span class="token punctuation">(</span>countAllocated<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">>=</span> nInstances<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 缓存的STM Servlet不够分</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>nInstances <span class="token operator">&lt;</span> maxInstances<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 没到上限，则进行实例化</span>
+                    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                        instancePool<span class="token punctuation">.</span><span class="token function">push</span><span class="token punctuation">(</span><span class="token function">loadServlet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        nInstances<span class="token operator">++</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ServletException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        ExceptionUtils<span class="token punctuation">.</span><span class="token function">handleThrowable</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ServletException</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"standardWrapper.allocate"</span><span class="token punctuation">)</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// 超过上限，则阻塞等待归还Servlet时的唤醒</span>
+                        instancePool<span class="token punctuation">.</span><span class="token function">wait</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">InterruptedException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// Ignore</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 增加servlet正在使用的数量</span>
+            countAllocated<span class="token punctuation">.</span><span class="token function">incrementAndGet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> instancePool<span class="token punctuation">.</span><span class="token function">pop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+     <span class="token comment" spellcheck="true">/**
+     * 释放已使用完的Servlet实例
+     */</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">deallocate</span><span class="token punctuation">(</span>Servlet servlet<span class="token punctuation">)</span> <span class="token keyword">throws</span> ServletException <span class="token punctuation">{</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>singleThreadModel<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            countAllocated<span class="token punctuation">.</span><span class="token function">decrementAndGet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 归还到栈中，让其可以重复使用</span>
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>instancePool<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            countAllocated<span class="token punctuation">.</span><span class="token function">decrementAndGet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            instancePool<span class="token punctuation">.</span><span class="token function">push</span><span class="token punctuation">(</span>servlet<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            instancePool<span class="token punctuation">.</span><span class="token function">notify</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Container/" rel="tag"># Container</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021-09-23/tomcat-engine-host-he-hostconfig/" rel="prev" title="Tomcat-Engine,Host和HostConfig">
+                  <i class="fa fa-angle-left"></i> Tomcat-Engine,Host和HostConfig
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="next" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  Spring-事物NOT_SUPPORTED策略下多数据源切换的问题 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">281k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">8:31</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

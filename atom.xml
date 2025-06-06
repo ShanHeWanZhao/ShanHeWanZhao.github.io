@@ -54,6 +54,26 @@
   </entry>
   
   <entry>
+    <title>Tomcat-Context,ContextConfig和Wrapper</title>
+    <link href="https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/"/>
+    <id>https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/</id>
+    <published>2021-10-03T10:39:39.000Z</published>
+    <updated>2021-10-07T06:31:39.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	StandardContext、ContextConfig以及StandardWrapper的核心逻辑源码解析及总结&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
+    
+    
+    <category term="Container" scheme="https://blog.shanzhao.site/tags/Container/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Tomcat-Engine,Host和HostConfig</title>
     <link href="https://blog.shanzhao.site/2021-09-23/tomcat-engine-host-he-hostconfig/"/>
     <id>https://blog.shanzhao.site/2021-09-23/tomcat-engine-host-he-hostconfig/</id>
@@ -398,25 +418,6 @@
     <category term="CMS" scheme="https://blog.shanzhao.site/tags/CMS/"/>
     
     <category term="三色标记" scheme="https://blog.shanzhao.site/tags/%E4%B8%89%E8%89%B2%E6%A0%87%E8%AE%B0/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Java源码篇-线程池</title>
-    <link href="https://blog.shanzhao.site/2020-05-12/java-yuan-ma-pian-xian-cheng-chi/"/>
-    <id>https://blog.shanzhao.site/2020-05-12/java-yuan-ma-pian-xian-cheng-chi/</id>
-    <published>2020-05-12T07:45:13.000Z</published>
-    <updated>2020-06-03T10:22:12.000Z</updated>
-    
-    
-    <summary type="html">&lt;p&gt;​	对jdk的ThreadPoolExecutor和ScheduledThreadPoolExecutor进行了详细的源码分析&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
-    
-    
-    <category term="线程池" scheme="https://blog.shanzhao.site/tags/%E7%BA%BF%E7%A8%8B%E6%B1%A0/"/>
     
   </entry>
   
