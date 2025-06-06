@@ -281,9 +281,9 @@
       
         <tags>
             
-            <tag> BeanPostProcessor </tag>
-            
             <tag> AOP </tag>
+            
+            <tag> BeanPostProcessor </tag>
             
         </tags>
       
@@ -308,9 +308,9 @@
       
         <tags>
             
-            <tag> BeanPostProcessor </tag>
-            
             <tag> AOP </tag>
+            
+            <tag> BeanPostProcessor </tag>
             
         </tags>
       
