@@ -54,6 +54,26 @@
   </entry>
   
   <entry>
+    <title>Tomcat-责任链之Pipeline+Valve和Filter</title>
+    <link href="https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/"/>
+    <id>https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/</id>
+    <published>2021-11-02T11:18:11.000Z</published>
+    <updated>2021-11-07T10:03:15.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	分析了Tomcat中Pipeline+Valve和支持Filter的ApplicationFilterChain两种基于责任链模式的实现逻辑，并在最后总结了这两者的异同点以及为什么会有这两种类似的模块。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
+    
+    
+    <category term="责任链模式" scheme="https://blog.shanzhao.site/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Tomcat-启动流程和http请求流程</title>
     <link href="https://blog.shanzhao.site/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/"/>
     <id>https://blog.shanzhao.site/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/</id>
@@ -394,26 +414,6 @@
     
     
     <category term="G1" scheme="https://blog.shanzhao.site/tags/G1/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>谈谈ThreadLocal为什么被设计为弱引用</title>
-    <link href="https://blog.shanzhao.site/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/"/>
-    <id>https://blog.shanzhao.site/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/</id>
-    <published>2020-11-21T06:23:19.000Z</published>
-    <updated>2020-11-24T08:21:22.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;分析了ThreadLocal为什么要被设计为弱引用，并给出了ThreadLocal的建议使用方法&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="jdk" scheme="https://blog.shanzhao.site/categories/jdk/"/>
-    
-    
-    <category term="ThreadLocal" scheme="https://blog.shanzhao.site/tags/ThreadLocal/"/>
     
   </entry>
   

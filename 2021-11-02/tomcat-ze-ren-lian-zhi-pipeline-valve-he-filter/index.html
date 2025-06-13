@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	分析了Tomcat中Pipeline+Valve和支持Filter的ApplicationFilterChain两种基于责任链模式的实现逻辑，并在最后总结了这两者的异同点以及为什么会有这两种类似的模块。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat-责任链之Pipeline+Valve和Filter">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	分析了Tomcat中Pipeline+Valve和支持Filter的ApplicationFilterChain两种基于责任链模式的实现逻辑，并在最后总结了这两者的异同点以及为什么会有这两种类似的模块。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-11-02T11:18:11.000Z">
+<meta property="article:modified_time" content="2021-11-07T10:03:15.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="责任链模式">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/","path":"2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/","title":"Tomcat-责任链之Pipeline+Valve和Filter"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Tomcat-责任链之Pipeline+Valve和Filter | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Tomcat-%E8%B4%A3%E4%BB%BB%E9%93%BE%E4%B9%8BPipeline-Valve%E5%92%8CFilter"><span class="nav-number">1.</span> <span class="nav-text">Tomcat-责任链之Pipeline+Valve和Filter</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Pipeline"><span class="nav-number">1.1.</span> <span class="nav-text">Pipeline</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E5%AD%97%E6%AE%B5%E5%92%8C%E6%96%B9%E6%B3%95"><span class="nav-number">1.1.1.</span> <span class="nav-text">核心字段和方法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Valve"><span class="nav-number">1.1.2.</span> <span class="nav-text">Valve</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#StandardEngineValve"><span class="nav-number">1.1.2.1.</span> <span class="nav-text">StandardEngineValve</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#StandardHostValve"><span class="nav-number">1.1.2.2.</span> <span class="nav-text">StandardHostValve</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#StandardContextValve"><span class="nav-number">1.1.2.3.</span> <span class="nav-text">StandardContextValve</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#StandardWrapperValve"><span class="nav-number">1.1.2.4.</span> <span class="nav-text">StandardWrapperValve</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Filter"><span class="nav-number">1.2.</span> <span class="nav-text">Filter</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ApplicationFilterChain"><span class="nav-number">1.2.1.</span> <span class="nav-text">ApplicationFilterChain</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AF%B9%E6%AF%94%E6%80%BB%E7%BB%93"><span class="nav-number">1.3.</span> <span class="nav-text">对比总结</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">28</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">26</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Tomcat-责任链之Pipeline+Valve和Filter | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Tomcat-责任链之Pipeline+Valve和Filter
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-11-02 19:18:11" itemprop="dateCreated datePublished" datetime="2021-11-02T19:18:11+08:00">2021-11-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2021-11-07 18:03:15" itemprop="dateModified" datetime="2021-11-07T18:03:15+08:00">2021-11-07</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>7.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	分析了Tomcat中Pipeline+Valve和支持Filter的ApplicationFilterChain两种基于责任链模式的实现逻辑，并在最后总结了这两者的异同点以及为什么会有这两种类似的模块。</p>
+<span id="more"></span>
+
+<h1 id="Tomcat-责任链之Pipeline-Valve和Filter"><a href="#Tomcat-责任链之Pipeline-Valve和Filter" class="headerlink" title="Tomcat-责任链之Pipeline+Valve和Filter"></a>Tomcat-责任链之Pipeline+Valve和Filter</h1><h2 id="Pipeline"><a href="#Pipeline" class="headerlink" title="Pipeline"></a>Pipeline</h2><p>​	可以理解为<strong>请求传递的管道</strong>，每个容器（Engine、Host、Context、Wrapper）都关联一个独立的 Pipeline（管道），<strong>用于处理 HTTP 请求的责任链式分发</strong>，其默认实现为 <code>StandardPipeline</code></p>
+<p>​	每个 <strong>Pipeline 内部由一系列 <code>Valve</code>（阀门）组成</strong>，Pipeline为其提供了一系列接口（包括添加，删除和管理其生命周期管理等），<strong>并将它们构造成链式结构</strong>（addValve方法将新 Valve 插入到链中 <strong>倒数第二个位置</strong>，即 basic Valve 之前）</p>
+<p>​	<strong>请求到达某个容器时，会先被其 Pipeline 的第一个 Valve（first）处理，然后依次传递到后续的 Valve，最终到达 basic Valve。basic Valve 处理完成后，请求再被传递给下层子容器的 Pipeline，并最终传递到Filter中，从而达到请求贯穿全部容器的作用</strong></p>
+<h3 id="核心字段和方法"><a href="#核心字段和方法" class="headerlink" title="核心字段和方法"></a>核心字段和方法</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">StandardPipeline</span> <span class="token keyword">extends</span> <span class="token class-name">LifecycleBase</span> <span class="token keyword">implements</span> <span class="token class-name">Pipeline</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// basic valve（last valve），当前管道中最后处理的一个Valve</span>
+    <span class="token keyword">protected</span> Valve basic <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 关联的容器</span>
+    <span class="token keyword">protected</span> Container container <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// value链首</span>
+    <span class="token keyword">protected</span> Valve first <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">addValve</span><span class="token punctuation">(</span>Valve valve<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+        <span class="token comment" spellcheck="true">// 将容器也绑定搭到valve中</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>valve <span class="token keyword">instanceof</span> <span class="token class-name">Contained</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token punctuation">(</span><span class="token punctuation">(</span>Contained<span class="token punctuation">)</span> valve<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setContainer</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>container<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 如果当前 Pipeline 已处于运行状态，则启动Valve的生命周期start方法</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getState</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isAvailable</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>valve <span class="token keyword">instanceof</span> <span class="token class-name">Lifecycle</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token punctuation">(</span><span class="token punctuation">(</span>Lifecycle<span class="token punctuation">)</span> valve<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">LifecycleException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"standardPipeline.valve.start"</span><span class="token punctuation">)</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>first <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            first <span class="token operator">=</span> valve<span class="token punctuation">;</span>
+            valve<span class="token punctuation">.</span><span class="token function">setNext</span><span class="token punctuation">(</span>basic<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 将valve添加到Valve链中倒数第二个位置（最后一个位置为固定的basic）</span>
+            Valve current <span class="token operator">=</span> first<span class="token punctuation">;</span>
+            <span class="token keyword">while</span> <span class="token punctuation">(</span>current <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>current<span class="token punctuation">.</span><span class="token function">getNext</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> basic<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    current<span class="token punctuation">.</span><span class="token function">setNext</span><span class="token punctuation">(</span>valve<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    valve<span class="token punctuation">.</span><span class="token function">setNext</span><span class="token punctuation">(</span>basic<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">break</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                current <span class="token operator">=</span> current<span class="token punctuation">.</span><span class="token function">getNext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        container<span class="token punctuation">.</span><span class="token function">fireContainerEvent</span><span class="token punctuation">(</span>Container<span class="token punctuation">.</span>ADD_VALVE_EVENT<span class="token punctuation">,</span> valve<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="Valve"><a href="#Valve" class="headerlink" title="Valve"></a>Valve</h3><p>​	把http请求看作水流，Valve（阀门）即具有控制和预处理水流的作用。每个 Valve 通过其核心的 <code>invoke</code> 方法对请求 (<code>Request</code>) 和响应 (<code>Response</code>) 进行加工处理，并决定是否将请求继续传递给下一个 Valve。关键Valve如下</p>
+<h4 id="StandardEngineValve"><a href="#StandardEngineValve" class="headerlink" title="StandardEngineValve"></a>StandardEngineValve</h4><p>​	Engine中Pipeline里的最后一个阀门，主要是负责将请求传递给下一层容器Host的Pipeline中。源码较简单就不分析了</p>
+<h4 id="StandardHostValve"><a href="#StandardHostValve" class="headerlink" title="StandardHostValve"></a>StandardHostValve</h4><p>​	不仅是 Host 容器中 Pipeline 的最后一个阀门，同时<strong>也负责将 WebappClassLoader 绑定到当前处理请求的 worker 线程上。</strong> 这样做可以保证：</p>
+<blockquote>
+<p> ​	<strong>在业务代码里通过 worker 线程间接创建的新对象、新类或新线程时，默认使用的都是当前 Context 下的 WebappClassLoader，从而确保整个 Web 应用内部始终使用一致的类加载器，避免类加载混乱问题。</strong></p>
+</blockquote>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">void</span> <span class="token function">invoke</span><span class="token punctuation">(</span>Request request<span class="token punctuation">,</span> Response response<span class="token punctuation">)</span>
+        <span class="token keyword">throws</span> IOException<span class="token punctuation">,</span> ServletException <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 获取当前请求对应的Web应用上下文</span>
+    Context context <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>context <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 如果没有找到对应的Context，直接返回404</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>response<span class="token punctuation">.</span><span class="token function">isError</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            response<span class="token punctuation">.</span><span class="token function">sendError</span><span class="token punctuation">(</span><span class="token number">404</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 1. 绑定Web应用的类加载器到当前worker线程</span>
+        <span class="token comment" spellcheck="true">// 将当前worker线程的上下文类加载器设置为WebappClassLoader，这样后续的类加载和创建新的线程就会使用这个WebappClassLoader</span>
+        context<span class="token punctuation">.</span><span class="token function">bind</span><span class="token punctuation">(</span>Globals<span class="token punctuation">.</span>IS_SECURITY_ENABLED<span class="token punctuation">,</span> MY_CLASSLOADER<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>response<span class="token punctuation">.</span><span class="token function">isErrorReportRequired</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 2. 请求向后续容器传递</span>
+                context<span class="token punctuation">.</span><span class="token function">getPipeline</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getFirst</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">invoke</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> response<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 异常处理（忽略）</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 3. 恢复原来的类加载器</span>
+        <span class="token comment" spellcheck="true">// 将当前worker线程的上下文类加载器恢复为原来的值（commonClassLoader），确保其不会污染其他请求</span>
+        context<span class="token punctuation">.</span><span class="token function">unbind</span><span class="token punctuation">(</span>Globals<span class="token punctuation">.</span>IS_SECURITY_ENABLED<span class="token punctuation">,</span> MY_CLASSLOADER<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="StandardContextValve"><a href="#StandardContextValve" class="headerlink" title="StandardContextValve"></a>StandardContextValve</h4><p>​	Context中Pipeline里的最后一个阀门，可以注意下<strong>对当前context的META-INF和WEB-INF目录访问的限制</strong>就是在这个Valve中做的。</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">void</span> <span class="token function">invoke</span><span class="token punctuation">(</span>Request request<span class="token punctuation">,</span> Response response<span class="token punctuation">)</span>
+        <span class="token keyword">throws</span> IOException<span class="token punctuation">,</span> ServletException <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// META-INF和WEB-INF目录下的资源不允许访问</span>
+    MessageBytes requestPathMB <span class="token operator">=</span> request<span class="token punctuation">.</span><span class="token function">getRequestPathMB</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>requestPathMB<span class="token punctuation">.</span><span class="token function">startsWithIgnoreCase</span><span class="token punctuation">(</span><span class="token string">"/META-INF/"</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+            <span class="token operator">||</span> <span class="token punctuation">(</span>requestPathMB<span class="token punctuation">.</span><span class="token function">equalsIgnoreCase</span><span class="token punctuation">(</span><span class="token string">"/META-INF"</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+            <span class="token operator">||</span> <span class="token punctuation">(</span>requestPathMB<span class="token punctuation">.</span><span class="token function">startsWithIgnoreCase</span><span class="token punctuation">(</span><span class="token string">"/WEB-INF/"</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+            <span class="token operator">||</span> <span class="token punctuation">(</span>requestPathMB<span class="token punctuation">.</span><span class="token function">equalsIgnoreCase</span><span class="token punctuation">(</span><span class="token string">"/WEB-INF"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        response<span class="token punctuation">.</span><span class="token function">sendError</span><span class="token punctuation">(</span>HttpServletResponse<span class="token punctuation">.</span>SC_NOT_FOUND<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// ...</span>
+
+    wrapper<span class="token punctuation">.</span><span class="token function">getPipeline</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getFirst</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">invoke</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> response<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="StandardWrapperValve"><a href="#StandardWrapperValve" class="headerlink" title="StandardWrapperValve"></a>StandardWrapperValve</h4><p>​	StandardWrapperValve值得重点分析，<strong>它是 Tomcat 容器中请求分发链路的最后一个核心 <code>Valve</code>，其职责是将请求最终交付给具体的 <code>Servlet</code> 实例</strong>。核心逻辑如下</p>
+<ol>
+<li>分配Servlet（支持SingleThreadModel Servlet）</li>
+<li><strong>构建ApplicationFilterChain：基于当前请求的URL和对应的Servlet，筛选出所有匹配的 Filter实例</strong></li>
+<li><strong>执行过滤器链ApplicationFilterChain.doFilter（内部会在所有Filter执行完毕后再执行Servlet#service方法）</strong></li>
+<li>资源回收和状态清理，并记录一些jmx的统计信息</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java">
+<span class="token keyword">final</span> <span class="token keyword">class</span> <span class="token class-name">StandardWrapperValve</span> <span class="token keyword">extends</span> <span class="token class-name">ValveBase</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// ============== jmx统计使用（毫秒单位）===============</span>
+    <span class="token comment" spellcheck="true">// 当前servlet的总处理时间</span>
+    <span class="token keyword">private</span> <span class="token keyword">volatile</span> <span class="token keyword">long</span> processingTime<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 当前servlet一次处理的最大耗时时间</span>
+    <span class="token keyword">private</span> <span class="token keyword">volatile</span> <span class="token keyword">long</span> maxTime<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 当前servlet一次处理的最小耗时时间</span>
+    <span class="token keyword">private</span> <span class="token keyword">volatile</span> <span class="token keyword">long</span> minTime <span class="token operator">=</span> Long<span class="token punctuation">.</span>MAX_VALUE<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 请求总数</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> AtomicInteger requestCount <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">AtomicInteger</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 错误请求数</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> AtomicInteger errorCount <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">AtomicInteger</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">void</span> <span class="token function">invoke</span><span class="token punctuation">(</span>Request request<span class="token punctuation">,</span> Response response<span class="token punctuation">)</span>
+        <span class="token keyword">throws</span> IOException<span class="token punctuation">,</span> ServletException <span class="token punctuation">{</span>
+
+        <span class="token keyword">boolean</span> unavailable <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        Throwable throwable <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        <span class="token keyword">long</span> t1<span class="token operator">=</span>System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        requestCount<span class="token punctuation">.</span><span class="token function">incrementAndGet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        StandardWrapper wrapper <span class="token operator">=</span> <span class="token punctuation">(</span>StandardWrapper<span class="token punctuation">)</span> <span class="token function">getContainer</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Servlet servlet <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        Context context <span class="token operator">=</span> <span class="token punctuation">(</span>Context<span class="token punctuation">)</span> wrapper<span class="token punctuation">.</span><span class="token function">getParent</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 1. 分配servlet并初始化</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>unavailable<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                servlet <span class="token operator">=</span> wrapper<span class="token punctuation">.</span><span class="token function">allocate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span><span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// ... 异常处理省略</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 2. 创建ApplicationFilterChain，并匹配合适的filter</span>
+        ApplicationFilterChain filterChain <span class="token operator">=</span>
+                ApplicationFilterFactory<span class="token punctuation">.</span><span class="token function">createFilterChain</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> wrapper<span class="token punctuation">,</span> servlet<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+
+        Container container <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>container<span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>servlet <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token punctuation">(</span>filterChain <span class="token operator">!=</span> null<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+               <span class="token comment" spellcheck="true">// 3. 执行过滤器链</span>
+                filterChain<span class="token punctuation">.</span><span class="token function">doFilter</span><span class="token punctuation">(</span>request<span class="token punctuation">.</span><span class="token function">getRequest</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> response<span class="token punctuation">.</span><span class="token function">getResponse</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// ... 异常处理省略</span>
+        <span class="token punctuation">}</span><span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// =========== 4. 资源释放让其可在使用，减少垃圾收集器的活动 ================</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>filterChain <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                filterChain<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// servlet归还</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>servlet <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    wrapper<span class="token punctuation">.</span><span class="token function">deallocate</span><span class="token punctuation">(</span>servlet<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// ... 异常处理省略</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>servlet <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span>
+                    <span class="token punctuation">(</span>wrapper<span class="token punctuation">.</span><span class="token function">getAvailable</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> Long<span class="token punctuation">.</span>MAX_VALUE<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    wrapper<span class="token punctuation">.</span><span class="token function">unload</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>  <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// ... 异常处理省略</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">long</span> t2<span class="token operator">=</span>System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 统计耗时，并更新相关数据</span>
+            <span class="token keyword">long</span> time<span class="token operator">=</span>t2<span class="token operator">-</span>t1<span class="token punctuation">;</span>
+            processingTime <span class="token operator">+=</span> time<span class="token punctuation">;</span>
+            <span class="token keyword">if</span><span class="token punctuation">(</span> time <span class="token operator">></span> maxTime<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                maxTime<span class="token operator">=</span>time<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">if</span><span class="token punctuation">(</span> time <span class="token operator">&lt;</span> minTime<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                minTime<span class="token operator">=</span>time<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Filter"><a href="#Filter" class="headerlink" title="Filter"></a>Filter</h2><h3 id="ApplicationFilterChain"><a href="#ApplicationFilterChain" class="headerlink" title="ApplicationFilterChain"></a>ApplicationFilterChain</h3><p>​	过滤器链（FilterChain）用于管理多个过滤器（Filter）的执行顺序与截断逻辑，核心机制<strong>和 Spring AOP 中的切面调用逻辑类似</strong>：</p>
+<blockquote>
+<p>​	<strong>每个请求对应一个独立的 FilterChain 实例，内部维护一个 <code>pos</code> 指针，在递归调用时通过传入当前 FilterChain 实例来控制指针的移动，从而实现 Filter 的顺序执行与截断控制</strong>。当所有 Filter 执行完毕（指针走到末尾）后，才会调用目标方法（FilterChain 中对应 Servlet#service()，Spring AOP 中则对应原始业务方法）；如果<strong>中间某个 Filter 没有继续调用 <code>chain.doFilter()</code>，则会直接返回，实现链路截断</strong></p>
+</blockquote>
+<p>​	整体实现其实就是<strong>典型的过滤器（增强器）模型，既能保证 Filter（切面） 之间的执行顺序，又支持灵活的拦截与提前返回</strong>。</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">class</span> <span class="token class-name">ApplicationFilterChain</span> <span class="token keyword">implements</span> <span class="token class-name">FilterChain</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 合适的Filter数组</span>
+    <span class="token keyword">private</span> ApplicationFilterConfig<span class="token punctuation">[</span><span class="token punctuation">]</span> filters <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ApplicationFilterConfig</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 当前执行到的filter位置指针</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> pos <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// filter的个数，&lt;= filters.lenght</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> n <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">private</span> Servlet servlet <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">doFilter</span><span class="token punctuation">(</span>ServletRequest request<span class="token punctuation">,</span> ServletResponse response<span class="token punctuation">)</span>
+            <span class="token keyword">throws</span> IOException<span class="token punctuation">,</span> ServletException <span class="token punctuation">{</span>
+
+        <span class="token function">internalDoFilter</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> response<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     *  内部真正执行filter链逻辑
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">internalDoFilter</span><span class="token punctuation">(</span>ServletRequest request<span class="token punctuation">,</span>
+            ServletResponse response<span class="token punctuation">)</span>
+            <span class="token keyword">throws</span> IOException<span class="token punctuation">,</span> ServletException <span class="token punctuation">{</span>
+
+        <span class="token comment" spellcheck="true">// 依次调用下一个filter，直到filter链调用完毕</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>pos <span class="token operator">&lt;</span> n<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            ApplicationFilterConfig filterConfig <span class="token operator">=</span> filters<span class="token punctuation">[</span>pos<span class="token operator">++</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                Filter filter <span class="token operator">=</span> filterConfig<span class="token punctuation">.</span><span class="token function">getFilter</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 将当前对象传入，以此触发递归调用</span>
+                filter<span class="token punctuation">.</span><span class="token function">doFilter</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> response<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// ... 异常处理</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 若果某个Filter内部若未调用 chain.doFilter()，则会退回到这以终止链式调用，Servlet 不会被执行</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// filter链调用完毕，最后再执行servlet的service方法</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            servlet<span class="token punctuation">.</span><span class="token function">service</span><span class="token punctuation">(</span>request<span class="token punctuation">,</span> response<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// ... 异常处理</span>
+        <span class="token punctuation">}</span><span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ApplicationDispatcher<span class="token punctuation">.</span>WRAP_SAME_OBJECT<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                lastServicedRequest<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                lastServicedResponse<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="对比总结"><a href="#对比总结" class="headerlink" title="对比总结"></a>对比总结</h2><p>​	Pipeline+Valve和Filter<strong>都是基于责任链模式实现</strong>的，看起来功能上高度重叠，甚至都能互相模拟对方的行为，那为什么Tomcat还要设计两套机制呢？核心其实一句话可以总结：<strong>职责分离，边界清晰</strong></p>
+<ol>
+<li><p>Pipeline + Valve是 <strong>Tomcat 内部容器模型的一部分</strong>，完全属于 Tomcat 自己的体系。每个容器都有自己的 Pipeline，也就有自己的 Valve 链，各自的Pipeline也只关心当前容器：</p>
+<blockquote>
+<ul>
+<li>Host 层可以做虚拟主机级别的统一控制</li>
+<li>Context 层可以做应用级别的资源隔离与控制<ul>
+<li>比方说其实在进入Pipiline之前的CoyoteAdapter里就解析出了当前url需要的Context容器，在这里就可以限制对web项目META-INF和WEB-INF目录的访问权限。但还是在Context的Valve里实现的，这是因为这些目录属于具体 web 项目，Tomcat定义了它们不允许被访问，所以它们的规则校验应当由 Tomcat的Context容器层编写</li>
+</ul>
+</li>
+<li>Wrapper 层可以做单个 Servlet 级别的调度和分配（缓存和回收）</li>
+</ul>
+</blockquote>
+</li>
+<li><p>而Filter则是<strong>标准 Servlet 规范定义的一部分，属于业务开发层面的能力扩展</strong>。比如<strong>用户鉴权、具体的web资源访问权限限制、业务日志埋点</strong>等需求都由业务催生，就完全不该在容器层面（Pipeline + Valve）中去处理</p>
+</li>
+</ol>
+<p>所以核心点：<strong>Pipeline + Valve 管容器架构，Filter 管业务</strong>，各司其职</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/" rel="tag"># 责任链模式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/" rel="prev" title="Tomcat-启动流程和http请求流程">
+                  <i class="fa fa-angle-left"></i> Tomcat-启动流程和http请求流程
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="next" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  Spring-事物NOT_SUPPORTED策略下多数据源切换的问题 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">291k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">8:48</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>
