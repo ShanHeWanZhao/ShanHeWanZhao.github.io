@@ -54,6 +54,26 @@
   </entry>
   
   <entry>
+    <title>Tomcat-类加载器</title>
+    <link href="https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/"/>
+    <id>https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/</id>
+    <published>2021-11-23T01:13:34.000Z</published>
+    <updated>2021-11-28T10:09:17.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	以问题切入，深入剖析了commonLoader与WebappClassLoader各自的定位与设计初衷，重点分析了WebappClassLoader如何在保证JVM核心类安全的前提下，部分打破双亲委派机制，实现Web应用之间的真正隔离。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
+    
+    
+    <category term="类加载器" scheme="https://blog.shanzhao.site/tags/%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Tomcat-责任链之Pipeline+Valve和Filter</title>
     <link href="https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/"/>
     <id>https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/</id>
@@ -394,26 +414,6 @@
     
     
     <category term="JVM参数" scheme="https://blog.shanzhao.site/tags/JVM%E5%8F%82%E6%95%B0/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>G1</title>
-    <link href="https://blog.shanzhao.site/2020-11-25/g1/"/>
-    <id>https://blog.shanzhao.site/2020-11-25/g1/</id>
-    <published>2020-11-25T10:16:52.000Z</published>
-    <updated>2020-11-25T10:16:52.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	简单总结了G1和其常用参数，并分析了的G1日志&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="jvm" scheme="https://blog.shanzhao.site/categories/jvm/"/>
-    
-    
-    <category term="G1" scheme="https://blog.shanzhao.site/tags/G1/"/>
     
   </entry>
   

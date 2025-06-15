@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	以问题切入，深入剖析了commonLoader与WebappClassLoader各自的定位与设计初衷，重点分析了WebappClassLoader如何在保证JVM核心类安全的前提下，部分打破双亲委派机制，实现Web应用之间的真正隔离。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat-类加载器">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	以问题切入，深入剖析了commonLoader与WebappClassLoader各自的定位与设计初衷，重点分析了WebappClassLoader如何在保证JVM核心类安全的前提下，部分打破双亲委派机制，实现Web应用之间的真正隔离。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-11-23T01:13:34.000Z">
+<meta property="article:modified_time" content="2021-11-28T10:09:17.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="类加载器">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/","path":"2021-11-23/tomcat-lei-jia-zai-qi/","title":"Tomcat-类加载器"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Tomcat-类加载器 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Tomcat-%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8"><span class="nav-number">1.</span> <span class="nav-text">Tomcat-类加载器</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#commonLoader"><span class="nav-number">1.1.</span> <span class="nav-text">commonLoader</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#conf-catalina-properties%E7%9B%B8%E5%85%B3%E9%85%8D%E7%BD%AE"><span class="nav-number">1.1.1.</span> <span class="nav-text">conf&#x2F;catalina.properties相关配置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E4%BB%A3%E7%A0%81"><span class="nav-number">1.1.2.</span> <span class="nav-text">初始化代码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#classLoader%E5%BC%95%E7%94%A8%E8%AE%BE%E7%BD%AE"><span class="nav-number">1.1.3.</span> <span class="nav-text">classLoader引用设置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%B3%E9%94%AE%E8%A6%81%E7%82%B9"><span class="nav-number">1.1.4.</span> <span class="nav-text">关键要点</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#WebappClassLoader"><span class="nav-number">1.2.</span> <span class="nav-text">WebappClassLoader</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ParallelWebappClassLoader"><span class="nav-number">1.2.1.</span> <span class="nav-text">ParallelWebappClassLoader</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#start"><span class="nav-number">1.2.1.1.</span> <span class="nav-text">start</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#loadClass"><span class="nav-number">1.2.1.2.</span> <span class="nav-text">loadClass</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93%E5%92%8C%E6%80%9D%E8%80%83"><span class="nav-number">1.3.</span> <span class="nav-text">总结和思考</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">29</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Tomcat-类加载器 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Tomcat-类加载器
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-11-23 09:13:34" itemprop="dateCreated datePublished" datetime="2021-11-23T09:13:34+08:00">2021-11-23</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2021-11-28 18:09:17" itemprop="dateModified" datetime="2021-11-28T18:09:17+08:00">2021-11-28</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>13k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>24 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	以问题切入，深入剖析了commonLoader与WebappClassLoader各自的定位与设计初衷，重点分析了WebappClassLoader如何在保证JVM核心类安全的前提下，部分打破双亲委派机制，实现Web应用之间的真正隔离。</p>
+<span id="more"></span>
+
+<h1 id="Tomcat-类加载器"><a href="#Tomcat-类加载器" class="headerlink" title="Tomcat-类加载器"></a>Tomcat-类加载器</h1><p>​	以当前8.5.x版本为例，在具体分析之前，先想一个问题，带着这个问题再去思考为什么这么设计：</p>
+<blockquote>
+<p>​	当我们把一个 Web 项目部署到 Tomcat 里后，项目里用到的各种 class 文件，Tomcat 到底是从哪些地方去加载它们的？以及为什么要用这些不同的类加载器去加载？</p>
+</blockquote>
+<p>整体上可以简单归类为三部分来源：</p>
+<ol>
+<li><strong>Tomcat 自己的依赖（由commonLoader加载）</strong>：<strong>安装目录里lib目录下所有jar</strong>，这些都是 Tomcat 启动和运行时所需要的核心库。</li>
+<li><strong>Web 应用本身的依赖（由WebappClassLoader加载）</strong>，以context为user举例。<ol>
+<li><code>webapps/user/WEB-INF/classes/</code>：存放应用自身编译后的 class 文件</li>
+<li><code>webapps/user/WEB-INF/lib/</code> ：存放应用所依赖的第三方 jar 包</li>
+</ol>
+</li>
+<li><strong>JDK依赖（由 BootstrapClassLoader 加载）</strong>：比如 <code>rt.jar</code>（JDK 8 及以下）或 <code>java.base</code>（JDK 9 及以后），这些属于 JVM 层面的标准库，</li>
+</ol>
+<p>​	Web 应用在运行时所依赖的 class，基本都来自于上述几个目录。而 <strong>Tomcat 为了支持不同context之间的隔离、避免类冲突、支持热部署等需求，专门设计了一套层级化的类加载器体系，来负责加载这些不同来源的 class。</strong></p>
+<h2 id="commonLoader"><a href="#commonLoader" class="headerlink" title="commonLoader"></a>commonLoader</h2><h3 id="conf-catalina-properties相关配置"><a href="#conf-catalina-properties相关配置" class="headerlink" title="conf&#x2F;catalina.properties相关配置"></a>conf&#x2F;catalina.properties相关配置</h3><pre class="line-numbers language-properties"><code class="language-properties"><span class="token attr-name">common.loader</span><span class="token punctuation">=</span><span class="token attr-value">"${catalina.base}/lib","${catalina.base}/lib/*.jar","${catalina.home}/lib","${catalina.home}/lib/*.jar"</span>
+<span class="token attr-name">server.loader</span><span class="token punctuation">=</span>
+<span class="token attr-name">shared.loader</span><span class="token punctuation">=</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<h3 id="初始化代码"><a href="#初始化代码" class="headerlink" title="初始化代码"></a>初始化代码</h3><p>调用路径为：Bootstrap#main -&gt; Bootstrap#start -&gt; Bootstrap#init -&gt; Bootstrap#initClassLoaders</p>
+<p>默认的conf&#x2F;catalina.properties配置里server.loader和shared.loader都为空，所以catalinaLoader和sharedLoader都被赋值为了commonLoader</p>
+<pre class="line-numbers language-java"><code class="language-java">
+<span class="token comment" spellcheck="true">/**
+ * 初始化三层类加载器：common、server（catalina）、shared
+ */</span>
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">initClassLoaders</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// commonLoader：公共类加载器，供 Tomcat 内部和所有 Web 应用共享</span>
+        <span class="token comment" spellcheck="true">// 默认搜索目录：</span>
+        <span class="token comment" spellcheck="true">//   ${catalina.base}/lib/</span>
+        <span class="token comment" spellcheck="true">//   ${catalina.base}/lib/*.jar</span>
+        <span class="token comment" spellcheck="true">//   ${catalina.home}/lib/</span>
+        <span class="token comment" spellcheck="true">//   ${catalina.home}/lib/*.jar</span>
+        <span class="token comment" spellcheck="true">//</span>
+        <span class="token comment" spellcheck="true">// 说明：</span>
+        <span class="token comment" spellcheck="true">//   - ${catalina.base}：运行时指定的工作目录，可以实现多实例共享一个 Tomcat 安装</span>
+        <span class="token comment" spellcheck="true">//   - ${catalina.home}：Tomcat 的安装目录</span>
+        <span class="token comment" spellcheck="true">//</span>
+        <span class="token comment" spellcheck="true">// 如果未在 catalina.properties 里配置 common.loader，则默认使用当前类的 ClassLoader</span>
+        commonLoader <span class="token operator">=</span> <span class="token function">createClassLoader</span><span class="token punctuation">(</span><span class="token string">"common"</span><span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>commonLoader <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            commonLoader <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 默认为上面的commonLoader</span>
+        catalinaLoader <span class="token operator">=</span> <span class="token function">createClassLoader</span><span class="token punctuation">(</span><span class="token string">"server"</span><span class="token punctuation">,</span> commonLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 默认为上面的commonLoader</span>
+        sharedLoader <span class="token operator">=</span> <span class="token function">createClassLoader</span><span class="token punctuation">(</span><span class="token string">"shared"</span><span class="token punctuation">,</span> commonLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token function">handleThrowable</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"Class loader creation threw exception"</span><span class="token punctuation">,</span> t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        System<span class="token punctuation">.</span><span class="token function">exit</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> ClassLoader <span class="token function">createClassLoader</span><span class="token punctuation">(</span>String name<span class="token punctuation">,</span> ClassLoader parent<span class="token punctuation">)</span>
+        <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 从 catalina.properties 读取对应的 loader 配置</span>
+    String value <span class="token operator">=</span> CatalinaProperties<span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span>name <span class="token operator">+</span> <span class="token string">".loader"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// value为空，则使用parent</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>value <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token punctuation">(</span>value<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span><span class="token string">""</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> parent<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// value解析和占位符替换</span>
+    value <span class="token operator">=</span> <span class="token function">replace</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    List<span class="token operator">&lt;</span>Repository<span class="token operator">></span> repositories <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    String<span class="token punctuation">[</span><span class="token punctuation">]</span> repositoryPaths <span class="token operator">=</span> <span class="token function">getPaths</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>String repository <span class="token operator">:</span> repositoryPaths<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token annotation punctuation">@SuppressWarnings</span><span class="token punctuation">(</span><span class="token string">"unused"</span><span class="token punctuation">)</span>
+            URL url <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">URL</span><span class="token punctuation">(</span>repository<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            repositories<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">Repository</span><span class="token punctuation">(</span>repository<span class="token punctuation">,</span> RepositoryType<span class="token punctuation">.</span>URL<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">continue</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">MalformedURLException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// Ignore</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// Local repository</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>repository<span class="token punctuation">.</span><span class="token function">endsWith</span><span class="token punctuation">(</span><span class="token string">"*.jar"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            repository <span class="token operator">=</span> repository<span class="token punctuation">.</span><span class="token function">substring</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> repository<span class="token punctuation">.</span><span class="token function">length</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token string">"*.jar"</span><span class="token punctuation">.</span><span class="token function">length</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            repositories<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">Repository</span><span class="token punctuation">(</span>repository<span class="token punctuation">,</span> RepositoryType<span class="token punctuation">.</span>GLOB<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>repository<span class="token punctuation">.</span><span class="token function">endsWith</span><span class="token punctuation">(</span><span class="token string">".jar"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            repositories<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">Repository</span><span class="token punctuation">(</span>repository<span class="token punctuation">,</span> RepositoryType<span class="token punctuation">.</span>JAR<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            repositories<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">Repository</span><span class="token punctuation">(</span>repository<span class="token punctuation">,</span> RepositoryType<span class="token punctuation">.</span>DIR<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 根据class所在的位置，创建一个URLClassLoader</span>
+    <span class="token keyword">return</span> ClassLoaderFactory<span class="token punctuation">.</span><span class="token function">createClassLoader</span><span class="token punctuation">(</span>repositories<span class="token punctuation">,</span> parent<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="classLoader引用设置"><a href="#classLoader引用设置" class="headerlink" title="classLoader引用设置"></a>classLoader引用设置</h3><ol>
+<li>在Bootstrap#init()方法里，会将catalinaLoader绑定到当前线程的contextClassLoader里，同时，通过反射将sharedLoader设置到Catalina.parentClassLoader字段里</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+
+    <span class="token function">initClassLoaders</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 用catalinaLoader作为当前线程上下文的contextClassLoader，用于加载tomcat class</span>
+    Thread<span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setContextClassLoader</span><span class="token punctuation">(</span>catalinaLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    SecurityClassLoad<span class="token punctuation">.</span><span class="token function">securityClassLoad</span><span class="token punctuation">(</span>catalinaLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> startupClass <span class="token operator">=</span> catalinaLoader<span class="token punctuation">.</span><span class="token function">loadClass</span><span class="token punctuation">(</span><span class="token string">"org.apache.catalina.startup.Catalina"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    Object startupInstance <span class="token operator">=</span> startupClass<span class="token punctuation">.</span><span class="token function">getConstructor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">newInstance</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+  
+    <span class="token comment" spellcheck="true">// 使用反射将sharedLoader设置到Catalina.parentClassLoader字段</span>
+    String methodName <span class="token operator">=</span> <span class="token string">"setParentClassLoader"</span><span class="token punctuation">;</span>
+    Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> paramTypes<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Class</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    paramTypes<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">=</span> Class<span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span><span class="token string">"java.lang.ClassLoader"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    Object paramValues<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Object</span><span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+    paramValues<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">=</span> sharedLoader<span class="token punctuation">;</span>
+    Method method <span class="token operator">=</span>
+        startupInstance<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getMethod</span><span class="token punctuation">(</span>methodName<span class="token punctuation">,</span> paramTypes<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    method<span class="token punctuation">.</span><span class="token function">invoke</span><span class="token punctuation">(</span>startupInstance<span class="token punctuation">,</span> paramValues<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<ol start="2">
+<li><p>在 Catalina 中创建用于解析 <code>server.xml</code> 的 Digester 时，涉及到类加载器的一些关键配置。这里仅整理与类加载器相关的部分逻辑</p>
+<ul>
+<li><p><strong>设置Digester.useContextClassLoader&#x3D;true</strong></p>
+<blockquote>
+<p>​	这一配置让 Digester 在解析 <code>server.xml</code> 并实例化各个 Tomcat 组件时，优先使用当前线程的 <code>contextClassLoader</code>（即 <code>catalinaLoader</code>，本质上就是 <code>commonLoader</code>）来加载类。这样可以确保 Tomcat 核心组件统一通过 common 层加载</p>
+</blockquote>
+</li>
+<li><p><strong>设置 Engine 的 <code>parentClassLoader</code></strong></p>
+<blockquote>
+<p>​	在实例化 <code>Engine</code> 时，会将其内部的 <code>ContainerBase.parentClassLoader</code> 设置为 <code>sharedLoader</code>（其实也是 <code>commonLoader</code>）。这一步非常关键，因为后续每个 <code>WebappClassLoader</code> 的父加载器就是从这里继承而来</p>
+</blockquote>
+</li>
+</ul>
+</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> Digester <span class="token function">createStartDigester</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">long</span> t1<span class="token operator">=</span>System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// Initialize the digester</span>
+    Digester digester <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Digester</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 使用当前Thead的contextClassLoader加载指定的class</span>
+    digester<span class="token punctuation">.</span><span class="token function">setUseContextClassLoader</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 将sharedLoader设置到Engine里的parentClassLoader字段</span>
+    digester<span class="token punctuation">.</span><span class="token function">addRule</span><span class="token punctuation">(</span><span class="token string">"Server/Service/Engine"</span><span class="token punctuation">,</span>
+                     <span class="token keyword">new</span> <span class="token class-name">SetParentClassLoaderRule</span><span class="token punctuation">(</span>parentClassLoader<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> digester<span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="关键要点"><a href="#关键要点" class="headerlink" title="关键要点"></a>关键要点</h3><p>通过上诉的配置解析和设置，可总结出如下关键要点，对后续的WebappClassLoader分析有很大作用：</p>
+<ol>
+<li><strong>sharedLoader 和 catalinaLoader 基本都被废弃了</strong>，最终它们都被统一设置为了 <code>commonLoader</code>，即默认只使用 common 层的类加载器。</li>
+<li>Tomcat 主线程的 <code>contextClassLoader</code> 被设置为了 <code>catalinaLoader</code>（也就是 <code>commonLoader</code>），主要用于加载 Tomcat 自身运行所需的类（即 <code>lib</code> 目录下的 jar 或 class 文件）。</li>
+<li><code>StandardEngine</code> 的 <code>parentClassLoader</code> 被设置为了 <code>sharedLoader</code>（实际上还是 <code>commonLoader</code>），用于作为后续每个 <code>WebappClassLoader</code>（即 web 应用类加载器）的父加载器</li>
+</ol>
+<h2 id="WebappClassLoader"><a href="#WebappClassLoader" class="headerlink" title="WebappClassLoader"></a>WebappClassLoader</h2><p>通过之前<a href="https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/#start%E6%A0%B8%E5%BF%83%E6%B5%81%E7%A8%8B%E6%80%BB%E7%BB%93">分析的文章</a>，StandardContext#start会触发WebappLoader#start，需要注意的是，<code>WebappLoader</code> 本身并不是一个类加载器，而是通过实现 <code>Loader</code> 和 <code>Lifecycle</code> 接口，负责在各个生命周期阶段对真正的 <code>WebappClassLoader</code> 进行管理和控制。其创建真正的WebappClassLoader在WebappLoader#start阶段，核心如下</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">startInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException <span class="token punctuation">{</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+
+        <span class="token comment" spellcheck="true">// 创建真正的 Web 应用类加载器 WebappClassLoader</span>
+        classLoader <span class="token operator">=</span> <span class="token function">createClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        classLoader<span class="token punctuation">.</span><span class="token function">setResources</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getResources</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 设置类加载委托模型，决定优先使用父加载器还是自身加载器（默认为false，即不优先使用父加载器加载class）</span>
+        classLoader<span class="token punctuation">.</span><span class="token function">setDelegate</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>delegate<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token function">setClassPath</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token function">setPermissions</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 启动 WebappClassLoader（缓存/WEB-INF/classes和/WEB-INF/lib下的资源）</span>
+        <span class="token punctuation">(</span><span class="token punctuation">(</span>Lifecycle<span class="token punctuation">)</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// ...省略</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token function">setState</span><span class="token punctuation">(</span>LifecycleState<span class="token punctuation">.</span>STARTING<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> WebappClassLoaderBase <span class="token function">createClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+        <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// loader为org.apache.catalina.loader.ParallelWebappClassLoader</span>
+    Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> clazz <span class="token operator">=</span> Class<span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span>loaderClass<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    WebappClassLoaderBase classLoader <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>parentClassLoader <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 内部会递归向上查找，也就是最终会使用Engine内部的parentClassLoader，即sharedLoader</span>
+        parentClassLoader <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getParentClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        context<span class="token punctuation">.</span><span class="token function">setParentClassLoader</span><span class="token punctuation">(</span>parentClassLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 使用反射将sharedLoader作为构造参数，实例化出ParallelWebappClassLoader加载器</span>
+    Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span><span class="token punctuation">[</span><span class="token punctuation">]</span> argTypes <span class="token operator">=</span> <span class="token punctuation">{</span> ClassLoader<span class="token punctuation">.</span><span class="token keyword">class</span> <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    Object<span class="token punctuation">[</span><span class="token punctuation">]</span> args <span class="token operator">=</span> <span class="token punctuation">{</span> parentClassLoader <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    Constructor<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> constr <span class="token operator">=</span> clazz<span class="token punctuation">.</span><span class="token function">getConstructor</span><span class="token punctuation">(</span>argTypes<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    classLoader <span class="token operator">=</span> <span class="token punctuation">(</span>WebappClassLoaderBase<span class="token punctuation">)</span> constr<span class="token punctuation">.</span><span class="token function">newInstance</span><span class="token punctuation">(</span>args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">return</span> classLoader<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ParallelWebappClassLoader"><a href="#ParallelWebappClassLoader" class="headerlink" title="ParallelWebappClassLoader"></a>ParallelWebappClassLoader</h3><h4 id="start"><a href="#start" class="headerlink" title="start"></a>start</h4><p>相关字段和方法如下，主要是将当前项目里的&#x2F;WEB-INF&#x2F;classes和&#x2F;WEB-INF&#x2F;lib目录下的class资源缓存到localRepositories（可以理解为classpath），以供后续来实际加载class</p>
+<pre class="line-numbers language-java"><code class="language-java">
+<span class="token comment" spellcheck="true">// 当前 Web 应用的本地 classpath 资源（/WEB-INF/classes 以及 /WEB-INF/lib 下的所有 jar）</span>
+<span class="token keyword">private</span> List<span class="token operator">&lt;</span>URL<span class="token operator">></span> localRepositories <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">/**
+ * 生命周期的start方法，缓存class目录资源
+ */</span>
+<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">start</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> LifecycleException <span class="token punctuation">{</span>
+
+    state <span class="token operator">=</span> LifecycleState<span class="token punctuation">.</span>STARTING_PREP<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 1. 扫描 /WEB-INF/classes 目录，将其加入本地 classpath</span>
+    WebResource<span class="token punctuation">[</span><span class="token punctuation">]</span> classesResources <span class="token operator">=</span> resources<span class="token punctuation">.</span><span class="token function">getResources</span><span class="token punctuation">(</span><span class="token string">"/WEB-INF/classes"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>WebResource classes <span class="token operator">:</span> classesResources<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>classes<span class="token punctuation">.</span><span class="token function">isDirectory</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> classes<span class="token punctuation">.</span><span class="token function">canRead</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            localRepositories<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>classes<span class="token punctuation">.</span><span class="token function">getURL</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 2. 扫描 /WEB-INF/lib 目录下所有可读的 jar 包，将其加入本地 classpath，同时记录最后修改时间</span>
+    WebResource<span class="token punctuation">[</span><span class="token punctuation">]</span> jars <span class="token operator">=</span> resources<span class="token punctuation">.</span><span class="token function">listResources</span><span class="token punctuation">(</span><span class="token string">"/WEB-INF/lib"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>WebResource jar <span class="token operator">:</span> jars<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>jar<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">endsWith</span><span class="token punctuation">(</span><span class="token string">".jar"</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> jar<span class="token punctuation">.</span><span class="token function">isFile</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> jar<span class="token punctuation">.</span><span class="token function">canRead</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            localRepositories<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>jar<span class="token punctuation">.</span><span class="token function">getURL</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            jarModificationTimes<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>jar<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> Long<span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span>jar<span class="token punctuation">.</span><span class="token function">getLastModified</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    state <span class="token operator">=</span> LifecycleState<span class="token punctuation">.</span>STARTED<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="loadClass"><a href="#loadClass" class="headerlink" title="loadClass"></a>loadClass</h4><p>核心字段和方法如下（已删除不重要的部分），通过如下源码可总结出loadClass的步骤：</p>
+<ol>
+<li><strong>缓存检查</strong><ul>
+<li>先检查<strong>当前 WebappClassLoader 是否已加载过指定的类，如果已加载，直接返回已加载的类，避免重复加载</strong></li>
+</ul>
+</li>
+<li><strong>检查是否应尝试使用 JVM 内部类加载器（类似传统的类加载器加载方式）</strong><ul>
+<li>若<strong>JVM内部类加载器能找到指定class资源，则由其加载指定的class</strong></li>
+</ul>
+</li>
+<li><strong>根据委派规则（delegateLoad）决定加载顺序</strong>，delegateLoad一般都为false（若为true则颠倒顺序）<ul>
+<li><strong>先本地加载（当前 Web 应用内），尝试从&#x2F;WEB-INF&#x2F;classes、&#x2F;WEB-INF&#x2F;lib文件夹下加载指定class</strong></li>
+<li><strong>否则交由父加载器（sharedLoader）兜底，即从tomcat的lib目录里的jar加载指定class</strong></li>
+</ul>
+</li>
+<li>以上都没找到，则抛出ClassNotFoundException</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">WebappClassLoaderBase</span> <span class="token keyword">extends</span> <span class="token class-name">URLClassLoader</span>
+        <span class="token keyword">implements</span> <span class="token class-name">Lifecycle</span><span class="token punctuation">,</span> InstrumentableClassLoader<span class="token punctuation">,</span> WebappProperties<span class="token punctuation">,</span> PermissionCheck <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 绑定的 Web 资源接口，实际提供 /WEB-INF/classes、/WEB-INF/lib 等资源访问能力</span>
+    <span class="token keyword">protected</span> WebResourceRoot resources <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 当前加载过的class的缓存(/WEB-INF/classes目录下)</span>
+    <span class="token keyword">protected</span> <span class="token keyword">final</span> Map<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> ResourceEntry<span class="token operator">></span> resourceEntries <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ConcurrentHashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 是否强制委派给父类加载器优先加载。默认为false，表示优先当前类加载器先加载类</span>
+    <span class="token keyword">protected</span> <span class="token keyword">boolean</span> delegate <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// /WEB-INF/lib 目录下jar包的修改时间（热加载使用）</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> HashMap<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> Long<span class="token operator">></span> jarModificationTimes <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// tomcat的sharedLoader（URLClassLoader）</span>
+    <span class="token keyword">protected</span> <span class="token keyword">final</span> ClassLoader parent<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 标识是否有外部 repository 被注册（即 localRepositories 是否有值）</span>
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> hasExternalRepositories <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 当前 Web 应用的本地 classpath 资源（/WEB-INF/classes 以及 /WEB-INF/lib 下的所有 jar）</span>
+    <span class="token keyword">private</span> List<span class="token operator">&lt;</span>URL<span class="token operator">></span> localRepositories <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 把 webapp 的所有 classpath 资源（包括 /WEB-INF/classes 和 /WEB-INF/lib/*.jar）整理成 URL
+     * 数组，
+     * 供自己这个URLClassLoader实现去加载class。hasExternalRepositories也会被设置为true
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> URL<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token function">getURLs</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        ArrayList<span class="token operator">&lt;</span>URL<span class="token operator">></span> result <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        result<span class="token punctuation">.</span><span class="token function">addAll</span><span class="token punctuation">(</span>localRepositories<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        result<span class="token punctuation">.</span><span class="token function">addAll</span><span class="token punctuation">(</span>Arrays<span class="token punctuation">.</span><span class="token function">asList</span><span class="token punctuation">(</span><span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">getURLs</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> result<span class="token punctuation">.</span><span class="token function">toArray</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">URL</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 父类URLClassLoader的方法，配合getURLs()方法，设置hasExternalRepositories为true
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">addURL</span><span class="token punctuation">(</span>URL url<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">addURL</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        hasExternalRepositories <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> <span class="token function">loadClass</span><span class="token punctuation">(</span>String name<span class="token punctuation">,</span> <span class="token keyword">boolean</span> resolve<span class="token punctuation">)</span> <span class="token keyword">throws</span> ClassNotFoundException <span class="token punctuation">{</span>
+
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token function">getClassLoadingLock</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> clazz <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+            <span class="token comment" spellcheck="true">// 先检查 Web 应用是否已停止，防止在已停止的 webapp 中加载类</span>
+            <span class="token function">checkStateForClassLoading</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token comment" spellcheck="true">// 1、从缓存中resourceEntries查找当前类加载器是否已经加载了这个class</span>
+            clazz <span class="token operator">=</span> <span class="token function">findLoadedClass0</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>clazz <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>resolve<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token function">resolveClass</span><span class="token punctuation">(</span>clazz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">return</span> clazz<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 2、从当前类加载器的native中查找是否已经缓存过（范围比findLoadedClass0更大）</span>
+            clazz <span class="token operator">=</span> <span class="token function">findLoadedClass</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>clazz <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>resolve<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token function">resolveClass</span><span class="token punctuation">(</span>clazz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">return</span> clazz<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// class名转换为路径。比如：site.shanzhao.Demo => /site/shanzhao/Demo.class</span>
+            String resourceName <span class="token operator">=</span> <span class="token function">binaryNameToPath</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token comment" spellcheck="true">// 检查jvm的类加载器是否加载过当前class</span>
+            ClassLoader javaseLoader <span class="token operator">=</span> <span class="token function">getJavaseClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">boolean</span> tryLoadingFromJavaseLoader<span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+
+                URL url <span class="token operator">=</span> javaseLoader<span class="token punctuation">.</span><span class="token function">getResource</span><span class="token punctuation">(</span>resourceName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                tryLoadingFromJavaseLoader <span class="token operator">=</span> <span class="token punctuation">(</span>url <span class="token operator">!=</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                tryLoadingFromJavaseLoader <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 3. jvm类加载器加载过，直接从jvm类加载器获取这个Class</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>tryLoadingFromJavaseLoader<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    clazz <span class="token operator">=</span> javaseLoader<span class="token punctuation">.</span><span class="token function">loadClass</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>clazz <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>resolve<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token function">resolveClass</span><span class="token punctuation">(</span>clazz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                        <span class="token keyword">return</span> clazz<span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ClassNotFoundException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// Ignore</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 强制委派父加载器加载 or 一些特定核心类 ：都先走父类加载器进行加载</span>
+            <span class="token comment" spellcheck="true">// 一般情况都应为false</span>
+            <span class="token keyword">boolean</span> delegateLoad <span class="token operator">=</span> delegate <span class="token operator">||</span> <span class="token function">filter</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token comment" spellcheck="true">// 4. 设置了delegate为true，则尝试使用父类加载器（默认即tomcat的common类加载器加载）</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>delegateLoad<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    clazz <span class="token operator">=</span> Class<span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> parent<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>clazz <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>resolve<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token function">resolveClass</span><span class="token punctuation">(</span>clazz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                        <span class="token keyword">return</span> clazz<span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ClassNotFoundException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// Ignore</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// ================== 走到这，才开始尝试使用本类加载加载指定的class</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 5. 开始使用当前类加载器加载（即 /WEB-INF/classes 与 /WEB-INF/lib）</span>
+                clazz <span class="token operator">=</span> <span class="token function">findClass</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>clazz <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>resolve<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token function">resolveClass</span><span class="token punctuation">(</span>clazz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    <span class="token keyword">return</span> clazz<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ClassNotFoundException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// Ignore</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>delegateLoad<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 6. delegateLoad为false，再使用父类加载器（为sharedLoader，默认也是commonLoader）尝试加载指定的class</span>
+                    clazz <span class="token operator">=</span> Class<span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> parent<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>clazz <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>resolve<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token function">resolveClass</span><span class="token punctuation">(</span>clazz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                        <span class="token keyword">return</span> clazz<span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ClassNotFoundException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// Ignore</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ClassNotFoundException</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 从当前项目的/WEB-INF/classes 与 /WEB-INF/lib中加载指定class
+     */</span>
+    <span class="token keyword">public</span> Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> <span class="token function">findClass</span><span class="token punctuation">(</span>String name<span class="token punctuation">)</span> <span class="token keyword">throws</span> ClassNotFoundException <span class="token punctuation">{</span>
+        Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> clazz <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 1. 从/WEB-INF/classes文件夹下加载class(如果找到，还会缓存到resourceEntries字段里)</span>
+                clazz <span class="token operator">=</span> <span class="token function">findClassInternal</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// ... 异常处理</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>clazz <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> hasExternalRepositories<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 2. 利用父类URLClassLoader的功能，加载/WEB-INF/lib文件夹下jar里的class</span>
+                    clazz <span class="token operator">=</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">findClass</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// ... 异常处理</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// =========== 到这说明/WEB-INF/classes 和/WEB-INF/lib 里都没找到指定的class，直接抛异常 =========</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>clazz <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ClassNotFoundException</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ClassNotFoundException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> clazz<span class="token punctuation">;</span>
+
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="总结和思考"><a href="#总结和思考" class="headerlink" title="总结和思考"></a>总结和思考</h2><ol>
+<li><p>commonLoader存在的意义？</p>
+<blockquote>
+<p>​	Tomcat 里其实<strong>只有一个 JVM，但可以部署多个 web 应用（多个 context）。这些应用共用 Tomcat 核心组件</strong>，比如：Server、Connector、Valve、Pipeline 等。<strong>这些 Tomcat 核心组件的 class 没必要每个应用都各自加载一份，只需 JVM 里统一加载一次就行</strong>。</p>
+<p>​	<strong>commonLoader 就起这个作用，它其实就是一个 URLClassLoader，负责加载 <code>$CATALINA_HOME/lib</code> 目录下的 jar，把 Tomcat 自己的核心代码加载进来，供所有 Web 应用共享</strong>。</p>
+</blockquote>
+</li>
+<li><p>WebappClassLoader的意义？</p>
+<blockquote>
+<p>​	这里就是隔离问题的核心：<strong>全限定类名是类加载器判定是否已加载的唯一依据</strong>。</p>
+<p>​	假设有多个 web 应用，它们各自依赖了同一个类 <code>site.shanzhao.Demo</code>，但版本不同。如果 JVM 里只有一份类加载器，那只能加载一份，版本冲突就没法解决了。</p>
+<p>​	所以 Tomcat 设计了 WebappClassLoader：每个 context 都有自己的类加载器，各自加载自己的 <code>/WEB-INF/classes</code> 和 <code>/WEB-INF/lib</code> 目录，互不影响。这样<strong>同一个类名的 class 文件可以在不同应用里加载出不同版本，实现真正的隔离</strong>。</p>
+<p>​	另外，<strong>有独立的 WebappClassLoader 也方便支持应用的热部署和卸载</strong>：当某个 context 重新加载或被移除时，直接销毁这个 WebappClassLoader，连带其加载的所有 class、资源、线程都能一起回收，减少内存泄露风险。</p>
+</blockquote>
+</li>
+<li><p>哪个类加载器打破了双亲委派机制？</p>
+<blockquote>
+<p>其实<strong>只有 WebappClassLoader 部分打破了双亲委派</strong>。</p>
+<p>commonLoader、sharedLoader 本身都是标准的 URLClassLoader，没有动过 loadClass 逻辑，完全遵守双亲委派。</p>
+<p>WebappClassLoader 才重写了 loadClass，实现了一个 <strong>可控双亲委派</strong>：</p>
+<ul>
+<li><strong>没完全打破</strong>：<strong>JVM 自带的类（JDK 标准库等）依然优先交给 JVM 自己的类加载器加载，保证不会被项目里的同名 class 覆盖</strong>，比如你项目里搞个自定义 <code>java.lang.String</code>，Tomcat 也不会用你这份</li>
+<li><strong>部分打破</strong>：<strong>对于非 JVM 内部类，WebappClassLoader 可以根据 delegate 参数决定是否优先本地加载，而不强行一律交给父加载器sharedLoader</strong></li>
+</ul>
+</blockquote>
+</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8/" rel="tag"># 类加载器</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/" rel="prev" title="Tomcat-责任链之Pipeline+Valve和Filter">
+                  <i class="fa fa-angle-left"></i> Tomcat-责任链之Pipeline+Valve和Filter
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="next" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  Spring-事物NOT_SUPPORTED策略下多数据源切换的问题 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">304k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">9:13</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>
