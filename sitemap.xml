@@ -92,6 +92,15 @@
   </url>
   
   <url>
+    <loc>https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/</loc>
+    
+    <lastmod>2021-12-18</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/</loc>
     
     <lastmod>2021-11-28</lastmod>
@@ -467,7 +476,14 @@
   </url>
   
   <url>
-    <loc>https://blog.shanzhao.site/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/</loc>
+    <loc>https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/</loc>
+    <lastmod>2025-06-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/</loc>
     <lastmod>2025-06-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -475,6 +491,13 @@
   
   <url>
     <loc>https://blog.shanzhao.site/tags/%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8/</loc>
+    <lastmod>2025-06-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://blog.shanzhao.site/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/</loc>
     <lastmod>2025-06-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>

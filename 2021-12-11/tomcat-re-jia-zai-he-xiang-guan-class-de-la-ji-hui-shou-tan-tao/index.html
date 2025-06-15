@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	本文深入分析了 WebappClassLoader 的热加载整体流程，并对热加载过程中遗留的垃圾回收问题进行了系统性拆解。重点涵盖了：垃圾的分类、核心引用关系的梳理、各类资源的清理策略。最后详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat-热加载和相关Class的垃圾回收探讨">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	本文深入分析了 WebappClassLoader 的热加载整体流程，并对热加载过程中遗留的垃圾回收问题进行了系统性拆解。重点涵盖了：垃圾的分类、核心引用关系的梳理、各类资源的清理策略。最后详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://img.shanzhao.site/file/1749993196721_class-reference.png">
+<meta property="article:published_time" content="2021-12-11T05:07:06.000Z">
+<meta property="article:modified_time" content="2021-12-18T11:57:06.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="热加载">
+<meta property="article:tag" content="垃圾回收">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://img.shanzhao.site/file/1749993196721_class-reference.png">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/","path":"2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/","title":"Tomcat-热加载和相关Class的垃圾回收探讨"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Tomcat-热加载和相关Class的垃圾回收探讨 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%83%AD%E5%8A%A0%E8%BD%BD%E5%92%8C%E7%9B%B8%E5%85%B3Class%E7%9A%84%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E6%8E%A2%E8%AE%A8"><span class="nav-number">1.</span> <span class="nav-text">热加载和相关Class的垃圾回收探讨</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%83%AD%E5%8A%A0%E8%BD%BD"><span class="nav-number">1.1.</span> <span class="nav-text">热加载</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#WebappLoader-backgroundProcess"><span class="nav-number">1.1.1.</span> <span class="nav-text">WebappLoader#backgroundProcess</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#class%E8%B5%84%E6%BA%90%E5%8F%98%E5%8C%96%E7%9B%91%E6%B5%8B"><span class="nav-number">1.1.1.1.</span> <span class="nav-text">class资源变化监测</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#context%E9%87%8D%E5%8A%A0%E8%BD%BD"><span class="nav-number">1.1.1.2.</span> <span class="nav-text">context重加载</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6"><span class="nav-number">1.2.</span> <span class="nav-text">垃圾回收</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%B5%84%E6%BA%90%E5%88%86%E7%B1%BB"><span class="nav-number">1.2.1.</span> <span class="nav-text">资源分类</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%A0%86%E5%8C%BA"><span class="nav-number">1.2.1.1.</span> <span class="nav-text">堆区</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E9%9D%9E%E5%A0%86%E5%8C%BA"><span class="nav-number">1.2.1.2.</span> <span class="nav-text">非堆区</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%9B%9E%E6%94%B6%E6%8E%A2%E8%AE%A8"><span class="nav-number">1.2.2.</span> <span class="nav-text">回收探讨</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Context-%E5%86%85%E9%83%A8%E7%9A%84%E5%AF%B9%E8%B1%A1%E5%AE%9E%E4%BE%8B"><span class="nav-number">1.2.2.1.</span> <span class="nav-text">Context 内部的对象实例</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B%E7%9B%B8%E5%85%B3%E5%AF%B9%E8%B1%A1"><span class="nav-number">1.2.2.2.</span> <span class="nav-text">线程相关对象</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Class-%E5%AF%B9%E8%B1%A1"><span class="nav-number">1.2.2.3.</span> <span class="nav-text">Class 对象</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#WebappClassLoader-%E5%AE%9E%E4%BE%8B"><span class="nav-number">1.2.2.4.</span> <span class="nav-text">WebappClassLoader 实例</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">1.2.2.5.</span> <span class="nav-text">总结</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#tomcat%E9%87%8A%E6%94%BE%E8%B5%84%E6%BA%90"><span class="nav-number">1.2.3.</span> <span class="nav-text">tomcat释放资源</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B%E6%B8%85%E7%90%86"><span class="nav-number">1.2.3.1.</span> <span class="nav-text">线程清理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%80%BB%E7%BB%93-1"><span class="nav-number">1.2.3.2.</span> <span class="nav-text">总结</span></a></li></ol></li></ol></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">30</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">29</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Tomcat-热加载和相关Class的垃圾回收探讨 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Tomcat-热加载和相关Class的垃圾回收探讨
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-12-11 13:07:06" itemprop="dateCreated datePublished" datetime="2021-12-11T13:07:06+08:00">2021-12-11</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2021-12-18 19:57:06" itemprop="dateModified" datetime="2021-12-18T19:57:06+08:00">2021-12-18</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	本文深入分析了 WebappClassLoader 的热加载整体流程，并<strong>对热加载过程中遗留的垃圾回收问题进行了系统性拆解</strong>。重点涵盖了：<strong>垃圾的分类、核心引用关系的梳理、各类资源的清理策略</strong>。最后<strong>详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议</strong></p>
+<span id="more"></span>
+
+<h1 id="热加载和相关Class的垃圾回收探讨"><a href="#热加载和相关Class的垃圾回收探讨" class="headerlink" title="热加载和相关Class的垃圾回收探讨"></a>热加载和相关Class的垃圾回收探讨</h1><h2 id="热加载"><a href="#热加载" class="headerlink" title="热加载"></a>热加载</h2><p>​	WebappLoader#backgroundProcess是负责检测和触发热加载的方法入口，其被standardEngine的backgroundThread线程周期性触发，被调用路径为：<strong>ContainerBackgroundProcessor#run -&gt; ContainerBackgroundProcessor#processChildren -&gt; StandardContext.backgroundProcess -&gt; Loader#backgroundProcess</strong></p>
+<p>​	<strong>当web可触发context的资源重加载时，backgroundThread线程会销毁（stop）当前context内部的所有资源，并进行重启context（start），start过程中使用了新的WebappClassLoader加载项目相关的class资源，因此可以在不重启整个 Tomcat 进程的前提下，以实现应用级别的热部署与资源更新</strong></p>
+<h3 id="WebappLoader-backgroundProcess"><a href="#WebappLoader-backgroundProcess" class="headerlink" title="WebappLoader#backgroundProcess"></a>WebappLoader#backgroundProcess</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">backgroundProcess</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// reloadable由StandardContext.reloadable设置，默认为false，也就表示需要在context.xml里主动配置reloadable=true才开启热加载检测资格</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>reloadable <span class="token operator">&amp;&amp;</span> <span class="token function">modified</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// Context里有class或jar改变了，需要进行热加载</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 临时切换到Tomcat的commonLoader，避免使用即将被卸载的WebappClassLoader</span>
+                <span class="token comment" spellcheck="true">// 确保reload过程中使用的是稳定的类加载器环境</span>
+                Thread<span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setContextClassLoader</span><span class="token punctuation">(</span>WebappLoader<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>context <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    context<span class="token punctuation">.</span><span class="token function">reload</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>context <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> context<span class="token punctuation">.</span><span class="token function">getLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 热加载完毕，将context里新的WebappClassLoader绑定到线程上下文中</span>
+                    Thread<span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setContextClassLoader</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="class资源变化监测"><a href="#class资源变化监测" class="headerlink" title="class资源变化监测"></a>class资源变化监测</h4><p><code>WebappClassLoaderBase#modified()</code> 负责监测当前 Web 应用中的 class 资源是否发生变更，用于触发 Context 重载。当以下任一变化发生时，Tomcat 会认为需要重新加载当前 Context：</p>
+<ul>
+<li><strong>&#x2F;WEB-INF&#x2F;classes 目录下已加载的 class 文件被修改</strong></li>
+<li><strong>&#x2F;WEB-INF&#x2F;lib目录下的jar包有修改、新增和删除</strong></li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java">
+<span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">modified</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 1. 遍历所有已加载的 class 文件，判断是否有被修改</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>Entry<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> ResourceEntry<span class="token operator">></span> entry <span class="token operator">:</span> resourceEntries<span class="token punctuation">.</span><span class="token function">entrySet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">long</span> cachedLastModified <span class="token operator">=</span> entry<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span>lastModified<span class="token punctuation">;</span>
+        <span class="token keyword">long</span> lastModified <span class="token operator">=</span> resources<span class="token punctuation">.</span><span class="token function">getClassLoaderResource</span><span class="token punctuation">(</span>
+                entry<span class="token punctuation">.</span><span class="token function">getKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getLastModified</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>lastModified <span class="token operator">!=</span> cachedLastModified<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// class 文件修改时间变化，说明 class 被更新，需要重载 Context</span>
+            <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 2. 遍历 /WEB-INF/lib 下的 jar 包，判断是否有变动</span>
+    WebResource<span class="token punctuation">[</span><span class="token punctuation">]</span> jars <span class="token operator">=</span> resources<span class="token punctuation">.</span><span class="token function">listResources</span><span class="token punctuation">(</span><span class="token string">"/WEB-INF/lib"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">int</span> jarCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>WebResource jar <span class="token operator">:</span> jars<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>jar<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">endsWith</span><span class="token punctuation">(</span><span class="token string">".jar"</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> jar<span class="token punctuation">.</span><span class="token function">isFile</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> jar<span class="token punctuation">.</span><span class="token function">canRead</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            jarCount<span class="token operator">++</span><span class="token punctuation">;</span>
+            Long recordedLastModified <span class="token operator">=</span> jarModificationTimes<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>jar<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>recordedLastModified <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// jar包没有记录上次修改时间，代表这个jar是新增的，也需要重载context</span>
+                <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>recordedLastModified<span class="token punctuation">.</span><span class="token function">longValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> jar<span class="token punctuation">.</span><span class="token function">getLastModified</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 时间变了，表示被修改过，也要重载context</span>
+                <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 3. 检查是否有 jar 包被删除（jar 数量变少）</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>jarCount <span class="token operator">&lt;</span> jarModificationTimes<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 4. 无任何资源变化，则不需要重载Context</span>
+    <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="context重加载"><a href="#context重加载" class="headerlink" title="context重加载"></a>context重加载</h4><p>Context 重加载的本质流程就是：先执行 <code>stop()</code>，再重新 <code>start()</code>。start流程可以看<a href="https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/#start%E6%A0%B8%E5%BF%83%E6%B5%81%E7%A8%8B%E6%80%BB%E7%BB%93">这里</a>，stop则负责关闭和清理已有资源，避免内存泄露。我这里简要梳理 下<code>stop()</code> 过程中各核心组件的销毁逻辑：</p>
+<ol>
+<li><strong>子容器 Servlet (StandardWrapper#stop)</strong><ul>
+<li>依次销毁所有已加载的 Servlet 实例，调用其 <code>javax.servlet.Servlet#destroy()</code> 方法，完成业务资源释放</li>
+</ul>
+</li>
+<li><strong>Filter组件销毁</strong><ul>
+<li>调用所有已注册的 <code>javax.servlet.Filter#destroy()</code> 方法，清理过滤器资源。</li>
+</ul>
+</li>
+<li><strong>Session 管理器 (StandardManager#stop)</strong><ul>
+<li>触发 Session 持久化（等待context重启后再加载进来），同时清理过期的 Session 实例</li>
+</ul>
+</li>
+<li><strong>Listener组件销毁</strong><ul>
+<li>执行所有注册的 <code>javax.servlet.ServletContextListener#contextDestroyed()</code> 方法，通知应用关闭，释放监听资源。</li>
+</ul>
+</li>
+<li><strong>类加载器资源清理 (WebappLoader#stop)</strong><ul>
+<li>销毁 WebappClassLoader，清理已加载的 class 缓存、jar 缓存、资源引用</li>
+<li>停止并回收与类加载器相关的线程，断开对外部资源的强引用，避免内存泄漏</li>
+</ul>
+</li>
+</ol>
+<h2 id="垃圾回收"><a href="#垃圾回收" class="headerlink" title="垃圾回收"></a>垃圾回收</h2><p>​	前面的都是铺垫，现在来探讨一个最重要的问题（当最终理解了这个问题后，任何java热加载工具如何垃圾回收探讨都不是难题）：</p>
+<blockquote>
+<p>​	<strong>Tomcat 触发 Context 热加载后，系统中会产生哪些需要回收的垃圾？这些垃圾又该如何被回收？（如果回收不彻底，多次热加载最终可能引发 OOM 问题）</strong></p>
+</blockquote>
+<h3 id="资源分类"><a href="#资源分类" class="headerlink" title="资源分类"></a>资源分类</h3><p>首先我们可以将需要回收的资源粗分为如下两大类</p>
+<h4 id="堆区"><a href="#堆区" class="headerlink" title="堆区"></a>堆区</h4><p>堆区由GC自动回收，记住一点，<strong>这个区内的对象能被回收的唯一方法是对象不可达</strong>（软引用和弱引用这些具有特定回收限制的实例不再考虑范围内）</p>
+<ol>
+<li><strong>Context 内部的对象实例</strong>：比如Servlet、Filter、Session、Spring容器里的bean等等，这部分是最多的</li>
+<li><strong>线程相关对象</strong>：Context 内部自行启动的 Thread和线程池</li>
+<li><strong>Class 对象</strong>：由 WebappClassLoader 加载的所有 Class 实例</li>
+<li><strong>WebappClassLoader 实例本身</strong></li>
+</ol>
+<h4 id="非堆区"><a href="#非堆区" class="headerlink" title="非堆区"></a>非堆区</h4><ol>
+<li>元空间 (Metaspace) 中的 klass 元数据：<strong>回收依赖JVM的class卸载机制</strong></li>
+</ol>
+<h3 id="回收探讨"><a href="#回收探讨" class="headerlink" title="回收探讨"></a>回收探讨</h3><p><strong>堆区垃圾回收的核心逻辑只有一点：对象是否可达（Reachable）。</strong>所以只要搞清楚对象的引用关系，就能推导出其回收条件。我们基于这个核心点，对上诉堆对内所有的对象进行追溯，看看到底它被哪些对象给持有</p>
+<h4 id="Context-内部的对象实例"><a href="#Context-内部的对象实例" class="headerlink" title="Context 内部的对象实例"></a>Context 内部的对象实例</h4><p>​	这部分是最简单的，这些对象都是应用程序中<strong>显示创建并赋值</strong>的对象。在context#stop期间，触发了各种内部组件的stop后，再<strong>对字段赋值为null就是在清除引用</strong>。Spring 容器则会在 <code>ApplicationContext#close()</code> 里统一销毁 Bean 并清理所有容器内引用。</p>
+<h4 id="线程相关对象"><a href="#线程相关对象" class="headerlink" title="线程相关对象"></a>线程相关对象</h4><p>​	Thread可作为GCRoot对象，所以<strong>对它的回收必须等Thread终结，否则任意一个存活的线程是不可能被回收的（其内部持有的contextClassLoader和其所有加载的class都不会被回收）</strong></p>
+<h4 id="Class-对象"><a href="#Class-对象" class="headerlink" title="Class 对象"></a>Class 对象</h4><p>​	Class对象稍复杂，它不仅有显示的引用（应用程序中显示使用），还有隐式的使用</p>
+<table>
+<thead>
+<tr>
+<th>引用链路</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>A对象 → A.class</strong></td>
+<td>所有基于 A.class 创建的对象，其对象头中都隐式持有指向 A.class 的指针。</td>
+</tr>
+<tr>
+<td><strong>类加载器 → A.class</strong></td>
+<td>加载 A.class 的类加载器持有一份强引用。</td>
+</tr>
+<tr>
+<td><strong>其他显式引用</strong></td>
+<td>例如缓存、反射、Class.forName() 结果等都可能让其他对象显示持有 A.class 引用。</td>
+</tr>
+</tbody></table>
+<p>所以要回收Class对象，可以得出如下结论（以A.class为例）：</p>
+<ol>
+<li><strong>A.class创建的A对象都不可达，那么A对象头里的A.class指针也不可达</strong></li>
+<li><strong>加载A.class的类加载器对象不可达</strong></li>
+<li><strong>显示持有A.class的其他对象也不可达</strong></li>
+</ol>
+<h4 id="WebappClassLoader-实例"><a href="#WebappClassLoader-实例" class="headerlink" title="WebappClassLoader 实例"></a>WebappClassLoader 实例</h4><table>
+<thead>
+<tr>
+<th>引用链路</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>所有其加载的 Class → WebappClassLoader</strong></td>
+<td>每个 Class 实例反向持有其加载器引用。</td>
+</tr>
+<tr>
+<td><strong>线程的 contextClassLoader → WebappClassLoader</strong></td>
+<td>活跃线程若未清理 contextClassLoader 也持有加载器引用。</td>
+</tr>
+</tbody></table>
+<p>WebappClassLoader回收前提：</p>
+<ol>
+<li><strong>所有由其加载的 Class 都已不可达</strong></li>
+<li><strong>没有任何活跃线程仍在使用该类加载器作为 contextClassLoader</strong></li>
+<li><strong>显示持有此类加载器的其他对象不可达</strong></li>
+</ol>
+<h4 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h4><p><img src="https://img.shanzhao.site/file/1749993196721_class-reference.png" alt="class-reference.png"></p>
+<p align="center" style="color: #888;">class相关对象引用链</p>
+
+<p>所以垃圾能别回收的本质，是让持有A.class和WebappClassLoader对象的链路断掉，在这里我们只要做好如下清理条件，相关垃圾即可被回收</p>
+<ol>
+<li><strong>context下创建的所有Thread需要终结</strong></li>
+<li><strong>context内部强引用链全部断开（置为null）</strong></li>
+</ol>
+<h3 id="tomcat释放资源"><a href="#tomcat释放资源" class="headerlink" title="tomcat释放资源"></a>tomcat释放资源</h3><p>​	在正式进入分析之前，先明确一点：<strong>子线程默认继承父线程的 <code>contextClassLoader</code>（Thread的构造方法）</strong></p>
+<p>​	通过前面<a href="https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/#StandardHostValve">文章的分析</a>，可知在Context内部创建的线程都会使用Context的WebappClassLoadLoader作为其contextClassLoader，所以，<strong>只要线程的 <code>Thread.contextClassLoader</code> 是当前 Context 对应的 <code>WebappClassLoader</code>，就可以判断它属于当前 Context 内部创建的线程。</strong></p>
+<h4 id="线程清理"><a href="#线程清理" class="headerlink" title="线程清理"></a>线程清理</h4><p><strong>核心方法在WebappClassLoaderBase#clearReferencesThreads</strong>，调用链为：</p>
+<blockquote>
+<ol>
+<li>WebappLoader#stop</li>
+<li>WebappClassLoaderBase#stop</li>
+<li>WebappClassLoaderBase#clearReferences </li>
+<li>WebappClassLoaderBase#clearReferencesThreads</li>
+</ol>
+</blockquote>
+<p>逻辑总结：</p>
+<ol>
+<li><strong>获取当前JVM所有线程</strong>：通过遍历根 ThreadGroup进行所有线程的枚举</li>
+<li><strong>遍历并筛选出当前Context创建的线程</strong>：判断<strong>依据为Thread.contextClassLoader &#x3D;&#x3D; Context.WebappClassLoader</strong></li>
+<li>根据是否是线程池创建的线程来分开处理<ol>
+<li><strong>线程池创建的Thread：使用线程池的shutdownNow来优雅的关闭线程</strong></li>
+<li><strong>非线程池线程：先发送中断信号，若无法中断则再直接调用Thread.stop方法来强制终结线程</strong></li>
+</ol>
+</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">clearReferencesThreads</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 获取系统内所有活动线程</span>
+    Thread<span class="token punctuation">[</span><span class="token punctuation">]</span> threads <span class="token operator">=</span> <span class="token function">getThreads</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    List<span class="token operator">&lt;</span>Thread<span class="token operator">></span> threadsToStop <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>Thread thread <span class="token operator">:</span> threads<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>thread <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            ClassLoader ccl <span class="token operator">=</span> thread<span class="token punctuation">.</span><span class="token function">getContextClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 只处理 contextClassLoader 是当前 WebappClassLoader 的线程</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ccl <span class="token operator">==</span> <span class="token keyword">this</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 跳过当前线程自身，防止自杀</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>thread <span class="token operator">==</span> Thread<span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">continue</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">final</span> String threadName <span class="token operator">=</span> thread<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                ThreadGroup tg <span class="token operator">=</span> thread<span class="token punctuation">.</span><span class="token function">getThreadGroup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>tg <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> JVM_THREAD_GROUP_NAMES<span class="token punctuation">.</span><span class="token function">contains</span><span class="token punctuation">(</span>tg<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>clearReferencesHttpClientKeepAliveThread <span class="token operator">&amp;&amp;</span>
+                            threadName<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span><span class="token string">"Keep-Alive-Timer"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// Keep-Alive-Timer 特殊处理，仅替换其 contextClassLoader，避免泄露</span>
+                        thread<span class="token punctuation">.</span><span class="token function">setContextClassLoader</span><span class="token punctuation">(</span>parent<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+
+                    <span class="token comment" spellcheck="true">// Don't warn about remaining JVM controlled threads</span>
+                    <span class="token keyword">continue</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// // 已经死亡的线程，则不需要再清理了</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>thread<span class="token punctuation">.</span><span class="token function">isAlive</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">continue</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// TimerThread 可以被安全关闭</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>thread<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">startsWith</span><span class="token punctuation">(</span><span class="token string">"java.util.Timer"</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span>
+                        clearReferencesStopTimerThreads<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token function">clearReferencesStopTimerThread</span><span class="token punctuation">(</span>thread<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">continue</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// 仅当配置允许强制停止线程时才处理（clearReferencesStopThreads默认为false）</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>clearReferencesStopThreads<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">continue</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 尝试检测是否为 ThreadPoolExecutor 的 worker 线程，优先关闭线程池本身</span>
+                <span class="token keyword">boolean</span> usingExecutor <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+
+                    <span class="token comment" spellcheck="true">// 兼容不同 JDK 实现，寻找包装的 runnable 字段</span>
+                    Object target <span class="token operator">=</span> null<span class="token punctuation">;</span>
+                    <span class="token keyword">for</span> <span class="token punctuation">(</span>String fieldName <span class="token operator">:</span> <span class="token keyword">new</span> <span class="token class-name">String</span><span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">{</span> <span class="token string">"target"</span><span class="token punctuation">,</span> <span class="token string">"runnable"</span><span class="token punctuation">,</span> <span class="token string">"action"</span> <span class="token punctuation">}</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                            Field targetField <span class="token operator">=</span> thread<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDeclaredField</span><span class="token punctuation">(</span>fieldName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            targetField<span class="token punctuation">.</span><span class="token function">setAccessible</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            target <span class="token operator">=</span> targetField<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>thread<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token keyword">break</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">NoSuchFieldException</span> nfe<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token keyword">continue</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+
+                    <span class="token comment" spellcheck="true">// 判断是否为 ThreadPoolExecutor.Worker，如果是则使用线程池的shutdownNow方法来优雅关闭线程</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>target <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> target<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getCanonicalName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span>
+                            target<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getCanonicalName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>
+                                    <span class="token string">"java.util.concurrent.ThreadPoolExecutor.Worker"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        Field executorField <span class="token operator">=</span> target<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDeclaredField</span><span class="token punctuation">(</span><span class="token string">"this$0"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        executorField<span class="token punctuation">.</span><span class="token function">setAccessible</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        Object executor <span class="token operator">=</span> executorField<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>target<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>executor <span class="token keyword">instanceof</span> <span class="token class-name">ThreadPoolExecutor</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token punctuation">(</span><span class="token punctuation">(</span>ThreadPoolExecutor<span class="token punctuation">)</span> executor<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">shutdownNow</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            usingExecutor <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">NoSuchFieldException</span> <span class="token operator">|</span> IllegalAccessException <span class="token operator">|</span> RuntimeException e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    log<span class="token punctuation">.</span><span class="token function">warn</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"webappClassLoader.stopThreadFail"</span><span class="token punctuation">,</span>
+                            thread<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">getContextName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 非线程池线程，直接尝试 interrupt 终止</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>usingExecutor <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>thread<span class="token punctuation">.</span><span class="token function">isInterrupted</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    thread<span class="token punctuation">.</span><span class="token function">interrupt</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 记录仍需等待确认终止的线程</span>
+                threadsToStop<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>thread<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">int</span> count <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 对需要stop的线程都直接终结</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>Thread t <span class="token operator">:</span> threadsToStop<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">while</span> <span class="token punctuation">(</span>t<span class="token punctuation">.</span><span class="token function">isAlive</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> count <span class="token operator">&lt;</span> <span class="token number">100</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                Thread<span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span><span class="token number">20</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">InterruptedException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// Quit the while loop</span>
+                <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            count<span class="token operator">++</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 存活才终结</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>t<span class="token punctuation">.</span><span class="token function">isAlive</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            t<span class="token punctuation">.</span><span class="token function">stop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> Thread<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token function">getThreads</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 获取当前线程所在的线程组</span>
+    ThreadGroup tg <span class="token operator">=</span> Thread<span class="token punctuation">.</span><span class="token function">currentThread</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getThreadGroup</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 向上遍历，找到根线程组（整个 JVM 的顶级线程组）</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token keyword">while</span> <span class="token punctuation">(</span>tg<span class="token punctuation">.</span><span class="token function">getParent</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            tg <span class="token operator">=</span> tg<span class="token punctuation">.</span><span class="token function">getParent</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">SecurityException</span> se<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">int</span> threadCountGuess <span class="token operator">=</span> tg<span class="token punctuation">.</span><span class="token function">activeCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token number">50</span><span class="token punctuation">;</span>
+    Thread<span class="token punctuation">[</span><span class="token punctuation">]</span> threads <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Thread</span><span class="token punctuation">[</span>threadCountGuess<span class="token punctuation">]</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 枚举所有的线程</span>
+    <span class="token keyword">int</span> threadCountActual <span class="token operator">=</span> tg<span class="token punctuation">.</span><span class="token function">enumerate</span><span class="token punctuation">(</span>threads<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// enumerate 方法在数组空间不足时会默默丢弃多余的线程，</span>
+    <span class="token comment" spellcheck="true">// 因此当实际数量等于猜测数量时，说明数组可能装不下，需要扩容重试</span>
+    <span class="token keyword">while</span> <span class="token punctuation">(</span>threadCountActual <span class="token operator">==</span> threadCountGuess<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        threadCountGuess <span class="token operator">*=</span> <span class="token number">2</span><span class="token punctuation">;</span>
+        threads <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Thread</span><span class="token punctuation">[</span>threadCountGuess<span class="token punctuation">]</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 继续枚举</span>
+        threadCountActual <span class="token operator">=</span> tg<span class="token punctuation">.</span><span class="token function">enumerate</span><span class="token punctuation">(</span>threads<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">return</span> threads<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="总结-1"><a href="#总结-1" class="headerlink" title="总结"></a>总结</h4><p>​	通过上述<strong>对 Context 内线程资源的兜底清理</strong>（这一部分其实是热加载内存泄漏中最核心、最容易被忽略的风险点 —— 因为实际项目中，大量使用了自定义线程或线程池，且它们往往没能纳入 Spring.ApplicationContext 的生命周期管理），<strong>再加上在 <code>Context#stop</code> 阶段，对各个强引用对象统一置 <code>null</code>，主动断开引用链，基本可以保证 Context 在热加载时不会产生内存泄漏问题。</strong></p>
+<p>最后需要特别强调一点：</p>
+<p>​	<strong>项目中使用线程池时，强烈建议将其纳入 Context 生命周期统一管理（例如通过 Spring 的 <code>ThreadPoolExecutorFactoryBean</code> 来创建线程池）。</strong></p>
+<p>​	因为 Tomcat 在兜底清理时，如果无法识别线程归属，最终可能会直接调用 <code>Thread.stop()</code> 强行终止线程 —— 这种方式极其不安全，容易导致数据不一致等问题。让线程池受控于 Spring 容器，借助 <code>shutdown()</code> 或 <code>shutdownNow()</code> 做平滑关闭，是最稳妥、安全的方案。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/" rel="tag"># 热加载</a>
+              <a href="/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/" rel="tag"># 垃圾回收</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021-11-23/tomcat-lei-jia-zai-qi/" rel="prev" title="Tomcat-类加载器">
+                  <i class="fa fa-angle-left"></i> Tomcat-类加载器
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="next" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  Spring-事物NOT_SUPPORTED策略下多数据源切换的问题 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">313k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">9:29</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

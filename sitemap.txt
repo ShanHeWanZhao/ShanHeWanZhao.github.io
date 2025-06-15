@@ -8,6 +8,7 @@ https://blog.shanzhao.site/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/
 https://blog.shanzhao.site/tags/index.html
 https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/
 https://blog.shanzhao.site/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/
+https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/
 https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/
 https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/
 https://blog.shanzhao.site/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/
@@ -55,8 +56,10 @@ https://blog.shanzhao.site/tags/Scheduled%E6%B3%A8%E8%A7%A3/
 https://blog.shanzhao.site/tags/Container/
 https://blog.shanzhao.site/tags/Acceptor/
 https://blog.shanzhao.site/tags/Poller/
-https://blog.shanzhao.site/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/
+https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/
+https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/
 https://blog.shanzhao.site/tags/%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8/
+https://blog.shanzhao.site/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/
 https://blog.shanzhao.site/tags/ThreadLocal/
 https://blog.shanzhao.site/categories/jvm/
 https://blog.shanzhao.site/categories/cloudflare/

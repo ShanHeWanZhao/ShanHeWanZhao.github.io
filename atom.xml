@@ -54,6 +54,28 @@
   </entry>
   
   <entry>
+    <title>Tomcat-热加载和相关Class的垃圾回收探讨</title>
+    <link href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/"/>
+    <id>https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/</id>
+    <published>2021-12-11T05:07:06.000Z</published>
+    <updated>2021-12-18T11:57:06.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	本文深入分析了 WebappClassLoader 的热加载整体流程，并&lt;strong&gt;对热加载过程中遗留的垃圾回收问题进行了系统性拆解&lt;/strong&gt;。重点涵盖了：&lt;strong&gt;垃圾的分类、核心引用关系的梳理、各类资源的清理策略&lt;/strong&gt;。最后&lt;strong&gt;详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议&lt;/strong&gt;&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
+    
+    
+    <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
+    
+    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Tomcat-类加载器</title>
     <link href="https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/"/>
     <id>https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/</id>
@@ -395,25 +417,6 @@
     
     
     <category term="spring三级缓存" scheme="https://blog.shanzhao.site/tags/spring%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>JVM参数</title>
-    <link href="https://blog.shanzhao.site/2020-12-18/jvm-can-shu/"/>
-    <id>https://blog.shanzhao.site/2020-12-18/jvm-can-shu/</id>
-    <published>2020-12-18T12:29:59.000Z</published>
-    <updated>2025-12-19T05:34:59.000Z</updated>
-    
-    
-    <summary type="html">&lt;p&gt;JVM常用参数整理和垃圾收集器组合&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="jvm" scheme="https://blog.shanzhao.site/categories/jvm/"/>
-    
-    
-    <category term="JVM参数" scheme="https://blog.shanzhao.site/tags/JVM%E5%8F%82%E6%95%B0/"/>
     
   </entry>
   

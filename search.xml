@@ -3487,297 +3487,6 @@ frozen：表示配置是否被冻结。默认为false，支持在运行时动态
       </tags>
   </entry>
   <entry>
-    <title>Spring-Bean的Scope</title>
-    <url>/2021-06-28/spring-bean-de-scope/</url>
-    <content><![CDATA[
-​	分析了Spring Scope的作用和实现类。并从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证。重点应该关注基于代理的其他作用域Bean注册的两个BeanDefinition异同点，以及为何会注册两个BeanDefinition
-
-
-Spring-Bean的Scope​	在 Spring 中，所有组件本质上都是 Bean，虽然它们的创建方式一致，但生命周期和缓存策略并不统一。为了支持不同的使用场景，Spring 设计了 Scope（作用域）机制，来决定 Bean 实例在容器中的缓存行为。
-常见的 Scope
-通用环境
-
-
-
-singleton：默认作用域。单例bean，由Spring进行全局缓存
-prototype：很多博客翻译为多例，其实容易误导，因为session和request中的bean也算多例。翻译为原型bean更好，因为它是基于 Bean 定义模板进行实例化 的原型模式，每次获取Bean时都会创建一个新的实例（即取即创建）。因此，它不能被缓存，也不能被循环依赖
-
-
-
-
-
-web环境
-
-
-session：web环境下的缓存在Session里的bean
-
-request：web环境下的缓存在Request里的bean。意味着每次新的Request，都需要创建新的bean
-application：web环境下缓存在ServletContext里的bean。是存在于另一个容器里单例bean
-
-
-
-
-
-cloud环境
-
-
- refresh：spring colud环境下的一种作用域，在这个作用域里的bean意味着每次环境刷新后（RefreshEvent事件触发），都需要创建新的bean，并destory以前bean。例如cloud环境下如果配置中心支持动态更改kv，每次修改kv后就出触发RefreshEvent事件
-
-
-
-
-
-Scope实现​	在 AbstractBeanFactory#doGetBean 方法中，所有非默认作用域（非 singleton&#x2F;prototype）的 Bean 获取，均通过 Scope 接口实现支持。每种运行环境对应一个 Scope 实例，由它统一负责该环境下 Bean 的 创建、缓存与销毁。Spring提供的常见Scope实现如下
-
-SessionScope：session域的实现
-
-RequestScope：request域的实现
-
-ServletContextScope：application域的实现
-
-RefreshScope：refresh域的实现
-
-SimpleThreadScope：用ThreadLocal实现的Bean的缓存域。即线程可见Bean
-
-SimpleTransactionScope：事务作用域，将 Bean 缓存绑定到当前事务，内部存储在 TransactionSynchronizationManager.resources 中
-
-
-session域主要逻辑为获取当前request的HttpSession，从内部中获取bean，没有则再实例化bean并缓存到当前Session里
-public class SessionScope extends AbstractRequestAttributesScope {
-
-    @Override
-    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
-        Object mutex = RequestContextHolder.currentRequestAttributes().getSessionMutex();
-        synchronized (mutex) { // 加锁，避免多线程同时创建bean
-            return super.get(name, objectFactory);
-        }
-    }
-
-    // 父类中的AbstractRequestAttributesScope方法
-    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
-        RequestAttributes attributes = RequestContextHolder.currentRequestAttributes();
-        // 对于session域，是通过HttpSession#getAttribute方法操作的
-        Object scopedObject = attributes.getAttribute(name, getScope());
-        if (scopedObject == null) {
-            // 创建bean
-            scopedObject = objectFactory.getObject();
-            attributes.setAttribute(name, scopedObject, getScope());
-            Object retrievedObject = attributes.getAttribute(name, getScope());
-            if (retrievedObject != null) {
-                scopedObject = retrievedObject;
-            }
-        }
-        return scopedObject;
-    }
-
-}
-
-@Scope注解用于定义 Spring 容器中 Bean 的作用域（Scope）。该注解通常配合 @Component 或 @Bean 使用，控制 Bean 在容器中的生命周期及缓存策略
-
-value：指定当前 Bean 的作用域名称，可以使用我们自定义的scope。Spring解析时不会校验
-scopeName：同value
-proxyMode：指定当前 Bean 是否需要通过代理方式注入。枚举类型为 ScopedProxyMode，常用值包括：
-DEFAULT（默认值）：等价于 NO
-NO：不使用代理。意味着当前Bean不能被其他singleton bean给依赖注入
-INTERFACES：JDK 动态代理，即接口代理
-TARGET_CLASS：CGLIB 代理，即继承代理
-
-
-
-Scope代理​	还有个重要的问题，Spring 中非 singleton 作用域的 Bean 无法直接注入到 singleton Bean 中，原因在于singleton Bean一旦被创建，其内部的依赖也随之固定。而诸如 request、session 等作用域下的 Bean 生命周期较短，其实例在运行时可能会动态变化。
-​	所以为了解决这种作用域不一致带来的注入问题，Spring 提供了 作用域代理机制（Scoped Proxy）。核心思想为将实际的Scope Bean 包装成一个代理对象，注入到 singleton Bean 中；每次通过该代理访问时，都会根据当前上下文（如当前request或session）动态获取真实的目标 Bean。这样，从开发者视角来看，这个 Bean 就像是 singleton 一样稳定可用，但实际底层访问的却是随作用域动态变化的目标实例。
-ScopedProxyUtils​	是 Spring 在注册特定作用域（如 request、session）BeanDefinition 之前，用于创建作用域代理的工具类。它的核心作用是：在注册 BeanDefinition 前，将其包装成作用域代理，从而允许非 singleton Bean 被注入到 singleton Bean 中。其最终会在容器中注册一下两个 Bean
-
-代理 Bean（Scoped Proxy）
-
-类型为 ScopedProxyFactoryBean，作用域为 singleton
-Bean 名为原始 Bean 的名称（例如 userService）
-负责在运行时根据当前作用域动态获取实际 Bean 实例
-保留原始 Bean 的自动注入相关属性（如 @Primary、限定符），因此它才是被注入到其他 Bean 中的“主 Bean”
-
-  目标 Bean（Target Bean）
-
-Bean 名为 &quot;scopedTarget.&quot; + 原始名称（如 scopedTarget.userService）
-保持原有的作用域定义（如 request、session 等）
-被设置为不可自动注入（autowireCandidate = false）。都注入代理bean
-
-
-
-核心源码public abstract class ScopedProxyUtils {
-
-    // 代理目标 Bean 的命名前缀
-    private static final String TARGET_NAME_PREFIX = "scopedTarget.";
-
-    private static final int TARGET_NAME_PREFIX_LENGTH = TARGET_NAME_PREFIX.length();
-
-    /**
-     * 创建作用域代理：将一个具有非单例作用域的 Bean 包装为一个 ScopedProxyFactoryBean，
-     * 用于在注入到 singleton Bean 时仍保持作用域语义。
-     *
-     * 实现原理：将原始 Bean 注册为一个带前缀的新 Bean，然后为原始 Bean 名称注册一个代理 Bean，
-     * 每次访问这个代理 Bean 时，都会动态地从容器中获取当前作用域下的真实 Bean。
-     */
-    public static BeanDefinitionHolder createScopedProxy(BeanDefinitionHolder definition,
-            BeanDefinitionRegistry registry, boolean proxyTargetClass) {
-
-        String originalBeanName = definition.getBeanName();
-        BeanDefinition targetDefinition = definition.getBeanDefinition();
-        // 原bean修改后的目标beanName： scopedTarget. + 原beanName
-        String targetBeanName = getTargetBeanName(originalBeanName);
-
-        // 创建 ScopedProxyFactoryBean 的定义，用于代理原始 Bean
-        RootBeanDefinition proxyDefinition = new RootBeanDefinition(ScopedProxyFactoryBean.class);
-        proxyDefinition.setDecoratedDefinition(new BeanDefinitionHolder(targetDefinition, targetBeanName));
-        proxyDefinition.setOriginatingBeanDefinition(targetDefinition);
-        proxyDefinition.setSource(definition.getSource());
-        proxyDefinition.setRole(targetDefinition.getRole());
-
-        // 设置代理bean中targetBeanName（用来在BeanFactory中原始bean）
-        proxyDefinition.getPropertyValues().add("targetBeanName", targetBeanName);
-        if (proxyTargetClass) { // cglib proxy
-            targetDefinition.setAttribute(AutoProxyUtils.PRESERVE_TARGET_CLASS_ATTRIBUTE, Boolean.TRUE);
-        } else { // jdk proxy
-            proxyDefinition.getPropertyValues().add("proxyTargetClass", Boolean.FALSE);
-        }
-
-        // 复制原始 Bean 的自动注入相关属性
-        proxyDefinition.setAutowireCandidate(targetDefinition.isAutowireCandidate());
-        proxyDefinition.setPrimary(targetDefinition.isPrimary());
-        if (targetDefinition instanceof AbstractBeanDefinition) {
-            proxyDefinition.copyQualifiersFrom((AbstractBeanDefinition) targetDefinition);
-        }
-
-        // 将原始 Bean 设为非primary且不可自动注入（避免与代理冲突，这样Spring注册的这个bean始终是代理bean）
-        targetDefinition.setAutowireCandidate(false);
-        targetDefinition.setPrimary(false);
-
-        // 注册原bean到容器中，此时beanName已被替换
-        registry.registerBeanDefinition(targetBeanName, targetDefinition);
-
-        // 返回代理 Bean 的定义（仍然使用原始Bean的beanName）
-        return new BeanDefinitionHolder(proxyDefinition, originalBeanName, definition.getAliases());
-    }
-
-}
-
-ScopedProxyFactoryBean​	它构建了一个用于作用域代理的单例增强 Bean，这个bean具有如下特点
-
-**TargetSource 为 SimpleBeanTargetSource**：每次方法调用时，动态从 BeanFactory 获取目标 bean 实例（不做任何缓存）
-代理类实现了目标 bean 的所有接口和类：对外表现为原始 bean，可被其他 bean 正常依赖和注入（作为主 bean 使用）。
-实现了 AopInfrastructureBean 接口：标记为基础设施类，避免再次被 AOP、事务、异步等机制增强。
-**仅使用一个拦截器：DelegatingIntroductionInterceptor**：
-对被“引入”的接口方法（如 ScopedObject#getTargetObject()）进行特殊处理；
-对其他方法则调用 MethodInvocation#proceed()，由原始 bean 执行具体逻辑。
-
-
-
-核心源码public class ScopedProxyFactoryBean extends ProxyConfig
-        implements FactoryBean&lt;Object>, BeanFactoryAware, AopInfrastructureBean {
-    public void setBeanFactory(BeanFactory beanFactory) {
-        if (!(beanFactory instanceof ConfigurableBeanFactory)) {
-            throw new IllegalStateException("Not running in a ConfigurableBeanFactory: " + beanFactory);
-        }
-        ConfigurableBeanFactory cbf = (ConfigurableBeanFactory) beanFactory;
-
-        // 将 BeanFactory 注入目标作用域对象（这样才有能力从BeanFactory中获取目标作用域对象）
-        this.scopedTargetSource.setBeanFactory(beanFactory);
-
-        ProxyFactory pf = new ProxyFactory();
-        pf.copyFrom(this);
-        // 设置代理目标为 scopedTargetSource（默认为SimpleBeanTargetSource，其获取目标对象每次都调用BeanFactory#getBean）
-        // 且scopedTargetSource的getTargetClass()方法会解析并返回原始bean的class，用于代理增强
-        pf.setTargetSource(this.scopedTargetSource);
-
-        Assert.notNull(this.targetBeanName, "Property 'targetBeanName' is required");
-        Class&lt;?> beanType = beanFactory.getType(this.targetBeanName);
-        if (beanType == null) {
-            throw new IllegalStateException("Cannot create scoped proxy for bean '" + this.targetBeanName +
-                    "': Target type could not be determined at the time of proxy creation.");
-        }
-        // jdk代理判断
-        if (!isProxyTargetClass() || beanType.isInterface() || Modifier.isPrivate(beanType.getModifiers())) {
-            pf.setInterfaces(ClassUtils.getAllInterfacesForClass(beanType, cbf.getBeanClassLoader()));
-        }
-
-        // Add an introduction that implements only the methods on ScopedObject.
-        ScopedObject scopedObject = new DefaultScopedObject(cbf, this.scopedTargetSource.getTargetBeanName());
-        pf.addAdvice(new DelegatingIntroductionInterceptor(scopedObject));
-
-        // 设置该bean不会被其他自动代理 代理了
-        /*
-         * 为什么会这么设置？
-         * 这个bean以及是个代理增强bean了，它所需要增强的地方也是唯一的地方就是找到目标scope里真实的bean，并将方法的调用行为转移到目标作用域的真实的bean中去
-         *
-         * 例：session域的bean，该bean被自动注入的就应该是这个代理bean，这个bean存在的目的也只是找到session域
-         * 里对应的真实bean，然后调用该bean的方法全走session域的真实bean的方法，且由这个真实bean来进行其他自动代理的增强
-         */
-        pf.addInterface(AopInfrastructureBean.class);
-
-        // 创建好代理对象
-        this.proxy = pf.getProxy(cbf.getBeanClassLoader());
-    }
-
-    /**
-     * 单例
-     */
-    public boolean isSingleton() {
-        return true;
-    }
-}
-
-arthas验证测试类package site.shanzhao.config;
-
-@Component
-@SessionScope
-public class SessionScopeDemo {
-    
-}
-
-class信息查询用sc -d site.shanzhao.config.SessionScopeDemo命令，我这里只展示了增强的class，重点观察到
-
-父类为site.shanzhao.config.SessionScopeDemo
-相比普通AOP，多增加的接口有：
-org.springframework.aop.scope.ScopedObject
-org.springframework.aop.framework.AopInfrastructureBean
-
-
-
- class-info        site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- code-source       /Users/reef/IdeaProjects/soil/target/classes/
- name              site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- isInterface       false
- isAnnotation      false
- isEnum            false
- isAnonymousClass  false
- isArray           false
- isLocalClass      false
- isMemberClass     false
- isPrimitive       false
- isSynthetic       false
- simple-name       SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
- modifier          public
- annotation
- interfaces        org.springframework.aop.scope.ScopedObject,java.io.Serializable,org.springframework.aop.framework.AopInfrastructureBean,org.springframework.aop.SpringProxy,org.springframework.aop.framework.
-                   Advised,org.springframework.cglib.proxy.Factory
- super-class       +-site.shanzhao.config.SessionScopeDemo
-                     +-java.lang.Object
- class-loader      +-jdk.internal.loader.ClassLoaders$AppClassLoader@311d617d
-                     +-jdk.internal.loader.ClassLoaders$PlatformClassLoader@1b4ae4e0
- classLoaderHash   311d617d
-
-ognl查询beanName# 使用ApplicationContext.getBeanNamesForType()方法，可知有两个SessionScopeDemo class的BeanDefinition
-[arthas@35578]$ ognl "@site.shanzhao.util.ApplicationContextUtils@applicationContext.getBeanNamesForType(@site.shanzhao.config.SessionScopeDemo@class)"
-@String[][
-    @String[scopedTarget.sessionScopeDemo],
-    @String[sessionScopeDemo],
-]
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-  </entry>
-  <entry>
     <title>Spring-Bean初始化</title>
     <url>/2021-01-08/spring-bean-de-chu-shi-hua/</url>
     <content><![CDATA[
@@ -4383,63 +4092,291 @@ public AutowiredAnnotationBeanPostProcessor() {
       </tags>
   </entry>
   <entry>
-    <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
-    <url>/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</url>
-    <content><![CDATA[​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考
+    <title>Spring-Bean的Scope</title>
+    <url>/2021-06-28/spring-bean-de-scope/</url>
+    <content><![CDATA[
+​	分析了Spring Scope的作用和实现类。并从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证。重点应该关注基于代理的其他作用域Bean注册的两个BeanDefinition异同点，以及为何会注册两个BeanDefinition
 
 
-Spring-事物NOT_SUPPORTED策略下多数据源切换的问题起因今天写代码时遇到一个多数据源的切换问题，框架为Spring和Mybatus-Plus。在完全没事物的情况下pgsql和mysql切换没问题，但在@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)下却切换不了。翻了以前的Spring-Transactional文章和代码，遂记录一下原因和解决思路，以及整体的思考
-​	在有事物的情况下多数据源切换不了这是很正常的，毕竟Connection绑定到ThreadLocal了。但我开始简单的认为只要使用Propagation.NOT_SUPPORTED传播策略，毕竟这都不支持事物了，应该就能进行数据源切换。实际就是代码报错了，还是切换不了
-伪代码ProductService#recommend被调用在一个事物里
-public class ProductService {
+Spring-Bean的Scope​	在 Spring 中，所有组件本质上都是 Bean，虽然它们的创建方式一致，但生命周期和缓存策略并不统一。为了支持不同的使用场景，Spring 设计了 Scope（作用域）机制，来决定 Bean 实例在容器中的缓存行为。
+常见的 Scope
+通用环境
 
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void recommend(int i){
 
-        // pgsqlMapper这个mapper有注解 @DS("postgresql")，走pqsql库
-        pgsqlMapper.queryById(i);
-        
-        // 走mysql库
-        msyqlMapper.queryById(i);
+
+singleton：默认作用域。单例bean，由Spring进行全局缓存
+prototype：很多博客翻译为多例，其实容易误导，因为session和request中的bean也算多例。翻译为原型bean更好，因为它是基于 Bean 定义模板进行实例化 的原型模式，每次获取Bean时都会创建一个新的实例（即取即创建）。因此，它不能被缓存，也不能被循环依赖
+
+
+
+
+
+web环境
+
+
+session：web环境下的缓存在Session里的bean
+
+request：web环境下的缓存在Request里的bean。意味着每次新的Request，都需要创建新的bean
+application：web环境下缓存在ServletContext里的bean。是存在于另一个容器里单例bean
+
+
+
+
+
+cloud环境
+
+
+ refresh：spring colud环境下的一种作用域，在这个作用域里的bean意味着每次环境刷新后（RefreshEvent事件触发），都需要创建新的bean，并destory以前bean。例如cloud环境下如果配置中心支持动态更改kv，每次修改kv后就出触发RefreshEvent事件
+
+
+
+
+
+Scope实现​	在 AbstractBeanFactory#doGetBean 方法中，所有非默认作用域（非 singleton&#x2F;prototype）的 Bean 获取，均通过 Scope 接口实现支持。每种运行环境对应一个 Scope 实例，由它统一负责该环境下 Bean 的 创建、缓存与销毁。Spring提供的常见Scope实现如下
+
+SessionScope：session域的实现
+
+RequestScope：request域的实现
+
+ServletContextScope：application域的实现
+
+RefreshScope：refresh域的实现
+
+SimpleThreadScope：用ThreadLocal实现的Bean的缓存域。即线程可见Bean
+
+SimpleTransactionScope：事务作用域，将 Bean 缓存绑定到当前事务，内部存储在 TransactionSynchronizationManager.resources 中
+
+
+session域主要逻辑为获取当前request的HttpSession，从内部中获取bean，没有则再实例化bean并缓存到当前Session里
+public class SessionScope extends AbstractRequestAttributesScope {
+
+    @Override
+    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
+        Object mutex = RequestContextHolder.currentRequestAttributes().getSessionMutex();
+        synchronized (mutex) { // 加锁，避免多线程同时创建bean
+            return super.get(name, objectFactory);
+        }
     }
+
+    // 父类中的AbstractRequestAttributesScope方法
+    public Object get(String name, ObjectFactory&lt;?> objectFactory) {
+        RequestAttributes attributes = RequestContextHolder.currentRequestAttributes();
+        // 对于session域，是通过HttpSession#getAttribute方法操作的
+        Object scopedObject = attributes.getAttribute(name, getScope());
+        if (scopedObject == null) {
+            // 创建bean
+            scopedObject = objectFactory.getObject();
+            attributes.setAttribute(name, scopedObject, getScope());
+            Object retrievedObject = attributes.getAttribute(name, getScope());
+            if (retrievedObject != null) {
+                scopedObject = retrievedObject;
+            }
+        }
+        return scopedObject;
+    }
+
+}
+
+@Scope注解用于定义 Spring 容器中 Bean 的作用域（Scope）。该注解通常配合 @Component 或 @Bean 使用，控制 Bean 在容器中的生命周期及缓存策略
+
+value：指定当前 Bean 的作用域名称，可以使用我们自定义的scope。Spring解析时不会校验
+scopeName：同value
+proxyMode：指定当前 Bean 是否需要通过代理方式注入。枚举类型为 ScopedProxyMode，常用值包括：
+DEFAULT（默认值）：等价于 NO
+NO：不使用代理。意味着当前Bean不能被其他singleton bean给依赖注入
+INTERFACES：JDK 动态代理，即接口代理
+TARGET_CLASS：CGLIB 代理，即继承代理
+
+
+
+Scope代理​	还有个重要的问题，Spring 中非 singleton 作用域的 Bean 无法直接注入到 singleton Bean 中，原因在于singleton Bean一旦被创建，其内部的依赖也随之固定。而诸如 request、session 等作用域下的 Bean 生命周期较短，其实例在运行时可能会动态变化。
+​	所以为了解决这种作用域不一致带来的注入问题，Spring 提供了 作用域代理机制（Scoped Proxy）。核心思想为将实际的Scope Bean 包装成一个代理对象，注入到 singleton Bean 中；每次通过该代理访问时，都会根据当前上下文（如当前request或session）动态获取真实的目标 Bean。这样，从开发者视角来看，这个 Bean 就像是 singleton 一样稳定可用，但实际底层访问的却是随作用域动态变化的目标实例。
+ScopedProxyUtils​	是 Spring 在注册特定作用域（如 request、session）BeanDefinition 之前，用于创建作用域代理的工具类。它的核心作用是：在注册 BeanDefinition 前，将其包装成作用域代理，从而允许非 singleton Bean 被注入到 singleton Bean 中。其最终会在容器中注册一下两个 Bean
+
+代理 Bean（Scoped Proxy）
+
+类型为 ScopedProxyFactoryBean，作用域为 singleton
+Bean 名为原始 Bean 的名称（例如 userService）
+负责在运行时根据当前作用域动态获取实际 Bean 实例
+保留原始 Bean 的自动注入相关属性（如 @Primary、限定符），因此它才是被注入到其他 Bean 中的“主 Bean”
+
+  目标 Bean（Target Bean）
+
+Bean 名为 &quot;scopedTarget.&quot; + 原始名称（如 scopedTarget.userService）
+保持原有的作用域定义（如 request、session 等）
+被设置为不可自动注入（autowireCandidate = false）。都注入代理bean
+
+
+
+核心源码public abstract class ScopedProxyUtils {
+
+    // 代理目标 Bean 的命名前缀
+    private static final String TARGET_NAME_PREFIX = "scopedTarget.";
+
+    private static final int TARGET_NAME_PREFIX_LENGTH = TARGET_NAME_PREFIX.length();
+
+    /**
+     * 创建作用域代理：将一个具有非单例作用域的 Bean 包装为一个 ScopedProxyFactoryBean，
+     * 用于在注入到 singleton Bean 时仍保持作用域语义。
+     *
+     * 实现原理：将原始 Bean 注册为一个带前缀的新 Bean，然后为原始 Bean 名称注册一个代理 Bean，
+     * 每次访问这个代理 Bean 时，都会动态地从容器中获取当前作用域下的真实 Bean。
+     */
+    public static BeanDefinitionHolder createScopedProxy(BeanDefinitionHolder definition,
+            BeanDefinitionRegistry registry, boolean proxyTargetClass) {
+
+        String originalBeanName = definition.getBeanName();
+        BeanDefinition targetDefinition = definition.getBeanDefinition();
+        // 原bean修改后的目标beanName： scopedTarget. + 原beanName
+        String targetBeanName = getTargetBeanName(originalBeanName);
+
+        // 创建 ScopedProxyFactoryBean 的定义，用于代理原始 Bean
+        RootBeanDefinition proxyDefinition = new RootBeanDefinition(ScopedProxyFactoryBean.class);
+        proxyDefinition.setDecoratedDefinition(new BeanDefinitionHolder(targetDefinition, targetBeanName));
+        proxyDefinition.setOriginatingBeanDefinition(targetDefinition);
+        proxyDefinition.setSource(definition.getSource());
+        proxyDefinition.setRole(targetDefinition.getRole());
+
+        // 设置代理bean中targetBeanName（用来在BeanFactory中原始bean）
+        proxyDefinition.getPropertyValues().add("targetBeanName", targetBeanName);
+        if (proxyTargetClass) { // cglib proxy
+            targetDefinition.setAttribute(AutoProxyUtils.PRESERVE_TARGET_CLASS_ATTRIBUTE, Boolean.TRUE);
+        } else { // jdk proxy
+            proxyDefinition.getPropertyValues().add("proxyTargetClass", Boolean.FALSE);
+        }
+
+        // 复制原始 Bean 的自动注入相关属性
+        proxyDefinition.setAutowireCandidate(targetDefinition.isAutowireCandidate());
+        proxyDefinition.setPrimary(targetDefinition.isPrimary());
+        if (targetDefinition instanceof AbstractBeanDefinition) {
+            proxyDefinition.copyQualifiersFrom((AbstractBeanDefinition) targetDefinition);
+        }
+
+        // 将原始 Bean 设为非primary且不可自动注入（避免与代理冲突，这样Spring注册的这个bean始终是代理bean）
+        targetDefinition.setAutowireCandidate(false);
+        targetDefinition.setPrimary(false);
+
+        // 注册原bean到容器中，此时beanName已被替换
+        registry.registerBeanDefinition(targetBeanName, targetDefinition);
+
+        // 返回代理 Bean 的定义（仍然使用原始Bean的beanName）
+        return new BeanDefinitionHolder(proxyDefinition, originalBeanName, definition.getAliases());
+    }
+
+}
+
+ScopedProxyFactoryBean​	它构建了一个用于作用域代理的单例增强 Bean，这个bean具有如下特点
+
+**TargetSource 为 SimpleBeanTargetSource**：每次方法调用时，动态从 BeanFactory 获取目标 bean 实例（不做任何缓存）
+代理类实现了目标 bean 的所有接口和类：对外表现为原始 bean，可被其他 bean 正常依赖和注入（作为主 bean 使用）。
+实现了 AopInfrastructureBean 接口：标记为基础设施类，避免再次被 AOP、事务、异步等机制增强。
+**仅使用一个拦截器：DelegatingIntroductionInterceptor**：
+对被“引入”的接口方法（如 ScopedObject#getTargetObject()）进行特殊处理；
+对其他方法则调用 MethodInvocation#proceed()，由原始 bean 执行具体逻辑。
+
+
+
+核心源码public class ScopedProxyFactoryBean extends ProxyConfig
+        implements FactoryBean&lt;Object>, BeanFactoryAware, AopInfrastructureBean {
+    public void setBeanFactory(BeanFactory beanFactory) {
+        if (!(beanFactory instanceof ConfigurableBeanFactory)) {
+            throw new IllegalStateException("Not running in a ConfigurableBeanFactory: " + beanFactory);
+        }
+        ConfigurableBeanFactory cbf = (ConfigurableBeanFactory) beanFactory;
+
+        // 将 BeanFactory 注入目标作用域对象（这样才有能力从BeanFactory中获取目标作用域对象）
+        this.scopedTargetSource.setBeanFactory(beanFactory);
+
+        ProxyFactory pf = new ProxyFactory();
+        pf.copyFrom(this);
+        // 设置代理目标为 scopedTargetSource（默认为SimpleBeanTargetSource，其获取目标对象每次都调用BeanFactory#getBean）
+        // 且scopedTargetSource的getTargetClass()方法会解析并返回原始bean的class，用于代理增强
+        pf.setTargetSource(this.scopedTargetSource);
+
+        Assert.notNull(this.targetBeanName, "Property 'targetBeanName' is required");
+        Class&lt;?> beanType = beanFactory.getType(this.targetBeanName);
+        if (beanType == null) {
+            throw new IllegalStateException("Cannot create scoped proxy for bean '" + this.targetBeanName +
+                    "': Target type could not be determined at the time of proxy creation.");
+        }
+        // jdk代理判断
+        if (!isProxyTargetClass() || beanType.isInterface() || Modifier.isPrivate(beanType.getModifiers())) {
+            pf.setInterfaces(ClassUtils.getAllInterfacesForClass(beanType, cbf.getBeanClassLoader()));
+        }
+
+        // Add an introduction that implements only the methods on ScopedObject.
+        ScopedObject scopedObject = new DefaultScopedObject(cbf, this.scopedTargetSource.getTargetBeanName());
+        pf.addAdvice(new DelegatingIntroductionInterceptor(scopedObject));
+
+        // 设置该bean不会被其他自动代理 代理了
+        /*
+         * 为什么会这么设置？
+         * 这个bean以及是个代理增强bean了，它所需要增强的地方也是唯一的地方就是找到目标scope里真实的bean，并将方法的调用行为转移到目标作用域的真实的bean中去
+         *
+         * 例：session域的bean，该bean被自动注入的就应该是这个代理bean，这个bean存在的目的也只是找到session域
+         * 里对应的真实bean，然后调用该bean的方法全走session域的真实bean的方法，且由这个真实bean来进行其他自动代理的增强
+         */
+        pf.addInterface(AopInfrastructureBean.class);
+
+        // 创建好代理对象
+        this.proxy = pf.getProxy(cbf.getBeanClassLoader());
+    }
+
+    /**
+     * 单例
+     */
+    public boolean isSingleton() {
+        return true;
+    }
+}
+
+arthas验证测试类package site.shanzhao.config;
+
+@Component
+@SessionScope
+public class SessionScopeDemo {
     
 }
 
-分析原因​	ProductService#recommend使用了@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)注解，它构造出来的DefaultTransactionStatus中有如下两个字段需要重点关注。
-public class DefaultTransactionStatus extends AbstractTransactionStatus {
-    // 是否开启了真实的物理事物
-    private final boolean newTransaction;
-    // 是否由当前事务初始化并管理事务同步器（如注册连接绑定、hook 回调）
-    private final boolean newSynchronization;
-}
+class信息查询用sc -d site.shanzhao.config.SessionScopeDemo命令，我这里只展示了增强的class，重点观察到
 
-​	其中newTransaction&#x3D;false, newSynchronization&#x3D;true（受AbstractPlatformTransactionManager.transactionSynchronization字段控制）。
-
-表示尽管当前未开启物理事务，但事务管理器仍会初始化事务同步器（TransactionSynchronizationManager.initSynchronization()），并允许资源绑定（如 ConnectionHolder）与注册事务hook（TransactionSynchronization）。
-换句话说，“没有物理事务，但仍可进行事务性资源管理和 hook 回调”
-
-​	所以当触发pgsqlMapper.queryById(i)方法时，会绑定如下资源。（这一切必须要newSynchronization&#x3D;true）
+父类为site.shanzhao.config.SessionScopeDemo
+相比普通AOP，多增加的接口有：
+org.springframework.aop.scope.ScopedObject
+org.springframework.aop.framework.AopInfrastructureBean
 
 
-获取SqlSession时（SqlSessionUtils#getSqlSession）将SqlSessionFactory -&gt; SqlSessionHolder 给缓存到TransactionSynchronizationManager#resources中
-获取Connection时（DataSourceUtils#doGetConnection）将DataSource -&gt; ConnectionHolder 也缓存到TransactionSynchronizationManager#resources中
 
+ class-info        site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ code-source       /Users/reef/IdeaProjects/soil/target/classes/
+ name              site.shanzhao.config.SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ isInterface       false
+ isAnnotation      false
+ isEnum            false
+ isAnonymousClass  false
+ isArray           false
+ isLocalClass      false
+ isMemberClass     false
+ isPrimitive       false
+ isSynthetic       false
+ simple-name       SessionScopeDemo$$EnhancerBySpringCGLIB$$9851f0cb
+ modifier          public
+ annotation
+ interfaces        org.springframework.aop.scope.ScopedObject,java.io.Serializable,org.springframework.aop.framework.AopInfrastructureBean,org.springframework.aop.SpringProxy,org.springframework.aop.framework.
+                   Advised,org.springframework.cglib.proxy.Factory
+ super-class       +-site.shanzhao.config.SessionScopeDemo
+                     +-java.lang.Object
+ class-loader      +-jdk.internal.loader.ClassLoaders$AppClassLoader@311d617d
+                     +-jdk.internal.loader.ClassLoaders$PlatformClassLoader@1b4ae4e0
+ classLoaderHash   311d617d
 
-​	所以，当走到第二个方法msyqlMapper.queryById(i)时，会拿到上一步中缓存的SqlSessionHolder，内部操作的是同一个Connection（具体为DefaultSqlSession.executor.transaction.connection），即pgsql的Connection，所以报错了
-解决办法​	将这个字段AbstractPlatformTransactionManager.transactionSynchronization由默认的SYNCHRONIZATION_ALWAYS改为SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。直接获取这个AbstractPlatformTransactionManager bean再进行改动有些不优雅，我翻了一遍发现有这个PlatformTransactionManagerCustomizer接口，可以对PlatformTransactionManager的子类进行定制化修改。所以可以添加如下的bean到容器中即可
-@Component
-public class TransactionSynchronizationCustomizer implements PlatformTransactionManagerCustomizer&lt;AbstractPlatformTransactionManager>{
+ognl查询beanName# 使用ApplicationContext.getBeanNamesForType()方法，可知有两个SessionScopeDemo class的BeanDefinition
+[arthas@35578]$ ognl "@site.shanzhao.util.ApplicationContextUtils@applicationContext.getBeanNamesForType(@site.shanzhao.config.SessionScopeDemo@class)"
+@String[][
+    @String[scopedTarget.sessionScopeDemo],
+    @String[sessionScopeDemo],
+]
 
-    @Override
-    public void customize(AbstractPlatformTransactionManager transactionManager) {
-        // 解决Propagation.NOT_SUPPORTED下多数据源不能切换动态切换的问题
-        transactionManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
-    }
-}
-
-思考（重点）​		在 Spring 的事务模型中，Propagation.NOT_SUPPORTED 虽然会挂起当前事务，但默认配置下（SYNCHRONIZATION_ALWAYS）仍会注册事务同步器。 这导致即使没有物理事务，依然会出现线程绑定连接的行为（如通过 DataSourceUtils.getConnection() 获得的 Connection 会复用）。
-​	所以如果希望这个方法在语义上和“非事务环境”（即不使用@Transactional等情况）一致，避免隐式连接绑定，应将 transactionSynchronization 设置为 SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。
-​	看样子应该是Spring 为了支持某些非事务性方法（Propagation.NOT_SUPPORTED）也能参与事务资源控制才这样设计的
 ]]></content>
       <categories>
         <category>Spring</category>
@@ -5629,6 +5566,69 @@ full configration class的增强​	和lite configration class唯一的区别，
         <tag>BeanDefinitionRegistryPostProcessor</tag>
         <tag>Configuration注解</tag>
       </tags>
+  </entry>
+  <entry>
+    <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
+    <url>/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</url>
+    <content><![CDATA[​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考
+
+
+Spring-事物NOT_SUPPORTED策略下多数据源切换的问题起因今天写代码时遇到一个多数据源的切换问题，框架为Spring和Mybatus-Plus。在完全没事物的情况下pgsql和mysql切换没问题，但在@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)下却切换不了。翻了以前的Spring-Transactional文章和代码，遂记录一下原因和解决思路，以及整体的思考
+​	在有事物的情况下多数据源切换不了这是很正常的，毕竟Connection绑定到ThreadLocal了。但我开始简单的认为只要使用Propagation.NOT_SUPPORTED传播策略，毕竟这都不支持事物了，应该就能进行数据源切换。实际就是代码报错了，还是切换不了
+伪代码ProductService#recommend被调用在一个事物里
+public class ProductService {
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void recommend(int i){
+
+        // pgsqlMapper这个mapper有注解 @DS("postgresql")，走pqsql库
+        pgsqlMapper.queryById(i);
+        
+        // 走mysql库
+        msyqlMapper.queryById(i);
+    }
+    
+}
+
+分析原因​	ProductService#recommend使用了@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)注解，它构造出来的DefaultTransactionStatus中有如下两个字段需要重点关注。
+public class DefaultTransactionStatus extends AbstractTransactionStatus {
+    // 是否开启了真实的物理事物
+    private final boolean newTransaction;
+    // 是否由当前事务初始化并管理事务同步器（如注册连接绑定、hook 回调）
+    private final boolean newSynchronization;
+}
+
+​	其中newTransaction&#x3D;false, newSynchronization&#x3D;true（受AbstractPlatformTransactionManager.transactionSynchronization字段控制）。
+
+表示尽管当前未开启物理事务，但事务管理器仍会初始化事务同步器（TransactionSynchronizationManager.initSynchronization()），并允许资源绑定（如 ConnectionHolder）与注册事务hook（TransactionSynchronization）。
+换句话说，“没有物理事务，但仍可进行事务性资源管理和 hook 回调”
+
+​	所以当触发pgsqlMapper.queryById(i)方法时，会绑定如下资源。（这一切必须要newSynchronization&#x3D;true）
+
+
+获取SqlSession时（SqlSessionUtils#getSqlSession）将SqlSessionFactory -&gt; SqlSessionHolder 给缓存到TransactionSynchronizationManager#resources中
+获取Connection时（DataSourceUtils#doGetConnection）将DataSource -&gt; ConnectionHolder 也缓存到TransactionSynchronizationManager#resources中
+
+
+​	所以，当走到第二个方法msyqlMapper.queryById(i)时，会拿到上一步中缓存的SqlSessionHolder，内部操作的是同一个Connection（具体为DefaultSqlSession.executor.transaction.connection），即pgsql的Connection，所以报错了
+解决办法​	将这个字段AbstractPlatformTransactionManager.transactionSynchronization由默认的SYNCHRONIZATION_ALWAYS改为SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。直接获取这个AbstractPlatformTransactionManager bean再进行改动有些不优雅，我翻了一遍发现有这个PlatformTransactionManagerCustomizer接口，可以对PlatformTransactionManager的子类进行定制化修改。所以可以添加如下的bean到容器中即可
+@Component
+public class TransactionSynchronizationCustomizer implements PlatformTransactionManagerCustomizer&lt;AbstractPlatformTransactionManager>{
+
+    @Override
+    public void customize(AbstractPlatformTransactionManager transactionManager) {
+        // 解决Propagation.NOT_SUPPORTED下多数据源不能切换动态切换的问题
+        transactionManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
+    }
+}
+
+思考（重点）​		在 Spring 的事务模型中，Propagation.NOT_SUPPORTED 虽然会挂起当前事务，但默认配置下（SYNCHRONIZATION_ALWAYS）仍会注册事务同步器。 这导致即使没有物理事务，依然会出现线程绑定连接的行为（如通过 DataSourceUtils.getConnection() 获得的 Connection 会复用）。
+​	所以如果希望这个方法在语义上和“非事务环境”（即不使用@Transactional等情况）一致，避免隐式连接绑定，应将 transactionSynchronization 设置为 SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。
+​	看样子应该是Spring 为了支持某些非事务性方法（Propagation.NOT_SUPPORTED）也能参与事务资源控制才这样设计的
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
   </entry>
   <entry>
     <title>Spring-Transactional</title>
@@ -8010,430 +8010,6 @@ loadOnStartup &lt; 0（默认）：延迟到首次请求时才实例化
       </tags>
   </entry>
   <entry>
-    <title>Tomcat-Engine,Host和HostConfig</title>
-    <url>/2021-09-23/tomcat-engine-host-he-hostconfig/</url>
-    <content><![CDATA[
-​	从源码分析了ContainerBase，StandardEngine，StandardHost和HostConfig的实现逻辑。需要重点注意HostConfig的作用和部署流程
-
-
-Tomcat-Engine,Host和HostConfigContainerBase​	是所有容器（Engine、Host、Context、Wrapper）的核心抽象基类，定义并维护了容器通用的结构、生命周期管理机制和后台任务调度能力。核心职责如下：
-
-init
-构建一个可过期的核心线程数为1的线程池（生命周期短，仅用来启动子容器），准备用于并发start子容器
-
-
-start
-并发启动所有子容器，阻塞等待其完成
-启动自身的 Pipeline（包含所有 Valve）
-根据 backgroundProcessorDelay 的配置，决定是否启动后台线程 ContainerBackgroundProcessor（默认仅 Engine 容器会设置该值（为 10 秒），其它容器默认不启动），用于周期性执行后台任务（如 session 过期清理）
-
-
-
-核心源码public abstract class ContainerBase extends LifecycleMBeanBase implements Container {
-    // 子容器集合，key 为容器名，每个Container都有唯一name
-    protected final HashMap&lt;String, Container> children = new HashMap&lt;>();
-    /**
-     * 后台处理线程执行间隔（秒），用于处理如 session 过期等后台任务。
-     * - 默认值为 -1，表示不启动后台线程。
-     * - 仅 Engine 容器会设置为 10，其它容器（Host、Context、Wrapper）默认不设置。
-     * - ContainerBackgroundProcessor 线程由 Engine 启动，并递归处理其所有子容器的后台任务。
-     */
-    protected int backgroundProcessorDelay = -1;
-    // 容器监听器（用于监听子容器结构或状态变更）
-    protected final List&lt;ContainerListener> listeners = new CopyOnWriteArrayList&lt;>();
-    // 当前容器名
-    protected String name = null;
-    // 当前容器的父容器（Engine为最顶层的容器，所以为null）
-    protected Container parent = null;
-    // 当前容器的 Pipeline，用于处理请求链路（Valve）
-    protected final Pipeline pipeline = new StandardPipeline(this);
-
-    // 后台线程引用（用于执行 backgroundProcessor）
-    private Thread thread = null;
-    // 启动/停止子容器的线程数（默认 1）
-    private int startStopThreads = 1;
-    // 启动或暂停当前容器的子容器线程池（默认线程数就为上面的1，且允许核心线程过期。一般只有在启动才需要用到，所以启动完毕后这个线程池就没啥用了，让里面的线程过期）
-    protected ThreadPoolExecutor startStopExecutor;
-
-    @Override
-    protected void initInternal() throws LifecycleException {
-        BlockingQueue&lt;Runnable> startStopQueue = new LinkedBlockingQueue&lt;>();
-        // 默认一个线程
-        startStopExecutor = new ThreadPoolExecutor(
-                getStartStopThreadsInternal(),
-                getStartStopThreadsInternal(), 10, TimeUnit.SECONDS,
-                startStopQueue,
-                new StartStopThreadFactory(getName() + "-startStop-"));
-        // 允许核心线程过期
-        startStopExecutor.allowCoreThreadTimeOut(true);
-        super.initInternal();
-    }
-
-    @Override
-    protected synchronized void startInternal() throws LifecycleException {
-
-        // 先启动Cluster和Realm
-        logger = null;
-        getLogger();
-        Cluster cluster = getClusterInternal();
-        if (cluster instanceof Lifecycle) {
-            ((Lifecycle) cluster).start();
-        }
-        Realm realm = getRealmInternal();
-        if (realm instanceof Lifecycle) {
-            ((Lifecycle) realm).start();
-        }
-
-        // 并发启动所有子容器
-        Container children[] = findChildren();
-        List&lt;Future&lt;Void>> results = new ArrayList&lt;>();
-        for (Container child : children) {
-            results.add(startStopExecutor.submit(new StartChild(child)));
-        }
-
-        MultiThrowable multiThrowable = null;
-
-        // 阻塞等待所有子容器启动完成
-        for (Future&lt;Void> result : results) {
-            try {
-                result.get();
-            } catch (Throwable e) {
-                log.error(sm.getString("containerBase.threadedStartFailed"), e);
-                if (multiThrowable == null) {
-                    multiThrowable = new MultiThrowable();
-                }
-                multiThrowable.add(e);
-            }
-
-        }
-        if (multiThrowable != null) {
-            throw new LifecycleException(sm.getString("containerBase.threadedStartFailed"),
-                    multiThrowable.getThrowable());
-        }
-
-        // 等所有子容器启动完毕，再启动当前容器的Pipeline（包括 Basic Valve）
-        if (pipeline instanceof Lifecycle) {
-            ((Lifecycle) pipeline).start();
-        }
-
-        // 触发当前组件里监听器lifecycleListeners的start事件
-        setState(LifecycleState.STARTING);
-
-        // 启动后台线程（如配置，线程也是daemon）
-        threadStart();
-    }
-}
-
-Engine​	Engine是Tomcat最顶层的容器（没有父容器），和Service是一对一的关系，在他们内部互相保存了对方的引用，默认实现类时StandardEngine。
-​	该容器本身不负责具体请求处理，核心职责是承载多个 Host 子容器，因此其初始化和启动过程直接复用了父类 ContainerBase 的逻辑。
-​	需要注意的是，构造方法中设置了 backgroundProcessorDelay = 10，这会启动一个后台线程，周期性执行所有子容器的后台任务（如 session 过期清理等）。Tomcat 默认仅在 Engine 层启用此功能，从而递归驱动整个容器树的后台处理流程。
-核心源码public class StandardEngine extends ContainerBase implements Engine {
-
-    public StandardEngine() {
-        super();
-        // 设置当前容器的basic value, 此 Valve 会作为 Pipeline 中的最后一个节点。
-        pipeline.setBasic(new StandardEngineValve());
-
-        // 设置后台处理线程的执行间隔（单位：秒）
-        // 用于周期性执行容器级的后台任务，如 session 清理等，仅 Engine 层默认启用
-        backgroundProcessorDelay = 10;
-    }
-
-    /**
-     * 默认主机名。
-     * 当请求url的host未匹配到任何具体的 Host 容器时，将路由到该默认 Host
-     * 对应 server.xml 中 &lt;Engine> 的 defaultHost 属性，默认值通常为 localhost
-     */
-    private String defaultHost = null;
-
-    /**
-     * 当前 Engine 所绑定的 Service（Engine 和 Service 是一对一关系）。
-     */
-    private Service service = null;
-}
-
-Host​	Host 是 Engine 的子容器，默认实现为 StandardHost，表示对 HTTP 请求中 host 的抽象。请求到达时，Tomcat 会根据请求的 host 名（域名）查找匹配的 Host 实例；若无匹配项，则使用默认 Host（即 defaultHost，通常为 localhost）
-​	StandardHost 的初始化和启动逻辑沿用 ContainerBase 的通用流程，本身没有特殊处理。 真正负责扫描部署目录、创建并启动子容器 Context 的工作，实际上由其监听器 HostConfig 完成。
-核心源码public class StandardHost extends ContainerBase implements Host {
-    public StandardHost() {
-        // StandardHostValve也会作为当前容器的pipeline的last value
-        pipeline.setBasic(new StandardHostValve());
-
-    }
-
-    // 当前Host的别名，匹配别名也能匹配到当前Host
-    private String[] aliases = new String[0];
-
-    // 当前Host下的Web应用部署根目录，相对路径默认值为webapps
-    private String appBase = "webapps";
-
-    // 默认：${catalina.base}/webapps
-    private volatile File appBaseFile = null;
-
-    // 默认为：conf/Catalina/localhost目录
-    private volatile File hostConfigBase = null;
-
-    // 是否自动部署
-    private boolean autoDeploy = true;
-
-    // 添加到当前Host的子容器Context里的监听器（ContextConfig）
-    private String configClass = "org.apache.catalina.startup.ContextConfig";
-
-    // 当前Host的子容器Context的实现类
-    private String contextClass = "org.apache.catalina.core.StandardContext";
-
-    // 启动时部署Context
-    private boolean deployOnStartup = true;
-
-    // （应该被忽略的Context）默认为null
-    private Pattern deployIgnore = null;
-
-}
-
-HostConfig​	在默认的 server.xml 配置中，&lt;Host&gt; 元素下并没有显式配置 &lt;Context&gt; 子元素，因此在解析 server.xml 时并不会为 Host 创建任何 Context 子容器。尽管如此，Tomcat 仍能在启动时自动部署 $&#123;catalina.base&#125;/webapps/ 目录下的应用，这正是由 HostConfig 这个 LifecycleListener 完成的。
-
-注册方式
-
-​	在 Tomcat 启动期间，通过 Digester 解析 server.xml 时，会由 HostRuleSet#addRuleInstances() 方法为每个 Host 元素注册默认的生命周期监听器org.apache.catalina.startup.HostConfig，其会被实例化添加为Host的LifecycleListener
-
-
-启动时机
-
-​         StandardHost在startInternal()期间中的子容器启动完成后（默认没有子容器），但后台线程还未启动时，会触发lifecycle的START_EVENT事件，从而触发HostConfig的start，来解析目标文件夹下webapps的项目，自动部署所有符合规则的 Web 应用。
-
-
-三种部署方式
-
-XML 配置部署（conf&#x2F;Catalina&#x2F;{hostname}&#x2F;*.xml）
-每个xml文件即为一个Context（IDEA的war exploded就是这种方式）
-
-
-WAR 包部署（webapps&#x2F;*.war）
-每个war包即为一个Context
-
-
-directory部署（webapps&#x2F;{dir}）
-每个目录被当作一个Context，是项目中最常用的一种
-
-
-
-
-路径问题
-
-​	上诉三种部署方式都遵循相同的路径规则。即Context的name和path为去除拓展名后的部分。对于特殊的ROOT，则表示为根路径/ 。
-
-
-
-核心源码
-public class HostConfig implements LifecycleListener {
-
-    // context默认实现类
-    protected String contextClass = "org.apache.catalina.core.StandardContext";
-
-    // 当前绑定的 Host 容器
-    protected Host host = null;
-
-    // 已部署的应用（用于记录当前 host 下部署的 context 状态）
-    protected final Map&lt;String, DeployedApplication> deployed = new ConcurrentHashMap&lt;>();
-
-    // 正在处理部署/卸载操作的 Context 名集合（用于防止重复并发部署）
-    private Set&lt;String> servicedSet = Collections.newSetFromMap(new ConcurrentHashMap&lt;String, Boolean>());
-
-    /**
-     * Host 生命周期监听方法，根据不同生命周期阶段执行对应操作：
-     * - BEFORE_START：确认所需目录存在
-     * - START：执行部署流程
-     * - PERIODIC：周期性检查（autoDeploy 场景下可能重新部署）
-     * - STOP：停止并清理部署
-     */
-    @Override
-    public void lifecycleEvent(LifecycleEvent event) {
-
-        if (event.getType().equals(Lifecycle.PERIODIC_EVENT)) {
-            // 周期任务（例如监测部署目录变更）
-            check();
-        } else if (event.getType().equals(Lifecycle.BEFORE_START_EVENT)) {
-            // StandardHost启动前触发
-            // 确保 ${catalina.base}/webapps和conf/Catalina/localhost目录存在（不存在也只会打日志）
-            beforeStart();
-        } else if (event.getType().equals(Lifecycle.START_EVENT)) {
-            // StanardHost正在启动
-            start();
-        } else if (event.getType().equals(Lifecycle.STOP_EVENT)) {
-            stop();
-        }
-    }
-
-    public void start() {
-        // 默认：${catalina.base}/webapps
-        if (!host.getAppBaseFile().isDirectory()) { // app文件目录不是文件夹，代表不需要部署
-            log.error(sm.getString("hostConfig.appBase", host.getName(),
-                    host.getAppBaseFile().getPath()));
-            host.setDeployOnStartup(false);
-            host.setAutoDeploy(false);
-        }
-        if (host.getDeployOnStartup()) {
-            // 默认为true，开始部署
-            deployApps();
-        }
-    }
-
-    protected void deployApps() {
-        File appBase = host.getAppBaseFile();
-        File configBase = host.getConfigBaseFile();
-        // 过滤器默认为null，所以还是返回全部
-        String[] filteredAppPaths = filterAppPaths(appBase.list()); // 过滤webapps文件夹下的所有文件
-        // conf/Catalina/localhost目录下所有的xml方式部署（IDEA的war exploded就是这种方式）
-        // 每一个xml其实就是一个context，文件名就是context的ptah。ROOT.xml就是默认的context，即path为空字符串
-        deployDescriptors(configBase, configBase.list());
-        // war包的形式部署
-        // 部署${catalina.base}/webapps目录下的所有war包
-        deployWARs(appBase, filteredAppPaths);
-        // 直接以文件夹的形式部署
-        // 部署${catalina.base}/webapps目录下的所有文件夹形式的context
-        deployDirectories(appBase, filteredAppPaths);
-    }
-
-}
-
-directory部署​	重点解析下directory部署方式，毕竟这是最常用的。其会在当前host的startStop线程池中异步部署，根据如下源码总结出核心流程
-
-优先使用 META-INF&#x2F;context.xml 配置（如果存在）
-解析并构造出Context实例
-设置Context的一些基础属性（name和path等，以项目目录名为准）
-将Context添加为对应Host的子容器（此时会触发Context的start）
-
-
-/**
- * 以文件夹方式部署应用（appBase 下的目录结构）
- * - 忽略 META-INF、WEB-INF
- * - 忽略已存在的部署
- * - 支持异步并发部署（通过 Host 提供的线程池）
- */
-protected void deployDirectories(File appBase, String[] files) {
-
-    if (files == null) {
-        return;
-    }
-
-    ExecutorService es = host.getStartStopExecutor();
-    List&lt;Future&lt;?>> results = new ArrayList&lt;>();
-
-    for (String file : files) {
-        // META-INF和WEB-INF文件加不部署
-        if (file.equalsIgnoreCase("META-INF")) {
-            continue;
-        }
-        if (file.equalsIgnoreCase("WEB-INF")) {
-            continue;
-        }
-
-        File dir = new File(appBase, file);
-        if (dir.isDirectory()) {
-            // ROOT文件夹会被解析为 根context，也就是path为空字符串
-            ContextName cn = new ContextName(file, false);
-
-            if (tryAddServiced(cn.getName())) {
-                try {
-                    if (deploymentExists(cn.getName())) {
-                        removeServiced(cn.getName());
-                        continue;
-                    }
-
-                    // 异步部署
-                    results.add(es.submit(new DeployDirectory(this, cn, dir)));
-                } catch (Throwable t) {
-                    ExceptionUtils.handleThrowable(t);
-                    removeServiced(cn.getName());
-                    throw t;
-                }
-            }
-        }
-    }
-
-    // 同步等待
-    for (Future&lt;?> result : results) {
-        try {
-            result.get();
-        } catch (Exception e) {
-            log.error(sm.getString("hostConfig.deployDir.threaded.error"), e);
-        }
-    }
-}
-
-// ================ 开始部署 ==================
-protected void deployDirectory(ContextName cn, File dir) {
-
-    Context context = null;
-    // Web 应用目录下的META-INF/context.xml 文件
-    File xml = new File(dir, Constants.ApplicationContextXml);
-    // 将META-INF/context.xml拷贝到的目标位置：conf/Catalina/localhost/${contextName}.xml
-    File xmlCopy = new File(host.getConfigBaseFile(), cn.getBaseName() + ".xml");
-
-    DeployedApplication deployedApp;
-    // 是否拷贝 META-INF/context.xml 到 conf 目录（Host 默认 false，可被 Context 覆盖）
-    boolean copyThisXml = isCopyXML();
-    // 是否允许部署该 META-INF/context.xml（默认true）
-    boolean deployThisXML = isDeployThisXML(dir, cn);
-
-    try {
-        if (deployThisXML &amp;&amp; xml.exists()) {
-            // 存在有效 META-INF/context.xml 且支持部署这个xml，则通过 digester 解析生成 Context
-            synchronized (digesterLock) {
-                context = (Context) digester.parse(xml);
-            }
-
-            // 如果 host 设置不允许拷贝xml，则再次通过 context的copyXML 判断一次
-            if (copyThisXml == false &amp;&amp; context instanceof StandardContext) {
-                copyThisXml = ((StandardContext) context).getCopyXML();
-            }
-
-            // 根据是否拷贝，设置 context 的配置文件位置（conf 目录 or 原始目录）
-            if (copyThisXml) {
-                Files.copy(xml.toPath(), xmlCopy.toPath());
-                context.setConfigFile(xmlCopy.toURI().toURL());
-            } else {
-                context.setConfigFile(xml.toURI().toURL());
-            }
-        } else if (!deployThisXML &amp;&amp; xml.exists()) {
-            // 禁止部署，但 META-INF/context.xml 存在 —— 为安全考虑，阻止启动（避免绕过配置）
-            context = new FailedContext();
-        } else {
-            // 没有 META-INF/context.xml文件，则手动 new 一个 context 实例
-            context = (Context) Class.forName(contextClass).getConstructor().newInstance();
-        }
-        // 为 Context 添加生命周期监听器（默认是 ContextConfig，用于触发解析 web.xml等）
-        Class&lt;?> clazz = Class.forName(host.getConfigClass());
-        LifecycleListener listener = (LifecycleListener) clazz.getConstructor().newInstance();
-        context.addLifecycleListener(listener);
-
-        // 设置 Context 的一些基础信息
-        context.setName(cn.getName());
-        context.setPath(cn.getPath());
-        context.setWebappVersion(cn.getVersion());
-        context.setDocBase(cn.getBaseName());
-        // 将 Context 添加到当前 Host，并自动触发生命周期（start/init）
-        host.addChild(context);
-    } catch (Throwable t) {
-        ExceptionUtils.handleThrowable(t);
-        log.error(sm.getString("hostConfig.deployDir.error", dir.getAbsolutePath()), t);
-    } finally {
-        // 部署完成后记录已部署信息，构建 DeployedApplication（省略细节）
-        // ...
-
-    }
-    deployed.put(cn.getName(), deployedApp);
-}
-
-]]></content>
-      <categories>
-        <category>Tomcat</category>
-      </categories>
-      <tags>
-        <tag>Container</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Tomcat-Server和Service</title>
     <url>/2021-09-04/tomcat-server-he-service/</url>
     <content><![CDATA[
@@ -8991,6 +8567,430 @@ Mapper​	同上面的MapperListener，理解作用即可，源码深入分析�
       </tags>
   </entry>
   <entry>
+    <title>Tomcat-Engine,Host和HostConfig</title>
+    <url>/2021-09-23/tomcat-engine-host-he-hostconfig/</url>
+    <content><![CDATA[
+​	从源码分析了ContainerBase，StandardEngine，StandardHost和HostConfig的实现逻辑。需要重点注意HostConfig的作用和部署流程
+
+
+Tomcat-Engine,Host和HostConfigContainerBase​	是所有容器（Engine、Host、Context、Wrapper）的核心抽象基类，定义并维护了容器通用的结构、生命周期管理机制和后台任务调度能力。核心职责如下：
+
+init
+构建一个可过期的核心线程数为1的线程池（生命周期短，仅用来启动子容器），准备用于并发start子容器
+
+
+start
+并发启动所有子容器，阻塞等待其完成
+启动自身的 Pipeline（包含所有 Valve）
+根据 backgroundProcessorDelay 的配置，决定是否启动后台线程 ContainerBackgroundProcessor（默认仅 Engine 容器会设置该值（为 10 秒），其它容器默认不启动），用于周期性执行后台任务（如 session 过期清理）
+
+
+
+核心源码public abstract class ContainerBase extends LifecycleMBeanBase implements Container {
+    // 子容器集合，key 为容器名，每个Container都有唯一name
+    protected final HashMap&lt;String, Container> children = new HashMap&lt;>();
+    /**
+     * 后台处理线程执行间隔（秒），用于处理如 session 过期等后台任务。
+     * - 默认值为 -1，表示不启动后台线程。
+     * - 仅 Engine 容器会设置为 10，其它容器（Host、Context、Wrapper）默认不设置。
+     * - ContainerBackgroundProcessor 线程由 Engine 启动，并递归处理其所有子容器的后台任务。
+     */
+    protected int backgroundProcessorDelay = -1;
+    // 容器监听器（用于监听子容器结构或状态变更）
+    protected final List&lt;ContainerListener> listeners = new CopyOnWriteArrayList&lt;>();
+    // 当前容器名
+    protected String name = null;
+    // 当前容器的父容器（Engine为最顶层的容器，所以为null）
+    protected Container parent = null;
+    // 当前容器的 Pipeline，用于处理请求链路（Valve）
+    protected final Pipeline pipeline = new StandardPipeline(this);
+
+    // 后台线程引用（用于执行 backgroundProcessor）
+    private Thread thread = null;
+    // 启动/停止子容器的线程数（默认 1）
+    private int startStopThreads = 1;
+    // 启动或暂停当前容器的子容器线程池（默认线程数就为上面的1，且允许核心线程过期。一般只有在启动才需要用到，所以启动完毕后这个线程池就没啥用了，让里面的线程过期）
+    protected ThreadPoolExecutor startStopExecutor;
+
+    @Override
+    protected void initInternal() throws LifecycleException {
+        BlockingQueue&lt;Runnable> startStopQueue = new LinkedBlockingQueue&lt;>();
+        // 默认一个线程
+        startStopExecutor = new ThreadPoolExecutor(
+                getStartStopThreadsInternal(),
+                getStartStopThreadsInternal(), 10, TimeUnit.SECONDS,
+                startStopQueue,
+                new StartStopThreadFactory(getName() + "-startStop-"));
+        // 允许核心线程过期
+        startStopExecutor.allowCoreThreadTimeOut(true);
+        super.initInternal();
+    }
+
+    @Override
+    protected synchronized void startInternal() throws LifecycleException {
+
+        // 先启动Cluster和Realm
+        logger = null;
+        getLogger();
+        Cluster cluster = getClusterInternal();
+        if (cluster instanceof Lifecycle) {
+            ((Lifecycle) cluster).start();
+        }
+        Realm realm = getRealmInternal();
+        if (realm instanceof Lifecycle) {
+            ((Lifecycle) realm).start();
+        }
+
+        // 并发启动所有子容器
+        Container children[] = findChildren();
+        List&lt;Future&lt;Void>> results = new ArrayList&lt;>();
+        for (Container child : children) {
+            results.add(startStopExecutor.submit(new StartChild(child)));
+        }
+
+        MultiThrowable multiThrowable = null;
+
+        // 阻塞等待所有子容器启动完成
+        for (Future&lt;Void> result : results) {
+            try {
+                result.get();
+            } catch (Throwable e) {
+                log.error(sm.getString("containerBase.threadedStartFailed"), e);
+                if (multiThrowable == null) {
+                    multiThrowable = new MultiThrowable();
+                }
+                multiThrowable.add(e);
+            }
+
+        }
+        if (multiThrowable != null) {
+            throw new LifecycleException(sm.getString("containerBase.threadedStartFailed"),
+                    multiThrowable.getThrowable());
+        }
+
+        // 等所有子容器启动完毕，再启动当前容器的Pipeline（包括 Basic Valve）
+        if (pipeline instanceof Lifecycle) {
+            ((Lifecycle) pipeline).start();
+        }
+
+        // 触发当前组件里监听器lifecycleListeners的start事件
+        setState(LifecycleState.STARTING);
+
+        // 启动后台线程（如配置，线程也是daemon）
+        threadStart();
+    }
+}
+
+Engine​	Engine是Tomcat最顶层的容器（没有父容器），和Service是一对一的关系，在他们内部互相保存了对方的引用，默认实现类时StandardEngine。
+​	该容器本身不负责具体请求处理，核心职责是承载多个 Host 子容器，因此其初始化和启动过程直接复用了父类 ContainerBase 的逻辑。
+​	需要注意的是，构造方法中设置了 backgroundProcessorDelay = 10，这会启动一个后台线程，周期性执行所有子容器的后台任务（如 session 过期清理等）。Tomcat 默认仅在 Engine 层启用此功能，从而递归驱动整个容器树的后台处理流程。
+核心源码public class StandardEngine extends ContainerBase implements Engine {
+
+    public StandardEngine() {
+        super();
+        // 设置当前容器的basic value, 此 Valve 会作为 Pipeline 中的最后一个节点。
+        pipeline.setBasic(new StandardEngineValve());
+
+        // 设置后台处理线程的执行间隔（单位：秒）
+        // 用于周期性执行容器级的后台任务，如 session 清理等，仅 Engine 层默认启用
+        backgroundProcessorDelay = 10;
+    }
+
+    /**
+     * 默认主机名。
+     * 当请求url的host未匹配到任何具体的 Host 容器时，将路由到该默认 Host
+     * 对应 server.xml 中 &lt;Engine> 的 defaultHost 属性，默认值通常为 localhost
+     */
+    private String defaultHost = null;
+
+    /**
+     * 当前 Engine 所绑定的 Service（Engine 和 Service 是一对一关系）。
+     */
+    private Service service = null;
+}
+
+Host​	Host 是 Engine 的子容器，默认实现为 StandardHost，表示对 HTTP 请求中 host 的抽象。请求到达时，Tomcat 会根据请求的 host 名（域名）查找匹配的 Host 实例；若无匹配项，则使用默认 Host（即 defaultHost，通常为 localhost）
+​	StandardHost 的初始化和启动逻辑沿用 ContainerBase 的通用流程，本身没有特殊处理。 真正负责扫描部署目录、创建并启动子容器 Context 的工作，实际上由其监听器 HostConfig 完成。
+核心源码public class StandardHost extends ContainerBase implements Host {
+    public StandardHost() {
+        // StandardHostValve也会作为当前容器的pipeline的last value
+        pipeline.setBasic(new StandardHostValve());
+
+    }
+
+    // 当前Host的别名，匹配别名也能匹配到当前Host
+    private String[] aliases = new String[0];
+
+    // 当前Host下的Web应用部署根目录，相对路径默认值为webapps
+    private String appBase = "webapps";
+
+    // 默认：${catalina.base}/webapps
+    private volatile File appBaseFile = null;
+
+    // 默认为：conf/Catalina/localhost目录
+    private volatile File hostConfigBase = null;
+
+    // 是否自动部署
+    private boolean autoDeploy = true;
+
+    // 添加到当前Host的子容器Context里的监听器（ContextConfig）
+    private String configClass = "org.apache.catalina.startup.ContextConfig";
+
+    // 当前Host的子容器Context的实现类
+    private String contextClass = "org.apache.catalina.core.StandardContext";
+
+    // 启动时部署Context
+    private boolean deployOnStartup = true;
+
+    // （应该被忽略的Context）默认为null
+    private Pattern deployIgnore = null;
+
+}
+
+HostConfig​	在默认的 server.xml 配置中，&lt;Host&gt; 元素下并没有显式配置 &lt;Context&gt; 子元素，因此在解析 server.xml 时并不会为 Host 创建任何 Context 子容器。尽管如此，Tomcat 仍能在启动时自动部署 $&#123;catalina.base&#125;/webapps/ 目录下的应用，这正是由 HostConfig 这个 LifecycleListener 完成的。
+
+注册方式
+
+​	在 Tomcat 启动期间，通过 Digester 解析 server.xml 时，会由 HostRuleSet#addRuleInstances() 方法为每个 Host 元素注册默认的生命周期监听器org.apache.catalina.startup.HostConfig，其会被实例化添加为Host的LifecycleListener
+
+
+启动时机
+
+​         StandardHost在startInternal()期间中的子容器启动完成后（默认没有子容器），但后台线程还未启动时，会触发lifecycle的START_EVENT事件，从而触发HostConfig的start，来解析目标文件夹下webapps的项目，自动部署所有符合规则的 Web 应用。
+
+
+三种部署方式
+
+XML 配置部署（conf&#x2F;Catalina&#x2F;{hostname}&#x2F;*.xml）
+每个xml文件即为一个Context（IDEA的war exploded就是这种方式）
+
+
+WAR 包部署（webapps&#x2F;*.war）
+每个war包即为一个Context
+
+
+directory部署（webapps&#x2F;{dir}）
+每个目录被当作一个Context，是项目中最常用的一种
+
+
+
+
+路径问题
+
+​	上诉三种部署方式都遵循相同的路径规则。即Context的name和path为去除拓展名后的部分。对于特殊的ROOT，则表示为根路径/ 。
+
+
+
+核心源码
+public class HostConfig implements LifecycleListener {
+
+    // context默认实现类
+    protected String contextClass = "org.apache.catalina.core.StandardContext";
+
+    // 当前绑定的 Host 容器
+    protected Host host = null;
+
+    // 已部署的应用（用于记录当前 host 下部署的 context 状态）
+    protected final Map&lt;String, DeployedApplication> deployed = new ConcurrentHashMap&lt;>();
+
+    // 正在处理部署/卸载操作的 Context 名集合（用于防止重复并发部署）
+    private Set&lt;String> servicedSet = Collections.newSetFromMap(new ConcurrentHashMap&lt;String, Boolean>());
+
+    /**
+     * Host 生命周期监听方法，根据不同生命周期阶段执行对应操作：
+     * - BEFORE_START：确认所需目录存在
+     * - START：执行部署流程
+     * - PERIODIC：周期性检查（autoDeploy 场景下可能重新部署）
+     * - STOP：停止并清理部署
+     */
+    @Override
+    public void lifecycleEvent(LifecycleEvent event) {
+
+        if (event.getType().equals(Lifecycle.PERIODIC_EVENT)) {
+            // 周期任务（例如监测部署目录变更）
+            check();
+        } else if (event.getType().equals(Lifecycle.BEFORE_START_EVENT)) {
+            // StandardHost启动前触发
+            // 确保 ${catalina.base}/webapps和conf/Catalina/localhost目录存在（不存在也只会打日志）
+            beforeStart();
+        } else if (event.getType().equals(Lifecycle.START_EVENT)) {
+            // StanardHost正在启动
+            start();
+        } else if (event.getType().equals(Lifecycle.STOP_EVENT)) {
+            stop();
+        }
+    }
+
+    public void start() {
+        // 默认：${catalina.base}/webapps
+        if (!host.getAppBaseFile().isDirectory()) { // app文件目录不是文件夹，代表不需要部署
+            log.error(sm.getString("hostConfig.appBase", host.getName(),
+                    host.getAppBaseFile().getPath()));
+            host.setDeployOnStartup(false);
+            host.setAutoDeploy(false);
+        }
+        if (host.getDeployOnStartup()) {
+            // 默认为true，开始部署
+            deployApps();
+        }
+    }
+
+    protected void deployApps() {
+        File appBase = host.getAppBaseFile();
+        File configBase = host.getConfigBaseFile();
+        // 过滤器默认为null，所以还是返回全部
+        String[] filteredAppPaths = filterAppPaths(appBase.list()); // 过滤webapps文件夹下的所有文件
+        // conf/Catalina/localhost目录下所有的xml方式部署（IDEA的war exploded就是这种方式）
+        // 每一个xml其实就是一个context，文件名就是context的ptah。ROOT.xml就是默认的context，即path为空字符串
+        deployDescriptors(configBase, configBase.list());
+        // war包的形式部署
+        // 部署${catalina.base}/webapps目录下的所有war包
+        deployWARs(appBase, filteredAppPaths);
+        // 直接以文件夹的形式部署
+        // 部署${catalina.base}/webapps目录下的所有文件夹形式的context
+        deployDirectories(appBase, filteredAppPaths);
+    }
+
+}
+
+directory部署​	重点解析下directory部署方式，毕竟这是最常用的。其会在当前host的startStop线程池中异步部署，根据如下源码总结出核心流程
+
+优先使用 META-INF&#x2F;context.xml 配置（如果存在）
+解析并构造出Context实例
+设置Context的一些基础属性（name和path等，以项目目录名为准）
+将Context添加为对应Host的子容器（此时会触发Context的start）
+
+
+/**
+ * 以文件夹方式部署应用（appBase 下的目录结构）
+ * - 忽略 META-INF、WEB-INF
+ * - 忽略已存在的部署
+ * - 支持异步并发部署（通过 Host 提供的线程池）
+ */
+protected void deployDirectories(File appBase, String[] files) {
+
+    if (files == null) {
+        return;
+    }
+
+    ExecutorService es = host.getStartStopExecutor();
+    List&lt;Future&lt;?>> results = new ArrayList&lt;>();
+
+    for (String file : files) {
+        // META-INF和WEB-INF文件加不部署
+        if (file.equalsIgnoreCase("META-INF")) {
+            continue;
+        }
+        if (file.equalsIgnoreCase("WEB-INF")) {
+            continue;
+        }
+
+        File dir = new File(appBase, file);
+        if (dir.isDirectory()) {
+            // ROOT文件夹会被解析为 根context，也就是path为空字符串
+            ContextName cn = new ContextName(file, false);
+
+            if (tryAddServiced(cn.getName())) {
+                try {
+                    if (deploymentExists(cn.getName())) {
+                        removeServiced(cn.getName());
+                        continue;
+                    }
+
+                    // 异步部署
+                    results.add(es.submit(new DeployDirectory(this, cn, dir)));
+                } catch (Throwable t) {
+                    ExceptionUtils.handleThrowable(t);
+                    removeServiced(cn.getName());
+                    throw t;
+                }
+            }
+        }
+    }
+
+    // 同步等待
+    for (Future&lt;?> result : results) {
+        try {
+            result.get();
+        } catch (Exception e) {
+            log.error(sm.getString("hostConfig.deployDir.threaded.error"), e);
+        }
+    }
+}
+
+// ================ 开始部署 ==================
+protected void deployDirectory(ContextName cn, File dir) {
+
+    Context context = null;
+    // Web 应用目录下的META-INF/context.xml 文件
+    File xml = new File(dir, Constants.ApplicationContextXml);
+    // 将META-INF/context.xml拷贝到的目标位置：conf/Catalina/localhost/${contextName}.xml
+    File xmlCopy = new File(host.getConfigBaseFile(), cn.getBaseName() + ".xml");
+
+    DeployedApplication deployedApp;
+    // 是否拷贝 META-INF/context.xml 到 conf 目录（Host 默认 false，可被 Context 覆盖）
+    boolean copyThisXml = isCopyXML();
+    // 是否允许部署该 META-INF/context.xml（默认true）
+    boolean deployThisXML = isDeployThisXML(dir, cn);
+
+    try {
+        if (deployThisXML &amp;&amp; xml.exists()) {
+            // 存在有效 META-INF/context.xml 且支持部署这个xml，则通过 digester 解析生成 Context
+            synchronized (digesterLock) {
+                context = (Context) digester.parse(xml);
+            }
+
+            // 如果 host 设置不允许拷贝xml，则再次通过 context的copyXML 判断一次
+            if (copyThisXml == false &amp;&amp; context instanceof StandardContext) {
+                copyThisXml = ((StandardContext) context).getCopyXML();
+            }
+
+            // 根据是否拷贝，设置 context 的配置文件位置（conf 目录 or 原始目录）
+            if (copyThisXml) {
+                Files.copy(xml.toPath(), xmlCopy.toPath());
+                context.setConfigFile(xmlCopy.toURI().toURL());
+            } else {
+                context.setConfigFile(xml.toURI().toURL());
+            }
+        } else if (!deployThisXML &amp;&amp; xml.exists()) {
+            // 禁止部署，但 META-INF/context.xml 存在 —— 为安全考虑，阻止启动（避免绕过配置）
+            context = new FailedContext();
+        } else {
+            // 没有 META-INF/context.xml文件，则手动 new 一个 context 实例
+            context = (Context) Class.forName(contextClass).getConstructor().newInstance();
+        }
+        // 为 Context 添加生命周期监听器（默认是 ContextConfig，用于触发解析 web.xml等）
+        Class&lt;?> clazz = Class.forName(host.getConfigClass());
+        LifecycleListener listener = (LifecycleListener) clazz.getConstructor().newInstance();
+        context.addLifecycleListener(listener);
+
+        // 设置 Context 的一些基础信息
+        context.setName(cn.getName());
+        context.setPath(cn.getPath());
+        context.setWebappVersion(cn.getVersion());
+        context.setDocBase(cn.getBaseName());
+        // 将 Context 添加到当前 Host，并自动触发生命周期（start/init）
+        host.addChild(context);
+    } catch (Throwable t) {
+        ExceptionUtils.handleThrowable(t);
+        log.error(sm.getString("hostConfig.deployDir.error", dir.getAbsolutePath()), t);
+    } finally {
+        // 部署完成后记录已部署信息，构建 DeployedApplication（省略细节）
+        // ...
+
+    }
+    deployed.put(cn.getName(), deployedApp);
+}
+
+]]></content>
+      <categories>
+        <category>Tomcat</category>
+      </categories>
+      <tags>
+        <tag>Container</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Tomcat-启动流程和http请求流程</title>
     <url>/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/</url>
     <content><![CDATA[
@@ -9309,299 +9309,348 @@ DESTROYED才是终态，不可逆转（FAILED都不是终态，它还可以stop(
       </categories>
   </entry>
   <entry>
-    <title>Tomcat-责任链之Pipeline+Valve和Filter</title>
-    <url>/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/</url>
+    <title>Tomcat-热加载和相关Class的垃圾回收探讨</title>
+    <url>/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/</url>
     <content><![CDATA[
-​	分析了Tomcat中Pipeline+Valve和支持Filter的ApplicationFilterChain两种基于责任链模式的实现逻辑，并在最后总结了这两者的异同点以及为什么会有这两种类似的模块。
+​	本文深入分析了 WebappClassLoader 的热加载整体流程，并对热加载过程中遗留的垃圾回收问题进行了系统性拆解。重点涵盖了：垃圾的分类、核心引用关系的梳理、各类资源的清理策略。最后详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议
 
 
-Tomcat-责任链之Pipeline+Valve和FilterPipeline​	可以理解为请求传递的管道，每个容器（Engine、Host、Context、Wrapper）都关联一个独立的 Pipeline（管道），用于处理 HTTP 请求的责任链式分发，其默认实现为 StandardPipeline
-​	每个 Pipeline 内部由一系列 Valve（阀门）组成，Pipeline为其提供了一系列接口（包括添加，删除和管理其生命周期管理等），并将它们构造成链式结构（addValve方法将新 Valve 插入到链中 倒数第二个位置，即 basic Valve 之前）
-​	请求到达某个容器时，会先被其 Pipeline 的第一个 Valve（first）处理，然后依次传递到后续的 Valve，最终到达 basic Valve。basic Valve 处理完成后，请求再被传递给下层子容器的 Pipeline，并最终传递到Filter中，从而达到请求贯穿全部容器的作用
-核心字段和方法public class StandardPipeline extends LifecycleBase implements Pipeline {
-    // basic valve（last valve），当前管道中最后处理的一个Valve
-    protected Valve basic = null;
-
-    // 关联的容器
-    protected Container container = null;
-
-    // value链首
-    protected Valve first = null;
-
-    public void addValve(Valve valve) {
-
-        // 将容器也绑定搭到valve中
-        if (valve instanceof Contained) {
-            ((Contained) valve).setContainer(this.container);
+热加载和相关Class的垃圾回收探讨热加载​	WebappLoader#backgroundProcess是负责检测和触发热加载的方法入口，其被standardEngine的backgroundThread线程周期性触发，被调用路径为：ContainerBackgroundProcessor#run -&gt; ContainerBackgroundProcessor#processChildren -&gt; StandardContext.backgroundProcess -&gt; Loader#backgroundProcess
+​	当web可触发context的资源重加载时，backgroundThread线程会销毁（stop）当前context内部的所有资源，并进行重启context（start），start过程中使用了新的WebappClassLoader加载项目相关的class资源，因此可以在不重启整个 Tomcat 进程的前提下，以实现应用级别的热部署与资源更新
+WebappLoader#backgroundProcesspublic void backgroundProcess() {
+        // reloadable由StandardContext.reloadable设置，默认为false，也就表示需要在context.xml里主动配置reloadable=true才开启热加载检测资格
+        if (reloadable &amp;&amp; modified()) { // Context里有class或jar改变了，需要进行热加载
+            try {
+                // 临时切换到Tomcat的commonLoader，避免使用即将被卸载的WebappClassLoader
+                // 确保reload过程中使用的是稳定的类加载器环境
+                Thread.currentThread().setContextClassLoader(WebappLoader.class.getClassLoader());
+                if (context != null) {
+                    context.reload();
+                }
+            } finally {
+                if (context != null &amp;&amp; context.getLoader() != null) {
+                    // 热加载完毕，将context里新的WebappClassLoader绑定到线程上下文中
+                    Thread.currentThread().setContextClassLoader(context.getLoader().getClassLoader());
+                }
+            }
         }
+    }
 
-        // 如果当前 Pipeline 已处于运行状态，则启动Valve的生命周期start方法
-        if (getState().isAvailable()) {
-            if (valve instanceof Lifecycle) {
+class资源变化监测WebappClassLoaderBase#modified() 负责监测当前 Web 应用中的 class 资源是否发生变更，用于触发 Context 重载。当以下任一变化发生时，Tomcat 会认为需要重新加载当前 Context：
+
+&#x2F;WEB-INF&#x2F;classes 目录下已加载的 class 文件被修改
+&#x2F;WEB-INF&#x2F;lib目录下的jar包有修改、新增和删除
+
+
+public boolean modified() {
+
+    // 1. 遍历所有已加载的 class 文件，判断是否有被修改
+    for (Entry&lt;String, ResourceEntry> entry : resourceEntries.entrySet()) {
+        long cachedLastModified = entry.getValue().lastModified;
+        long lastModified = resources.getClassLoaderResource(
+                entry.getKey()).getLastModified();
+        if (lastModified != cachedLastModified) {
+            // class 文件修改时间变化，说明 class 被更新，需要重载 Context
+            return true;
+        }
+    }
+
+    // 2. 遍历 /WEB-INF/lib 下的 jar 包，判断是否有变动
+    WebResource[] jars = resources.listResources("/WEB-INF/lib");
+
+    int jarCount = 0;
+    for (WebResource jar : jars) {
+        if (jar.getName().endsWith(".jar") &amp;&amp; jar.isFile() &amp;&amp; jar.canRead()) {
+            jarCount++;
+            Long recordedLastModified = jarModificationTimes.get(jar.getName());
+            if (recordedLastModified == null) {
+                // jar包没有记录上次修改时间，代表这个jar是新增的，也需要重载context
+                return true;
+            }
+            if (recordedLastModified.longValue() != jar.getLastModified()) {
+                // 时间变了，表示被修改过，也要重载context
+                return true;
+            }
+        }
+    }
+
+    // 3. 检查是否有 jar 包被删除（jar 数量变少）
+    if (jarCount &lt; jarModificationTimes.size()) {
+        return true;
+    }
+
+    // 4. 无任何资源变化，则不需要重载Context
+    return false;
+}
+
+context重加载Context 重加载的本质流程就是：先执行 stop()，再重新 start()。start流程可以看这里，stop则负责关闭和清理已有资源，避免内存泄露。我这里简要梳理 下stop() 过程中各核心组件的销毁逻辑：
+
+子容器 Servlet (StandardWrapper#stop)
+依次销毁所有已加载的 Servlet 实例，调用其 javax.servlet.Servlet#destroy() 方法，完成业务资源释放
+
+
+Filter组件销毁
+调用所有已注册的 javax.servlet.Filter#destroy() 方法，清理过滤器资源。
+
+
+Session 管理器 (StandardManager#stop)
+触发 Session 持久化（等待context重启后再加载进来），同时清理过期的 Session 实例
+
+
+Listener组件销毁
+执行所有注册的 javax.servlet.ServletContextListener#contextDestroyed() 方法，通知应用关闭，释放监听资源。
+
+
+类加载器资源清理 (WebappLoader#stop)
+销毁 WebappClassLoader，清理已加载的 class 缓存、jar 缓存、资源引用
+停止并回收与类加载器相关的线程，断开对外部资源的强引用，避免内存泄漏
+
+
+
+垃圾回收​	前面的都是铺垫，现在来探讨一个最重要的问题（当最终理解了这个问题后，任何java热加载工具如何垃圾回收探讨都不是难题）：
+
+​	Tomcat 触发 Context 热加载后，系统中会产生哪些需要回收的垃圾？这些垃圾又该如何被回收？（如果回收不彻底，多次热加载最终可能引发 OOM 问题）
+
+资源分类首先我们可以将需要回收的资源粗分为如下两大类
+堆区堆区由GC自动回收，记住一点，这个区内的对象能被回收的唯一方法是对象不可达（软引用和弱引用这些具有特定回收限制的实例不再考虑范围内）
+
+Context 内部的对象实例：比如Servlet、Filter、Session、Spring容器里的bean等等，这部分是最多的
+线程相关对象：Context 内部自行启动的 Thread和线程池
+Class 对象：由 WebappClassLoader 加载的所有 Class 实例
+WebappClassLoader 实例本身
+
+非堆区
+元空间 (Metaspace) 中的 klass 元数据：回收依赖JVM的class卸载机制
+
+回收探讨堆区垃圾回收的核心逻辑只有一点：对象是否可达（Reachable）。所以只要搞清楚对象的引用关系，就能推导出其回收条件。我们基于这个核心点，对上诉堆对内所有的对象进行追溯，看看到底它被哪些对象给持有
+Context 内部的对象实例​	这部分是最简单的，这些对象都是应用程序中显示创建并赋值的对象。在context#stop期间，触发了各种内部组件的stop后，再对字段赋值为null就是在清除引用。Spring 容器则会在 ApplicationContext#close() 里统一销毁 Bean 并清理所有容器内引用。
+线程相关对象​	Thread可作为GCRoot对象，所以对它的回收必须等Thread终结，否则任意一个存活的线程是不可能被回收的（其内部持有的contextClassLoader和其所有加载的class都不会被回收）
+Class 对象​	Class对象稍复杂，它不仅有显示的引用（应用程序中显示使用），还有隐式的使用
+
+
+
+引用链路
+描述
+
+
+
+A对象 → A.class
+所有基于 A.class 创建的对象，其对象头中都隐式持有指向 A.class 的指针。
+
+
+类加载器 → A.class
+加载 A.class 的类加载器持有一份强引用。
+
+
+其他显式引用
+例如缓存、反射、Class.forName() 结果等都可能让其他对象显示持有 A.class 引用。
+
+
+所以要回收Class对象，可以得出如下结论（以A.class为例）：
+
+A.class创建的A对象都不可达，那么A对象头里的A.class指针也不可达
+加载A.class的类加载器对象不可达
+显示持有A.class的其他对象也不可达
+
+WebappClassLoader 实例
+
+
+引用链路
+描述
+
+
+
+所有其加载的 Class → WebappClassLoader
+每个 Class 实例反向持有其加载器引用。
+
+
+线程的 contextClassLoader → WebappClassLoader
+活跃线程若未清理 contextClassLoader 也持有加载器引用。
+
+
+WebappClassLoader回收前提：
+
+所有由其加载的 Class 都已不可达
+没有任何活跃线程仍在使用该类加载器作为 contextClassLoader
+显示持有此类加载器的其他对象不可达
+
+总结
+class相关对象引用链
+
+所以垃圾能别回收的本质，是让持有A.class和WebappClassLoader对象的链路断掉，在这里我们只要做好如下清理条件，相关垃圾即可被回收
+
+context下创建的所有Thread需要终结
+context内部强引用链全部断开（置为null）
+
+tomcat释放资源​	在正式进入分析之前，先明确一点：子线程默认继承父线程的 contextClassLoader（Thread的构造方法）
+​	通过前面文章的分析，可知在Context内部创建的线程都会使用Context的WebappClassLoadLoader作为其contextClassLoader，所以，只要线程的 Thread.contextClassLoader 是当前 Context 对应的 WebappClassLoader，就可以判断它属于当前 Context 内部创建的线程。
+线程清理核心方法在WebappClassLoaderBase#clearReferencesThreads，调用链为：
+
+
+WebappLoader#stop
+WebappClassLoaderBase#stop
+WebappClassLoaderBase#clearReferences 
+WebappClassLoaderBase#clearReferencesThreads
+
+
+逻辑总结：
+
+获取当前JVM所有线程：通过遍历根 ThreadGroup进行所有线程的枚举
+遍历并筛选出当前Context创建的线程：判断依据为Thread.contextClassLoader &#x3D;&#x3D; Context.WebappClassLoader
+根据是否是线程池创建的线程来分开处理
+线程池创建的Thread：使用线程池的shutdownNow来优雅的关闭线程
+非线程池线程：先发送中断信号，若无法中断则再直接调用Thread.stop方法来强制终结线程
+
+
+
+private void clearReferencesThreads() {
+    // 获取系统内所有活动线程
+    Thread[] threads = getThreads();
+    List&lt;Thread> threadsToStop = new ArrayList&lt;>();
+
+    for (Thread thread : threads) {
+        if (thread != null) {
+            ClassLoader ccl = thread.getContextClassLoader();
+            // 只处理 contextClassLoader 是当前 WebappClassLoader 的线程
+            if (ccl == this) {
+                // 跳过当前线程自身，防止自杀
+                if (thread == Thread.currentThread()) {
+                    continue;
+                }
+
+                final String threadName = thread.getName();
+
+                ThreadGroup tg = thread.getThreadGroup();
+                if (tg != null &amp;&amp; JVM_THREAD_GROUP_NAMES.contains(tg.getName())) {
+                    if (clearReferencesHttpClientKeepAliveThread &amp;&amp;
+                            threadName.equals("Keep-Alive-Timer")) {
+                        // Keep-Alive-Timer 特殊处理，仅替换其 contextClassLoader，避免泄露
+                        thread.setContextClassLoader(parent);
+                    }
+
+                    // Don't warn about remaining JVM controlled threads
+                    continue;
+                }
+
+                // // 已经死亡的线程，则不需要再清理了
+                if (!thread.isAlive()) {
+                    continue;
+                }
+
+                // TimerThread 可以被安全关闭
+                if (thread.getClass().getName().startsWith("java.util.Timer") &amp;&amp;
+                        clearReferencesStopTimerThreads) {
+                    clearReferencesStopTimerThread(thread);
+                    continue;
+                }
+                // 仅当配置允许强制停止线程时才处理（clearReferencesStopThreads默认为false）
+                if (!clearReferencesStopThreads) {
+                    continue;
+                }
+
+                // 尝试检测是否为 ThreadPoolExecutor 的 worker 线程，优先关闭线程池本身
+                boolean usingExecutor = false;
                 try {
-                    ((Lifecycle) valve).start();
-                } catch (LifecycleException e) {
-                    log.error(sm.getString("standardPipeline.valve.start"), e);
+
+                    // 兼容不同 JDK 实现，寻找包装的 runnable 字段
+                    Object target = null;
+                    for (String fieldName : new String[] { "target", "runnable", "action" }) {
+                        try {
+                            Field targetField = thread.getClass().getDeclaredField(fieldName);
+                            targetField.setAccessible(true);
+                            target = targetField.get(thread);
+                            break;
+                        } catch (NoSuchFieldException nfe) {
+                            continue;
+                        }
+                    }
+
+                    // 判断是否为 ThreadPoolExecutor.Worker，如果是则使用线程池的shutdownNow方法来优雅关闭线程
+                    if (target != null &amp;&amp; target.getClass().getCanonicalName() != null &amp;&amp;
+                            target.getClass().getCanonicalName().equals(
+                                    "java.util.concurrent.ThreadPoolExecutor.Worker")) {
+                        Field executorField = target.getClass().getDeclaredField("this$0");
+                        executorField.setAccessible(true);
+                        Object executor = executorField.get(target);
+                        if (executor instanceof ThreadPoolExecutor) {
+                            ((ThreadPoolExecutor) executor).shutdownNow();
+                            usingExecutor = true;
+                        }
+                    }
+                } catch (NoSuchFieldException | IllegalAccessException | RuntimeException e) {
+                    log.warn(sm.getString("webappClassLoader.stopThreadFail",
+                            thread.getName(), getContextName()), e);
                 }
+
+                // 非线程池线程，直接尝试 interrupt 终止
+                if (!usingExecutor &amp;&amp; !thread.isInterrupted()) {
+                    thread.interrupt();
+                }
+
+                // 记录仍需等待确认终止的线程
+                threadsToStop.add(thread);
             }
         }
+    }
 
-        if (first == null) {
-            first = valve;
-            valve.setNext(basic);
-        } else {
-            // 将valve添加到Valve链中倒数第二个位置（最后一个位置为固定的basic）
-            Valve current = first;
-            while (current != null) {
-                if (current.getNext() == basic) {
-                    current.setNext(valve);
-                    valve.setNext(basic);
-                    break;
-                }
-                current = current.getNext();
+    int count = 0;
+    // 对需要stop的线程都直接终结
+    for (Thread t : threadsToStop) {
+        while (t.isAlive() &amp;&amp; count &lt; 100) {
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                // Quit the while loop
+                break;
             }
+            count++;
         }
-
-        container.fireContainerEvent(Container.ADD_VALVE_EVENT, valve);
+        // 存活才终结
+        if (t.isAlive()) {
+            t.stop();
+        }
     }
 }
 
-Valve​	把http请求看作水流，Valve（阀门）即具有控制和预处理水流的作用。每个 Valve 通过其核心的 invoke 方法对请求 (Request) 和响应 (Response) 进行加工处理，并决定是否将请求继续传递给下一个 Valve。关键Valve如下
-StandardEngineValve​	Engine中Pipeline里的最后一个阀门，主要是负责将请求传递给下一层容器Host的Pipeline中。源码较简单就不分析了
-StandardHostValve​	不仅是 Host 容器中 Pipeline 的最后一个阀门，同时也负责将 WebappClassLoader 绑定到当前处理请求的 worker 线程上。 这样做可以保证：
-
- ​	在业务代码里通过 worker 线程间接创建的新对象、新类或新线程时，默认使用的都是当前 Context 下的 WebappClassLoader，从而确保整个 Web 应用内部始终使用一致的类加载器，避免类加载混乱问题。
-
-public final void invoke(Request request, Response response)
-        throws IOException, ServletException {
-
-    // 获取当前请求对应的Web应用上下文
-    Context context = request.getContext();
-    if (context == null) {
-        // 如果没有找到对应的Context，直接返回404
-        if (!response.isError()) {
-            response.sendError(404);
-        }
-        return;
-    }
-
+private Thread[] getThreads() {
+    // 获取当前线程所在的线程组
+    ThreadGroup tg = Thread.currentThread().getThreadGroup();
+    // 向上遍历，找到根线程组（整个 JVM 的顶级线程组）
     try {
-        // 1. 绑定Web应用的类加载器到当前worker线程
-        // 将当前worker线程的上下文类加载器设置为WebappClassLoader，这样后续的类加载和创建新的线程就会使用这个WebappClassLoader
-        context.bind(Globals.IS_SECURITY_ENABLED, MY_CLASSLOADER);
-
-        try {
-            if (!response.isErrorReportRequired()) {
-                // 2. 请求向后续容器传递
-                context.getPipeline().getFirst().invoke(request, response);
-            }
-        } catch (Throwable t) {
-            // 异常处理（忽略）
+        while (tg.getParent() != null) {
+            tg = tg.getParent();
         }
+    } catch (SecurityException se) {
 
-    } finally {
-        // 3. 恢复原来的类加载器
-        // 将当前worker线程的上下文类加载器恢复为原来的值（commonClassLoader），确保其不会污染其他请求
-        context.unbind(Globals.IS_SECURITY_ENABLED, MY_CLASSLOADER);
     }
+
+    int threadCountGuess = tg.activeCount() + 50;
+    Thread[] threads = new Thread[threadCountGuess];
+    // 枚举所有的线程
+    int threadCountActual = tg.enumerate(threads);
+    // enumerate 方法在数组空间不足时会默默丢弃多余的线程，
+    // 因此当实际数量等于猜测数量时，说明数组可能装不下，需要扩容重试
+    while (threadCountActual == threadCountGuess) {
+        threadCountGuess *= 2;
+        threads = new Thread[threadCountGuess];
+        // 继续枚举
+        threadCountActual = tg.enumerate(threads);
+    }
+
+    return threads;
 }
 
-StandardContextValve​	Context中Pipeline里的最后一个阀门，可以注意下对当前context的META-INF和WEB-INF目录访问的限制就是在这个Valve中做的。
-public final void invoke(Request request, Response response)
-        throws IOException, ServletException {
-
-    // META-INF和WEB-INF目录下的资源不允许访问
-    MessageBytes requestPathMB = request.getRequestPathMB();
-    if ((requestPathMB.startsWithIgnoreCase("/META-INF/", 0))
-            || (requestPathMB.equalsIgnoreCase("/META-INF"))
-            || (requestPathMB.startsWithIgnoreCase("/WEB-INF/", 0))
-            || (requestPathMB.equalsIgnoreCase("/WEB-INF"))) {
-        response.sendError(HttpServletResponse.SC_NOT_FOUND);
-        return;
-    }
-    // ...
-
-    wrapper.getPipeline().getFirst().invoke(request, response);
-}
-
-StandardWrapperValve​	StandardWrapperValve值得重点分析，它是 Tomcat 容器中请求分发链路的最后一个核心 Valve，其职责是将请求最终交付给具体的 Servlet 实例。核心逻辑如下
-
-分配Servlet（支持SingleThreadModel Servlet）
-构建ApplicationFilterChain：基于当前请求的URL和对应的Servlet，筛选出所有匹配的 Filter实例
-执行过滤器链ApplicationFilterChain.doFilter（内部会在所有Filter执行完毕后再执行Servlet#service方法）
-资源回收和状态清理，并记录一些jmx的统计信息
-
-
-final class StandardWrapperValve extends ValveBase {
-
-    // ============== jmx统计使用（毫秒单位）===============
-    // 当前servlet的总处理时间
-    private volatile long processingTime;
-    // 当前servlet一次处理的最大耗时时间
-    private volatile long maxTime;
-    // 当前servlet一次处理的最小耗时时间
-    private volatile long minTime = Long.MAX_VALUE;
-    // 请求总数
-    private final AtomicInteger requestCount = new AtomicInteger(0);
-    // 错误请求数
-    private final AtomicInteger errorCount = new AtomicInteger(0);
-
-    @Override
-    public final void invoke(Request request, Response response)
-        throws IOException, ServletException {
-
-        boolean unavailable = false;
-        Throwable throwable = null;
-        long t1=System.currentTimeMillis();
-        requestCount.incrementAndGet();
-        StandardWrapper wrapper = (StandardWrapper) getContainer();
-        Servlet servlet = null;
-        Context context = (Context) wrapper.getParent();
-
-        // 1. 分配servlet并初始化
-        try {
-            if (!unavailable) {
-                servlet = wrapper.allocate();
-            }
-        }catch () {
-            // ... 异常处理省略
-        }
-
-        // 2. 创建ApplicationFilterChain，并匹配合适的filter
-        ApplicationFilterChain filterChain =
-                ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
-
-
-        Container container = this.container;
-        try {
-            if ((servlet != null) &amp;&amp; (filterChain != null)) {
-               // 3. 执行过滤器链
-                filterChain.doFilter(request.getRequest(), response.getResponse());
-            }
-        } catch () {
-            // ... 异常处理省略
-        }finally {
-            // =========== 4. 资源释放让其可在使用，减少垃圾收集器的活动 ================
-
-            if (filterChain != null) {
-                filterChain.release();
-            }
-
-            try {
-                // servlet归还
-                if (servlet != null) {
-                    wrapper.deallocate(servlet);
-                }
-            } catch () {
-                // ... 异常处理省略
-            }
-
-            try {
-                if ((servlet != null) &amp;&amp;
-                    (wrapper.getAvailable() == Long.MAX_VALUE)) {
-                    wrapper.unload();
-                }
-            }  catch () {
-                // ... 异常处理省略
-            }
-            long t2=System.currentTimeMillis();
-            // 统计耗时，并更新相关数据
-            long time=t2-t1;
-            processingTime += time;
-            if( time > maxTime) {
-                maxTime=time;
-            }
-            if( time &lt; minTime) {
-                minTime=time;
-            }
-        }
-    }
-
-}
-
-FilterApplicationFilterChain​	过滤器链（FilterChain）用于管理多个过滤器（Filter）的执行顺序与截断逻辑，核心机制和 Spring AOP 中的切面调用逻辑类似：
-
-​	每个请求对应一个独立的 FilterChain 实例，内部维护一个 pos 指针，在递归调用时通过传入当前 FilterChain 实例来控制指针的移动，从而实现 Filter 的顺序执行与截断控制。当所有 Filter 执行完毕（指针走到末尾）后，才会调用目标方法（FilterChain 中对应 Servlet#service()，Spring AOP 中则对应原始业务方法）；如果中间某个 Filter 没有继续调用 chain.doFilter()，则会直接返回，实现链路截断
-
-​	整体实现其实就是典型的过滤器（增强器）模型，既能保证 Filter（切面） 之间的执行顺序，又支持灵活的拦截与提前返回。
-public final class ApplicationFilterChain implements FilterChain {
-
-    // 合适的Filter数组
-    private ApplicationFilterConfig[] filters = new ApplicationFilterConfig[0];
-
-    // 当前执行到的filter位置指针
-    private int pos = 0;
-
-    // filter的个数，&lt;= filters.lenght
-    private int n = 0;
-    private Servlet servlet = null;
-
-    @Override
-    public void doFilter(ServletRequest request, ServletResponse response)
-            throws IOException, ServletException {
-
-        internalDoFilter(request, response);
-    }
-
-    /**
-     *  内部真正执行filter链逻辑
-     */
-    private void internalDoFilter(ServletRequest request,
-            ServletResponse response)
-            throws IOException, ServletException {
-
-        // 依次调用下一个filter，直到filter链调用完毕
-        if (pos &lt; n) {
-            ApplicationFilterConfig filterConfig = filters[pos++];
-            try {
-                Filter filter = filterConfig.getFilter();
-                // 将当前对象传入，以此触发递归调用
-                filter.doFilter(request, response, this);
-            } catch (){
-                // ... 异常处理
-            }
-            // 若果某个Filter内部若未调用 chain.doFilter()，则会退回到这以终止链式调用，Servlet 不会被执行
-            return;
-        }
-
-        // filter链调用完毕，最后再执行servlet的service方法
-        try {
-            servlet.service(request, response);
-        } catch (){
-            // ... 异常处理
-        }finally {
-            if (ApplicationDispatcher.WRAP_SAME_OBJECT) {
-                lastServicedRequest.set(null);
-                lastServicedResponse.set(null);
-            }
-        }
-    }
-}
-
-对比总结​	Pipeline+Valve和Filter都是基于责任链模式实现的，看起来功能上高度重叠，甚至都能互相模拟对方的行为，那为什么Tomcat还要设计两套机制呢？核心其实一句话可以总结：职责分离，边界清晰
-
-Pipeline + Valve是 Tomcat 内部容器模型的一部分，完全属于 Tomcat 自己的体系。每个容器都有自己的 Pipeline，也就有自己的 Valve 链，各自的Pipeline也只关心当前容器：
-
-
-Host 层可以做虚拟主机级别的统一控制
-Context 层可以做应用级别的资源隔离与控制
-比方说其实在进入Pipiline之前的CoyoteAdapter里就解析出了当前url需要的Context容器，在这里就可以限制对web项目META-INF和WEB-INF目录的访问权限。但还是在Context的Valve里实现的，这是因为这些目录属于具体 web 项目，Tomcat定义了它们不允许被访问，所以它们的规则校验应当由 Tomcat的Context容器层编写
-
-
-Wrapper 层可以做单个 Servlet 级别的调度和分配（缓存和回收）
-
-
-
-而Filter则是标准 Servlet 规范定义的一部分，属于业务开发层面的能力扩展。比如用户鉴权、具体的web资源访问权限限制、业务日志埋点等需求都由业务催生，就完全不该在容器层面（Pipeline + Valve）中去处理
-
-
-所以核心点：Pipeline + Valve 管容器架构，Filter 管业务，各司其职
+总结​	通过上述对 Context 内线程资源的兜底清理（这一部分其实是热加载内存泄漏中最核心、最容易被忽略的风险点 —— 因为实际项目中，大量使用了自定义线程或线程池，且它们往往没能纳入 Spring.ApplicationContext 的生命周期管理），再加上在 Context#stop 阶段，对各个强引用对象统一置 null，主动断开引用链，基本可以保证 Context 在热加载时不会产生内存泄漏问题。
+最后需要特别强调一点：
+​	项目中使用线程池时，强烈建议将其纳入 Context 生命周期统一管理（例如通过 Spring 的 ThreadPoolExecutorFactoryBean 来创建线程池）。
+​	因为 Tomcat 在兜底清理时，如果无法识别线程归属，最终可能会直接调用 Thread.stop() 强行终止线程 —— 这种方式极其不安全，容易导致数据不一致等问题。让线程池受控于 Spring 容器，借助 shutdown() 或 shutdownNow() 做平滑关闭，是最稳妥、安全的方案。
 ]]></content>
       <categories>
         <category>Tomcat</category>
       </categories>
       <tags>
-        <tag>责任链模式</tag>
+        <tag>热加载</tag>
+        <tag>垃圾回收</tag>
       </tags>
   </entry>
   <entry>
@@ -10081,6 +10130,302 @@ WebappClassLoader 才重写了 loadClass，实现了一个 可控双亲委派：
       </categories>
       <tags>
         <tag>类加载器</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Tomcat-责任链之Pipeline+Valve和Filter</title>
+    <url>/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/</url>
+    <content><![CDATA[
+​	分析了Tomcat中Pipeline+Valve和支持Filter的ApplicationFilterChain两种基于责任链模式的实现逻辑，并在最后总结了这两者的异同点以及为什么会有这两种类似的模块。
+
+
+Tomcat-责任链之Pipeline+Valve和FilterPipeline​	可以理解为请求传递的管道，每个容器（Engine、Host、Context、Wrapper）都关联一个独立的 Pipeline（管道），用于处理 HTTP 请求的责任链式分发，其默认实现为 StandardPipeline
+​	每个 Pipeline 内部由一系列 Valve（阀门）组成，Pipeline为其提供了一系列接口（包括添加，删除和管理其生命周期管理等），并将它们构造成链式结构（addValve方法将新 Valve 插入到链中 倒数第二个位置，即 basic Valve 之前）
+​	请求到达某个容器时，会先被其 Pipeline 的第一个 Valve（first）处理，然后依次传递到后续的 Valve，最终到达 basic Valve。basic Valve 处理完成后，请求再被传递给下层子容器的 Pipeline，并最终传递到Filter中，从而达到请求贯穿全部容器的作用
+核心字段和方法public class StandardPipeline extends LifecycleBase implements Pipeline {
+    // basic valve（last valve），当前管道中最后处理的一个Valve
+    protected Valve basic = null;
+
+    // 关联的容器
+    protected Container container = null;
+
+    // value链首
+    protected Valve first = null;
+
+    public void addValve(Valve valve) {
+
+        // 将容器也绑定搭到valve中
+        if (valve instanceof Contained) {
+            ((Contained) valve).setContainer(this.container);
+        }
+
+        // 如果当前 Pipeline 已处于运行状态，则启动Valve的生命周期start方法
+        if (getState().isAvailable()) {
+            if (valve instanceof Lifecycle) {
+                try {
+                    ((Lifecycle) valve).start();
+                } catch (LifecycleException e) {
+                    log.error(sm.getString("standardPipeline.valve.start"), e);
+                }
+            }
+        }
+
+        if (first == null) {
+            first = valve;
+            valve.setNext(basic);
+        } else {
+            // 将valve添加到Valve链中倒数第二个位置（最后一个位置为固定的basic）
+            Valve current = first;
+            while (current != null) {
+                if (current.getNext() == basic) {
+                    current.setNext(valve);
+                    valve.setNext(basic);
+                    break;
+                }
+                current = current.getNext();
+            }
+        }
+
+        container.fireContainerEvent(Container.ADD_VALVE_EVENT, valve);
+    }
+}
+
+Valve​	把http请求看作水流，Valve（阀门）即具有控制和预处理水流的作用。每个 Valve 通过其核心的 invoke 方法对请求 (Request) 和响应 (Response) 进行加工处理，并决定是否将请求继续传递给下一个 Valve。关键Valve如下
+StandardEngineValve​	Engine中Pipeline里的最后一个阀门，主要是负责将请求传递给下一层容器Host的Pipeline中。源码较简单就不分析了
+StandardHostValve​	不仅是 Host 容器中 Pipeline 的最后一个阀门，同时也负责将 WebappClassLoader 绑定到当前处理请求的 worker 线程上。 这样做可以保证：
+
+ ​	在业务代码里通过 worker 线程间接创建的新对象、新类或新线程时，默认使用的都是当前 Context 下的 WebappClassLoader，从而确保整个 Web 应用内部始终使用一致的类加载器，避免类加载混乱问题。
+
+public final void invoke(Request request, Response response)
+        throws IOException, ServletException {
+
+    // 获取当前请求对应的Web应用上下文
+    Context context = request.getContext();
+    if (context == null) {
+        // 如果没有找到对应的Context，直接返回404
+        if (!response.isError()) {
+            response.sendError(404);
+        }
+        return;
+    }
+
+    try {
+        // 1. 绑定Web应用的类加载器到当前worker线程
+        // 将当前worker线程的上下文类加载器设置为WebappClassLoader，这样后续的类加载和创建新的线程就会使用这个WebappClassLoader
+        context.bind(Globals.IS_SECURITY_ENABLED, MY_CLASSLOADER);
+
+        try {
+            if (!response.isErrorReportRequired()) {
+                // 2. 请求向后续容器传递
+                context.getPipeline().getFirst().invoke(request, response);
+            }
+        } catch (Throwable t) {
+            // 异常处理（忽略）
+        }
+
+    } finally {
+        // 3. 恢复原来的类加载器
+        // 将当前worker线程的上下文类加载器恢复为原来的值（commonClassLoader），确保其不会污染其他请求
+        context.unbind(Globals.IS_SECURITY_ENABLED, MY_CLASSLOADER);
+    }
+}
+
+StandardContextValve​	Context中Pipeline里的最后一个阀门，可以注意下对当前context的META-INF和WEB-INF目录访问的限制就是在这个Valve中做的。
+public final void invoke(Request request, Response response)
+        throws IOException, ServletException {
+
+    // META-INF和WEB-INF目录下的资源不允许访问
+    MessageBytes requestPathMB = request.getRequestPathMB();
+    if ((requestPathMB.startsWithIgnoreCase("/META-INF/", 0))
+            || (requestPathMB.equalsIgnoreCase("/META-INF"))
+            || (requestPathMB.startsWithIgnoreCase("/WEB-INF/", 0))
+            || (requestPathMB.equalsIgnoreCase("/WEB-INF"))) {
+        response.sendError(HttpServletResponse.SC_NOT_FOUND);
+        return;
+    }
+    // ...
+
+    wrapper.getPipeline().getFirst().invoke(request, response);
+}
+
+StandardWrapperValve​	StandardWrapperValve值得重点分析，它是 Tomcat 容器中请求分发链路的最后一个核心 Valve，其职责是将请求最终交付给具体的 Servlet 实例。核心逻辑如下
+
+分配Servlet（支持SingleThreadModel Servlet）
+构建ApplicationFilterChain：基于当前请求的URL和对应的Servlet，筛选出所有匹配的 Filter实例
+执行过滤器链ApplicationFilterChain.doFilter（内部会在所有Filter执行完毕后再执行Servlet#service方法）
+资源回收和状态清理，并记录一些jmx的统计信息
+
+
+final class StandardWrapperValve extends ValveBase {
+
+    // ============== jmx统计使用（毫秒单位）===============
+    // 当前servlet的总处理时间
+    private volatile long processingTime;
+    // 当前servlet一次处理的最大耗时时间
+    private volatile long maxTime;
+    // 当前servlet一次处理的最小耗时时间
+    private volatile long minTime = Long.MAX_VALUE;
+    // 请求总数
+    private final AtomicInteger requestCount = new AtomicInteger(0);
+    // 错误请求数
+    private final AtomicInteger errorCount = new AtomicInteger(0);
+
+    @Override
+    public final void invoke(Request request, Response response)
+        throws IOException, ServletException {
+
+        boolean unavailable = false;
+        Throwable throwable = null;
+        long t1=System.currentTimeMillis();
+        requestCount.incrementAndGet();
+        StandardWrapper wrapper = (StandardWrapper) getContainer();
+        Servlet servlet = null;
+        Context context = (Context) wrapper.getParent();
+
+        // 1. 分配servlet并初始化
+        try {
+            if (!unavailable) {
+                servlet = wrapper.allocate();
+            }
+        }catch () {
+            // ... 异常处理省略
+        }
+
+        // 2. 创建ApplicationFilterChain，并匹配合适的filter
+        ApplicationFilterChain filterChain =
+                ApplicationFilterFactory.createFilterChain(request, wrapper, servlet);
+
+
+        Container container = this.container;
+        try {
+            if ((servlet != null) &amp;&amp; (filterChain != null)) {
+               // 3. 执行过滤器链
+                filterChain.doFilter(request.getRequest(), response.getResponse());
+            }
+        } catch () {
+            // ... 异常处理省略
+        }finally {
+            // =========== 4. 资源释放让其可在使用，减少垃圾收集器的活动 ================
+
+            if (filterChain != null) {
+                filterChain.release();
+            }
+
+            try {
+                // servlet归还
+                if (servlet != null) {
+                    wrapper.deallocate(servlet);
+                }
+            } catch () {
+                // ... 异常处理省略
+            }
+
+            try {
+                if ((servlet != null) &amp;&amp;
+                    (wrapper.getAvailable() == Long.MAX_VALUE)) {
+                    wrapper.unload();
+                }
+            }  catch () {
+                // ... 异常处理省略
+            }
+            long t2=System.currentTimeMillis();
+            // 统计耗时，并更新相关数据
+            long time=t2-t1;
+            processingTime += time;
+            if( time > maxTime) {
+                maxTime=time;
+            }
+            if( time &lt; minTime) {
+                minTime=time;
+            }
+        }
+    }
+
+}
+
+FilterApplicationFilterChain​	过滤器链（FilterChain）用于管理多个过滤器（Filter）的执行顺序与截断逻辑，核心机制和 Spring AOP 中的切面调用逻辑类似：
+
+​	每个请求对应一个独立的 FilterChain 实例，内部维护一个 pos 指针，在递归调用时通过传入当前 FilterChain 实例来控制指针的移动，从而实现 Filter 的顺序执行与截断控制。当所有 Filter 执行完毕（指针走到末尾）后，才会调用目标方法（FilterChain 中对应 Servlet#service()，Spring AOP 中则对应原始业务方法）；如果中间某个 Filter 没有继续调用 chain.doFilter()，则会直接返回，实现链路截断
+
+​	整体实现其实就是典型的过滤器（增强器）模型，既能保证 Filter（切面） 之间的执行顺序，又支持灵活的拦截与提前返回。
+public final class ApplicationFilterChain implements FilterChain {
+
+    // 合适的Filter数组
+    private ApplicationFilterConfig[] filters = new ApplicationFilterConfig[0];
+
+    // 当前执行到的filter位置指针
+    private int pos = 0;
+
+    // filter的个数，&lt;= filters.lenght
+    private int n = 0;
+    private Servlet servlet = null;
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response)
+            throws IOException, ServletException {
+
+        internalDoFilter(request, response);
+    }
+
+    /**
+     *  内部真正执行filter链逻辑
+     */
+    private void internalDoFilter(ServletRequest request,
+            ServletResponse response)
+            throws IOException, ServletException {
+
+        // 依次调用下一个filter，直到filter链调用完毕
+        if (pos &lt; n) {
+            ApplicationFilterConfig filterConfig = filters[pos++];
+            try {
+                Filter filter = filterConfig.getFilter();
+                // 将当前对象传入，以此触发递归调用
+                filter.doFilter(request, response, this);
+            } catch (){
+                // ... 异常处理
+            }
+            // 若果某个Filter内部若未调用 chain.doFilter()，则会退回到这以终止链式调用，Servlet 不会被执行
+            return;
+        }
+
+        // filter链调用完毕，最后再执行servlet的service方法
+        try {
+            servlet.service(request, response);
+        } catch (){
+            // ... 异常处理
+        }finally {
+            if (ApplicationDispatcher.WRAP_SAME_OBJECT) {
+                lastServicedRequest.set(null);
+                lastServicedResponse.set(null);
+            }
+        }
+    }
+}
+
+对比总结​	Pipeline+Valve和Filter都是基于责任链模式实现的，看起来功能上高度重叠，甚至都能互相模拟对方的行为，那为什么Tomcat还要设计两套机制呢？核心其实一句话可以总结：职责分离，边界清晰
+
+Pipeline + Valve是 Tomcat 内部容器模型的一部分，完全属于 Tomcat 自己的体系。每个容器都有自己的 Pipeline，也就有自己的 Valve 链，各自的Pipeline也只关心当前容器：
+
+
+Host 层可以做虚拟主机级别的统一控制
+Context 层可以做应用级别的资源隔离与控制
+比方说其实在进入Pipiline之前的CoyoteAdapter里就解析出了当前url需要的Context容器，在这里就可以限制对web项目META-INF和WEB-INF目录的访问权限。但还是在Context的Valve里实现的，这是因为这些目录属于具体 web 项目，Tomcat定义了它们不允许被访问，所以它们的规则校验应当由 Tomcat的Context容器层编写
+
+
+Wrapper 层可以做单个 Servlet 级别的调度和分配（缓存和回收）
+
+
+
+而Filter则是标准 Servlet 规范定义的一部分，属于业务开发层面的能力扩展。比如用户鉴权、具体的web资源访问权限限制、业务日志埋点等需求都由业务催生，就完全不该在容器层面（Pipeline + Valve）中去处理
+
+
+所以核心点：Pipeline + Valve 管容器架构，Filter 管业务，各司其职
+]]></content>
+      <categories>
+        <category>Tomcat</category>
+      </categories>
+      <tags>
+        <tag>责任链模式</tag>
       </tags>
   </entry>
   <entry>
