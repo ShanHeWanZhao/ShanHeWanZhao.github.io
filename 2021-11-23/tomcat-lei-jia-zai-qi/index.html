@@ -280,14 +280,14 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>13k</span>
+      <span>14k</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
         <i class="far fa-clock"></i>
       </span>
       <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>24 分钟</span>
+      <span>25 分钟</span>
     </span>
 </div>
 
@@ -753,6 +753,15 @@
 <p>​	另外，<strong>有独立的 WebappClassLoader 也方便支持应用的热部署和卸载</strong>：当某个 context 重新加载或被移除时，直接销毁这个 WebappClassLoader，连带其加载的所有 class、资源、线程都能一起回收，减少内存泄露风险。</p>
 </blockquote>
 </li>
+<li><p>为什么不使用jdk的<code>AppClassLoader</code>替换<code>commonLoader</code>？从表面看，<code>AppClassLoader</code> 和 Tomcat 自定义的 <code>commonLoader</code> 都继承自 <code>URLClassLoader</code>，两者在能力上类似，都可以加载来自指定 <code>classpath</code> 的类或资源。但 Tomcat 并没有使用 <code>AppClassLoader</code> 来加载自身核心组件，为什么呢？</p>
+<blockquote>
+<ol>
+<li>AppClassLoader 的 classpath 是在 JVM 启动阶段静态确定的（通过系统属性：java.class.path）,而<strong>Tomcat 的类加载器的classpath支持占位符（如${catalina.base}和${catalina.home}）</strong>，即允许用户扩展 classpath，更加灵活</li>
+<li>Tomcat 在<strong>早期设计中区分了commonLoader，catalinaLoader和sharedLoader这三个类加载器用以实现模块隔离</strong>，AppClassLoader无法实现</li>
+<li>WebappClassLoader 更不可能使用 AppClassLoader。单是启动时无法确定需要部署哪些Context以及各自classpath这条理由，就不可能用AppClassLoader，更别提Tomcat还支持了Web环境隔离和热加载这种高级特性了</li>
+</ol>
+</blockquote>
+</li>
 <li><p>哪个类加载器打破了双亲委派机制？</p>
 <blockquote>
 <p>其实<strong>只有 WebappClassLoader 部分打破了双亲委派</strong>。</p>
@@ -830,7 +839,7 @@
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">9:29</span>
+    <span title="站点阅读时长">9:30</span>
   </span>
 </div>
 
