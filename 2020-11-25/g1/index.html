@@ -164,7 +164,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#G1"><span class="nav-number">1.</span> <span class="nav-text">G1</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E7%94%A8%E5%8F%82%E6%95%B0%E8%AE%BE%E7%BD%AE"><span class="nav-number">1.1.</span> <span class="nav-text">常用参数设置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Region%E5%88%92%E5%88%86"><span class="nav-number">1.2.</span> <span class="nav-text">Region划分</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Remembered-Set%EF%BC%88RSet%EF%BC%89"><span class="nav-number">1.3.</span> <span class="nav-text">Remembered Set（RSet）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Card-Table%EF%BC%88%E5%8D%A1%E8%A1%A8%EF%BC%89"><span class="nav-number">1.4.</span> <span class="nav-text">Card Table（卡表）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%97%A5%E5%BF%97%E8%A7%A3%E6%9E%90"><span class="nav-number">1.5.</span> <span class="nav-text">日志解析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">1.6.</span> <span class="nav-text">总结</span></a></li></ol></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E7%94%A8%E5%8F%82%E6%95%B0%E8%AE%BE%E7%BD%AE"><span class="nav-number">1.</span> <span class="nav-text">常用参数设置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Region%E5%88%92%E5%88%86"><span class="nav-number">2.</span> <span class="nav-text">Region划分</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Remembered-Set%EF%BC%88RSet%EF%BC%89"><span class="nav-number">3.</span> <span class="nav-text">Remembered Set（RSet）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Card-Table%EF%BC%88%E5%8D%A1%E8%A1%A8%EF%BC%89"><span class="nav-number">4.</span> <span class="nav-text">Card Table（卡表）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%97%A5%E5%BF%97%E8%A7%A3%E6%9E%90"><span class="nav-number">5.</span> <span class="nav-text">日志解析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">6.</span> <span class="nav-text">总结</span></a></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -294,7 +294,9 @@
 <p>​	简单总结了G1和其常用参数，并分析了的G1日志</p>
 <span id="more"></span>
 
-<h1 id="G1"><a href="#G1" class="headerlink" title="G1"></a>G1</h1><p>​	G1（Garbage First）是 JDK 7 引入，并在 JDK 9 默认启用的服务端垃圾回收器。它的核心理念是将整个 Java 堆划分为多个大小相等的 <strong>Region</strong>，打破了传统“新生代 &#x2F; 老年代”的物理分区模式，转而以 Region 为基本单位进行垃圾管理与回收。	</p>
+
+
+<p>​	G1（Garbage First）是 JDK 7 引入，并在 JDK 9 默认启用的服务端垃圾回收器。它的核心理念是将整个 Java 堆划分为多个大小相等的 <strong>Region</strong>，打破了传统“新生代 &#x2F; 老年代”的物理分区模式，转而以 Region 为基本单位进行垃圾管理与回收。	</p>
 <ul>
 <li><strong>整堆收集</strong>：G1 是一个真正的 <strong>整堆并行压缩收集器</strong>，新生代和老年代都可以并行回收。</li>
 <li><strong>并发标记</strong>：采用 <strong>三色标记法 + SATB + 写屏障机制</strong>，保证并发标记期间的准确性。</li>
@@ -396,8 +398,8 @@
                 </a>
             </div>
             <div class="post-nav-item">
-                <a href="/2020-12-18/jvm-can-shu/" rel="next" title="JVM参数">
-                  JVM参数 <i class="fa fa-angle-right"></i>
+                <a href="/2020-12-18/jvm-can-shu/" rel="next" title="JVM参数和垃圾收集器组合">
+                  JVM参数和垃圾收集器组合 <i class="fa fa-angle-right"></i>
                 </a>
             </div>
           </div>
@@ -440,7 +442,7 @@
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">9:30</span>
+    <span title="站点阅读时长">9:29</span>
   </span>
 </div>
 

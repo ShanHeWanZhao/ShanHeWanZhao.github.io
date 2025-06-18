@@ -164,7 +164,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Tomcat-Engine-Host%E5%92%8CHostConfig"><span class="nav-number">1.</span> <span class="nav-text">Tomcat-Engine,Host和HostConfig</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#ContainerBase"><span class="nav-number">1.1.</span> <span class="nav-text">ContainerBase</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.1.</span> <span class="nav-text">核心源码</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Engine"><span class="nav-number">1.2.</span> <span class="nav-text">Engine</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-1"><span class="nav-number">1.2.1.</span> <span class="nav-text">核心源码</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Host"><span class="nav-number">1.3.</span> <span class="nav-text">Host</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-2"><span class="nav-number">1.3.1.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#HostConfig"><span class="nav-number">1.3.2.</span> <span class="nav-text">HostConfig</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-3"><span class="nav-number">1.3.2.1.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#directory%E9%83%A8%E7%BD%B2"><span class="nav-number">1.3.2.2.</span> <span class="nav-text">directory部署</span></a></li></ol></li></ol></li></ol></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#ContainerBase"><span class="nav-number">1.</span> <span class="nav-text">ContainerBase</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.</span> <span class="nav-text">核心源码</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Engine"><span class="nav-number">2.</span> <span class="nav-text">Engine</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-1"><span class="nav-number">2.1.</span> <span class="nav-text">核心源码</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Host"><span class="nav-number">3.</span> <span class="nav-text">Host</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-2"><span class="nav-number">3.1.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#HostConfig"><span class="nav-number">3.2.</span> <span class="nav-text">HostConfig</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-3"><span class="nav-number">3.2.1.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#directory%E9%83%A8%E7%BD%B2"><span class="nav-number">3.2.2.</span> <span class="nav-text">directory部署</span></a></li></ol></li></ol></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -301,7 +301,9 @@
 <p>​	从源码分析了ContainerBase，StandardEngine，StandardHost和HostConfig的实现逻辑。需要<strong>重点注意HostConfig的作用和部署流程</strong></p>
 <span id="more"></span>
 
-<h1 id="Tomcat-Engine-Host和HostConfig"><a href="#Tomcat-Engine-Host和HostConfig" class="headerlink" title="Tomcat-Engine,Host和HostConfig"></a>Tomcat-Engine,Host和HostConfig</h1><h2 id="ContainerBase"><a href="#ContainerBase" class="headerlink" title="ContainerBase"></a>ContainerBase</h2><p>​	是所有容器（Engine、Host、Context、Wrapper）的核心抽象基类，<strong>定义并维护了容器通用的结构、生命周期管理机制和后台任务调度能力</strong>。核心职责如下：</p>
+
+
+<h2 id="ContainerBase"><a href="#ContainerBase" class="headerlink" title="ContainerBase"></a>ContainerBase</h2><p>​	是所有容器（Engine、Host、Context、Wrapper）的核心抽象基类，<strong>定义并维护了容器通用的结构、生命周期管理机制和后台任务调度能力</strong>。核心职责如下：</p>
 <ul>
 <li>init<ul>
 <li>构建一个<strong>可过期的核心线程数为1的线程池（生命周期短，仅用来启动子容器）</strong>，准备用于并发start子容器</li>
@@ -775,7 +777,7 @@
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">9:30</span>
+    <span title="站点阅读时长">9:29</span>
   </span>
 </div>
 

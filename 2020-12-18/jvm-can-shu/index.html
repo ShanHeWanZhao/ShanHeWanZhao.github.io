@@ -23,7 +23,7 @@
 
     <meta name="description" content="JVM常用参数整理和垃圾收集器组合">
 <meta property="og:type" content="article">
-<meta property="og:title" content="JVM参数">
+<meta property="og:title" content="JVM参数和垃圾收集器组合">
 <meta property="og:url" content="https://blog.shanzhao.site/2020-12-18/jvm-can-shu/index.html">
 <meta property="og:site_name" content="Reef&#39;s Blog">
 <meta property="og:description" content="JVM常用参数整理和垃圾收集器组合">
@@ -38,10 +38,10 @@
 <link rel="canonical" href="https://blog.shanzhao.site/2020-12-18/jvm-can-shu/">
 
 
-<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2020-12-18/jvm-can-shu/","path":"2020-12-18/jvm-can-shu/","title":"JVM参数"}</script>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2020-12-18/jvm-can-shu/","path":"2020-12-18/jvm-can-shu/","title":"JVM参数和垃圾收集器组合"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
-<title>JVM参数 | Reef's Blog</title>
+<title>JVM参数和垃圾收集器组合 | Reef's Blog</title>
   
 
 
@@ -164,7 +164,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#JVM%E5%8F%82%E6%95%B0%E5%92%8C%E5%9E%83%E5%9C%BE%E6%94%B6%E9%9B%86%E5%99%A8%E7%BB%84%E5%90%88"><span class="nav-number">1.</span> <span class="nav-text">JVM参数和垃圾收集器组合</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#jvm%E5%8F%82%E6%95%B0%E6%95%B4%E7%90%86"><span class="nav-number">1.1.</span> <span class="nav-text">jvm参数整理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9E%83%E5%9C%BE%E6%94%B6%E9%9B%86%E5%99%A8"><span class="nav-number">1.2.</span> <span class="nav-text">垃圾收集器</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%96%B0%E7%94%9F%E4%BB%A3"><span class="nav-number">1.2.1.</span> <span class="nav-text">新生代</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Serial%EF%BC%88hotspot%E8%99%9A%E6%8B%9F%E6%9C%BA%E5%9C%A8%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8B%E7%9A%84%E9%BB%98%E8%AE%A4%E6%96%B0%E7%94%9F%E4%BB%A3%E5%9E%83%E5%9C%BE%E6%94%B6%E9%9B%86%E5%99%A8%EF%BC%89"><span class="nav-number">1.2.1.1.</span> <span class="nav-text">Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#ParNew"><span class="nav-number">1.2.1.2.</span> <span class="nav-text">ParNew</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Parallel-Scavenge"><span class="nav-number">1.2.1.3.</span> <span class="nav-text">Parallel Scavenge</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%80%81%E5%B9%B4%E4%BB%A3"><span class="nav-number">1.2.2.</span> <span class="nav-text">老年代</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#CMS"><span class="nav-number">1.2.2.1.</span> <span class="nav-text">CMS</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Serial-Old"><span class="nav-number">1.2.2.2.</span> <span class="nav-text">Serial Old</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Parallel-Scavenge-Old"><span class="nav-number">1.2.2.3.</span> <span class="nav-text">Parallel Scavenge Old</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%95%B4%E5%A0%86"><span class="nav-number">1.2.3.</span> <span class="nav-text">整堆</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#G1%EF%BC%88garbage-frist%E6%94%B6%E9%9B%86%E5%99%A8%EF%BC%89"><span class="nav-number">1.2.3.1.</span> <span class="nav-text">G1（garbage-frist收集器）</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9E%83%E5%9C%BE%E6%94%B6%E9%9B%86%E5%99%A8%E7%BB%84%E5%90%88"><span class="nav-number">1.3.</span> <span class="nav-text">垃圾收集器组合</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#tips"><span class="nav-number">1.4.</span> <span class="nav-text">tips</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#GCRoots%E5%AF%B9%E8%B1%A1"><span class="nav-number">1.5.</span> <span class="nav-text">GCRoots对象</span></a></li></ol></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#jvm%E5%8F%82%E6%95%B0%E6%95%B4%E7%90%86"><span class="nav-number">1.</span> <span class="nav-text">jvm参数整理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9E%83%E5%9C%BE%E6%94%B6%E9%9B%86%E5%99%A8"><span class="nav-number">2.</span> <span class="nav-text">垃圾收集器</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%96%B0%E7%94%9F%E4%BB%A3"><span class="nav-number">2.1.</span> <span class="nav-text">新生代</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Serial%EF%BC%88hotspot%E8%99%9A%E6%8B%9F%E6%9C%BA%E5%9C%A8%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8B%E7%9A%84%E9%BB%98%E8%AE%A4%E6%96%B0%E7%94%9F%E4%BB%A3%E5%9E%83%E5%9C%BE%E6%94%B6%E9%9B%86%E5%99%A8%EF%BC%89"><span class="nav-number">2.1.1.</span> <span class="nav-text">Serial（hotspot虚拟机在客户端下的默认新生代垃圾收集器）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#ParNew"><span class="nav-number">2.1.2.</span> <span class="nav-text">ParNew</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Parallel-Scavenge"><span class="nav-number">2.1.3.</span> <span class="nav-text">Parallel Scavenge</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%80%81%E5%B9%B4%E4%BB%A3"><span class="nav-number">2.2.</span> <span class="nav-text">老年代</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#CMS"><span class="nav-number">2.2.1.</span> <span class="nav-text">CMS</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Serial-Old"><span class="nav-number">2.2.2.</span> <span class="nav-text">Serial Old</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Parallel-Scavenge-Old"><span class="nav-number">2.2.3.</span> <span class="nav-text">Parallel Scavenge Old</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%95%B4%E5%A0%86"><span class="nav-number">2.3.</span> <span class="nav-text">整堆</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#G1%EF%BC%88garbage-frist%E6%94%B6%E9%9B%86%E5%99%A8%EF%BC%89"><span class="nav-number">2.3.1.</span> <span class="nav-text">G1（garbage-frist收集器）</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%9E%83%E5%9C%BE%E6%94%B6%E9%9B%86%E5%99%A8%E7%BB%84%E5%90%88"><span class="nav-number">3.</span> <span class="nav-text">垃圾收集器组合</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#tips"><span class="nav-number">4.</span> <span class="nav-text">tips</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#GCRoots%E5%AF%B9%E8%B1%A1"><span class="nav-number">5.</span> <span class="nav-text">GCRoots对象</span></a></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -238,12 +238,12 @@
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="JVM参数 | Reef's Blog">
+      <meta itemprop="name" content="JVM参数和垃圾收集器组合 | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          JVM参数
+          JVM参数和垃圾收集器组合
         </h1>
 
         <div class="post-meta-container">
@@ -300,7 +300,9 @@
     <div class="post-body" itemprop="articleBody"><p>JVM常用参数整理和垃圾收集器组合</p>
  <span id="more"></span>
 
-<h1 id="JVM参数和垃圾收集器组合"><a href="#JVM参数和垃圾收集器组合" class="headerlink" title="JVM参数和垃圾收集器组合"></a>JVM参数和垃圾收集器组合</h1><h2 id="jvm参数整理"><a href="#jvm参数整理" class="headerlink" title="jvm参数整理"></a>jvm参数整理</h2><ul>
+
+
+<h2 id="jvm参数整理"><a href="#jvm参数整理" class="headerlink" title="jvm参数整理"></a>jvm参数整理</h2><ul>
 <li><strong>-Xms64m</strong> ：初始堆大小</li>
 <li><strong>-Xmx128m</strong> ：最大堆大小</li>
 <li><strong>-Xmn32m</strong> ：年轻代大小</li>
@@ -432,7 +434,7 @@
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">9:30</span>
+    <span title="站点阅读时长">9:29</span>
   </span>
 </div>
 

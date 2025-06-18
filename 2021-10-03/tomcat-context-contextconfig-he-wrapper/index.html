@@ -164,7 +164,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Tomcat-Context-ContextConfig%E5%92%8CWrapper"><span class="nav-number">1.</span> <span class="nav-text">Tomcat-Context,ContextConfig和Wrapper</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#Context"><span class="nav-number">1.1.</span> <span class="nav-text">Context</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#start%E6%A0%B8%E5%BF%83%E6%B5%81%E7%A8%8B%E6%80%BB%E7%BB%93"><span class="nav-number">1.1.1.</span> <span class="nav-text">start核心流程总结</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.2.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ContextConfig"><span class="nav-number">1.1.3.</span> <span class="nav-text">ContextConfig</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#webConfig-%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91"><span class="nav-number">1.1.3.1.</span> <span class="nav-text">webConfig()核心逻辑</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#webConfig-%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.3.2.</span> <span class="nav-text">webConfig()源码</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Wrapper"><span class="nav-number">1.2.</span> <span class="nav-text">Wrapper</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-1"><span class="nav-number">1.2.1.</span> <span class="nav-text">核心源码</span></a></li></ol></li></ol></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Context"><span class="nav-number">1.</span> <span class="nav-text">Context</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#start%E6%A0%B8%E5%BF%83%E6%B5%81%E7%A8%8B%E6%80%BB%E7%BB%93"><span class="nav-number">1.1.</span> <span class="nav-text">start核心流程总结</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81"><span class="nav-number">1.2.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ContextConfig"><span class="nav-number">1.3.</span> <span class="nav-text">ContextConfig</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#webConfig-%E6%A0%B8%E5%BF%83%E9%80%BB%E8%BE%91"><span class="nav-number">1.3.1.</span> <span class="nav-text">webConfig()核心逻辑</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#webConfig-%E6%BA%90%E7%A0%81"><span class="nav-number">1.3.2.</span> <span class="nav-text">webConfig()源码</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Wrapper"><span class="nav-number">2.</span> <span class="nav-text">Wrapper</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81-1"><span class="nav-number">2.1.</span> <span class="nav-text">核心源码</span></a></li></ol></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -301,7 +301,9 @@
 <p>​	StandardContext、ContextConfig以及StandardWrapper的核心逻辑源码解析及总结</p>
 <span id="more"></span>
 
-<h1 id="Tomcat-Context-ContextConfig和Wrapper"><a href="#Tomcat-Context-ContextConfig和Wrapper" class="headerlink" title="Tomcat-Context,ContextConfig和Wrapper"></a>Tomcat-Context,ContextConfig和Wrapper</h1><h2 id="Context"><a href="#Context" class="headerlink" title="Context"></a>Context</h2><p>​	<code>Context</code> 是 Tomcat 中最关键的容器组件，默认实现为 <code>StandardContext</code>。<strong>每一个 <code>Context</code> 实例代表一个独立的 Web 应用</strong>。在内部，<code>Context</code> 承担了大量与 Web 应用生命周期相关的工作，比如<strong>类加载器的初始化、<code>web.xml</code> 的解析、<code>Servlet</code>&#x2F;<code>Filter</code>&#x2F;<code>Listener</code> 的注册与实例化等</strong>。</p>
+
+
+<h2 id="Context"><a href="#Context" class="headerlink" title="Context"></a>Context</h2><p>​	<code>Context</code> 是 Tomcat 中最关键的容器组件，默认实现为 <code>StandardContext</code>。<strong>每一个 <code>Context</code> 实例代表一个独立的 Web 应用</strong>。在内部，<code>Context</code> 承担了大量与 Web 应用生命周期相关的工作，比如<strong>类加载器的初始化、<code>web.xml</code> 的解析、<code>Servlet</code>&#x2F;<code>Filter</code>&#x2F;<code>Listener</code> 的注册与实例化等</strong>。</p>
 <p>​	<strong>每个 <code>Context</code> 对应一个唯一的 <code>ServletContext</code>，用于代表当前 Web 应用的上下文环境</strong>。通过 <code>StandardContext</code> 的 <code>startInternal</code> 方法，我们可以深入了解 Tomcat 是如何逐步构建一个 Web 应用的，并是在哪一步触发Spring启动的。</p>
 <h3 id="start核心流程总结"><a href="#start核心流程总结" class="headerlink" title="start核心流程总结"></a>start核心流程总结</h3><ol>
 <li>初始化和设置类加载器<ul>
@@ -852,7 +854,7 @@
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">9:30</span>
+    <span title="站点阅读时长">9:29</span>
   </span>
 </div>
 

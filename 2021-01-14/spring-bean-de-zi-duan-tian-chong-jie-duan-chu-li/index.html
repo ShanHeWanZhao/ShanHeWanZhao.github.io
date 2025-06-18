@@ -166,7 +166,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Spring-Bean%E7%9A%84%E5%AD%97%E6%AE%B5%E5%A1%AB%E5%85%85%E9%98%B6%E6%AE%B5%E7%9B%B8%E5%85%B3%E5%A4%84%E7%90%86%E5%99%A8"><span class="nav-number">1.</span> <span class="nav-text">Spring-Bean的字段填充阶段相关处理器</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#CommonAnnotationBeanPostProcessor"><span class="nav-number">1.1.</span> <span class="nav-text">CommonAnnotationBeanPostProcessor</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%A7%A3%E6%9E%90Field%E5%92%8C%E6%96%B9%E6%B3%95"><span class="nav-number">1.1.1.</span> <span class="nav-text">解析Field和方法</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#ResourceElement%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.1.1.</span> <span class="nav-text">ResourceElement源码</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AD%97%E6%AE%B5%E6%B3%A8%E5%85%A5"><span class="nav-number">1.1.2.</span> <span class="nav-text">字段注入</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#CommonAnnotationBeanPostProcessor-postProcessProperties"><span class="nav-number">1.1.2.1.</span> <span class="nav-text">CommonAnnotationBeanPostProcessor#postProcessProperties</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#InjectionMetadata-InjectedElement-inject"><span class="nav-number">1.1.2.2.</span> <span class="nav-text">InjectionMetadata.InjectedElement#inject</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">1.1.3.</span> <span class="nav-text">总结</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#AutowiredAnnotationBeanPostProcessor"><span class="nav-number">1.2.</span> <span class="nav-text">AutowiredAnnotationBeanPostProcessor</span></a></li></ol></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#CommonAnnotationBeanPostProcessor"><span class="nav-number">1.</span> <span class="nav-text">CommonAnnotationBeanPostProcessor</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%A7%A3%E6%9E%90Field%E5%92%8C%E6%96%B9%E6%B3%95"><span class="nav-number">1.1.</span> <span class="nav-text">解析Field和方法</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#ResourceElement%E6%BA%90%E7%A0%81"><span class="nav-number">1.1.1.</span> <span class="nav-text">ResourceElement源码</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AD%97%E6%AE%B5%E6%B3%A8%E5%85%A5"><span class="nav-number">1.2.</span> <span class="nav-text">字段注入</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#CommonAnnotationBeanPostProcessor-postProcessProperties"><span class="nav-number">1.2.1.</span> <span class="nav-text">CommonAnnotationBeanPostProcessor#postProcessProperties</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#InjectionMetadata-InjectedElement-inject"><span class="nav-number">1.2.2.</span> <span class="nav-text">InjectionMetadata.InjectedElement#inject</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">1.3.</span> <span class="nav-text">总结</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#AutowiredAnnotationBeanPostProcessor"><span class="nav-number">2.</span> <span class="nav-text">AutowiredAnnotationBeanPostProcessor</span></a></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -296,7 +296,9 @@
 <p>​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程</p>
  <span id="more"></span>
 
-<h1 id="Spring-Bean的字段填充阶段相关处理器"><a href="#Spring-Bean的字段填充阶段相关处理器" class="headerlink" title="Spring-Bean的字段填充阶段相关处理器"></a>Spring-Bean的字段填充阶段相关处理器</h1><h2 id="CommonAnnotationBeanPostProcessor"><a href="#CommonAnnotationBeanPostProcessor" class="headerlink" title="CommonAnnotationBeanPostProcessor"></a>CommonAnnotationBeanPostProcessor</h2><p>​	专用来处理非Srping官方提供，而是javax的通用如下注解：</p>
+
+
+<h2 id="CommonAnnotationBeanPostProcessor"><a href="#CommonAnnotationBeanPostProcessor" class="headerlink" title="CommonAnnotationBeanPostProcessor"></a>CommonAnnotationBeanPostProcessor</h2><p>​	专用来处理非Srping官方提供，而是javax的通用如下注解：</p>
 <ul>
 <li><strong>@javax.annotation.Resource</strong></li>
 <li><strong>@javax.annotation.PostConstruct</strong></li>
@@ -612,7 +614,7 @@
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">9:30</span>
+    <span title="站点阅读时长">9:29</span>
   </span>
 </div>
 
