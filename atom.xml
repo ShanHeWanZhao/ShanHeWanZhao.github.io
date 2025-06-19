@@ -54,6 +54,24 @@
   </entry>
   
   <entry>
+    <title>Tomcat-Session管理</title>
+    <link href="https://blog.shanzhao.site/2021-12-28/tomcat-session-guan-li/"/>
+    <id>https://blog.shanzhao.site/2021-12-28/tomcat-session-guan-li/</id>
+    <published>2021-12-28T06:13:33.000Z</published>
+    <updated>2022-01-03T11:09:20.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	本文从源码出发，剖析 Tomcat 中 Session 的懒加载、保活与生命周期控制机制，并解析了 StandardManager 如何借助序列化完成热部署场景下的 Session 持久化与自动恢复&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
+    
+    
+  </entry>
+  
+  <entry>
     <title>Tomcat-热加载和相关Class的垃圾回收探讨</title>
     <link href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/"/>
     <id>https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/</id>
@@ -397,26 +415,6 @@
     
     
     <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Spring-Bean初始化</title>
-    <link href="https://blog.shanzhao.site/2021-01-08/spring-bean-de-chu-shi-hua/"/>
-    <id>https://blog.shanzhao.site/2021-01-08/spring-bean-de-chu-shi-hua/</id>
-    <published>2021-01-08T12:40:58.000Z</published>
-    <updated>2021-01-15T07:40:33.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	整体分析了BeanFactory和ApplicationContext的区别。并从Spring Bean创建流程源码分析了bean的创建流程并对其进行总结，并分析了三级缓存的作用&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
-    
-    
-    <category term="spring三级缓存" scheme="https://blog.shanzhao.site/tags/spring%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98/"/>
     
   </entry>
   

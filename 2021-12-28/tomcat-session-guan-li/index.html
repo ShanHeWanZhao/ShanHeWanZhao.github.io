@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	本文从源码出发，剖析 Tomcat 中 Session 的懒加载、保活与生命周期控制机制，并解析了 StandardManager 如何借助序列化完成热部署场景下的 Session 持久化与自动恢复">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat-Session管理">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-12-28/tomcat-session-guan-li/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	本文从源码出发，剖析 Tomcat 中 Session 的懒加载、保活与生命周期控制机制，并解析了 StandardManager 如何借助序列化完成热部署场景下的 Session 持久化与自动恢复">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2021-12-28T06:13:33.000Z">
+<meta property="article:modified_time" content="2022-01-03T11:09:20.000Z">
+<meta property="article:author" content="reef">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021-12-28/tomcat-session-guan-li/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-12-28/tomcat-session-guan-li/","path":"2021-12-28/tomcat-session-guan-li/","title":"Tomcat-Session管理"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Tomcat-Session管理 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Session%E5%88%9B%E5%BB%BA%E3%80%81%E7%BC%93%E5%AD%98%E5%92%8C%E5%88%B7%E6%96%B0"><span class="nav-number">1.</span> <span class="nav-text">Session创建、缓存和刷新</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%8E%B7%E5%8F%96%E5%92%8C%E5%88%9B%E5%BB%BA"><span class="nav-number">1.1.</span> <span class="nav-text">获取和创建</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%88%B7%E6%96%B0"><span class="nav-number">1.2.</span> <span class="nav-text">刷新</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Session%E8%BF%87%E6%9C%9F%E6%B8%85%E7%90%86"><span class="nav-number">2.</span> <span class="nav-text">Session过期清理</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%A5%E5%8F%A3"><span class="nav-number">2.1.</span> <span class="nav-text">入口</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%A1%E9%AA%8C%E6%B8%85%E7%90%86"><span class="nav-number">2.2.</span> <span class="nav-text">校验清理</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Session%E6%8C%81%E4%B9%85%E5%8C%96"><span class="nav-number">3.</span> <span class="nav-text">Session持久化</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">31</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">29</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-28/tomcat-session-guan-li/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Tomcat-Session管理 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Tomcat-Session管理
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-12-28 14:13:33" itemprop="dateCreated datePublished" datetime="2021-12-28T14:13:33+08:00">2021-12-28</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-01-03 19:09:20" itemprop="dateModified" datetime="2022-01-03T19:09:20+08:00">2022-01-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>10k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>18 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	本文从源码出发，剖析 Tomcat 中 Session 的懒加载、保活与生命周期控制机制，并解析了 StandardManager 如何借助序列化完成热部署场景下的 Session 持久化与自动恢复</p>
+<span id="more"></span>
+
+<p>​	在 <code>StandardContext#start()</code> 阶段，Tomcat 会默认创建一个 <code>StandardManager</code> 实例作为 Session 管理器。它是一个<strong>基于本地 JVM 内存的实现</strong>，负责：</p>
+<ul>
+<li>实例化和缓存Session</li>
+<li>定期检查并清理过期的 Session</li>
+<li>在 Context 热加载触发时，将 Session 序列化持久化到磁盘。并在启动后，尝试从磁盘恢复上一次的 Session 数据</li>
+</ul>
+<p>那么这些功能具体是怎么实现的呢？我们接下来结合源码逐一分析，也顺便看看有没有什么值得优化的地方。</p>
+<h2 id="Session创建、缓存和刷新"><a href="#Session创建、缓存和刷新" class="headerlink" title="Session创建、缓存和刷新"></a>Session创建、缓存和刷新</h2><h3 id="获取和创建"><a href="#获取和创建" class="headerlink" title="获取和创建"></a>获取和创建</h3><p>Tomcat 中的 Session 采用 <strong>懒加载策略</strong>，即只有在显式调用 <code>HttpServletRequest#getSession()</code>时，才会触发 Session 的<strong>获取或创建、绑定到当前Request</strong>等操作。该逻辑核心实现位于 <code>org.apache.catalina.connector.Request#doGetSession</code> 方法，其处理流程如下：</p>
+<ol>
+<li><strong>已绑定有效 Session</strong>：若当前 Request 已绑定有效 Session，直接返回；</li>
+<li><strong>尝试查找已有 Session</strong>：从全局缓存中查找session，如果存在则刷新访问时间，在绑定到当前Request并返回</li>
+<li><strong>按需创建新 Session</strong>：create&#x3D;true才创建session。先进行sessionId的校验（避免伪造攻击），再创建默认的StandardSession并全局缓存，记录访问时间后返回</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> Session <span class="token function">doGetSession</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> create<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+    Context context <span class="token operator">=</span> <span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>context <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 当前request中已获取过session切session有效，则直接返回</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>session <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>session<span class="token punctuation">.</span><span class="token function">isValid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        session <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>session <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> session<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    Manager manager <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>manager <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> null<span class="token punctuation">;</span> 
+    <span class="token punctuation">}</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>requestedSessionId <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 从缓存中找session</span>
+            session <span class="token operator">=</span> manager<span class="token punctuation">.</span><span class="token function">findSession</span><span class="token punctuation">(</span>requestedSessionId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            session <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>session <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>session<span class="token punctuation">.</span><span class="token function">isValid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            session <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+         <span class="token comment" spellcheck="true">// session找到了且有效，刷新访问时间后返回</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>session <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            session<span class="token punctuation">.</span><span class="token function">access</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> session<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 不许要创建则直接返回</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>create<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">boolean</span> trackModesIncludesCookie <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getServletContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getEffectiveSessionTrackingModes</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">contains</span><span class="token punctuation">(</span>SessionTrackingMode<span class="token punctuation">.</span>COOKIE<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>trackModesIncludesCookie <span class="token operator">&amp;&amp;</span> response<span class="token punctuation">.</span><span class="token function">getResponse</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isCommitted</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">IllegalStateException</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"coyoteRequest.sessionCreateCommitted"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// ====================== 到这里，表示需要创建session ================</span>
+
+    <span class="token comment" spellcheck="true">// 对客户端提供的sessionId进行校验，一般来说是不允许使用客户端提供的sessionId创建session的</span>
+    String sessionId <span class="token operator">=</span> <span class="token function">getRequestedSessionId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>requestedSessionSSL<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 一般不会走这</span>
+
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token string">"/"</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getSessionCookiePath</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+            <span class="token operator">&amp;&amp;</span> <span class="token function">isRequestedSessionIdFromCookie</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 支持跨 Context 共享 sessionId（必须配置 cookiePath="/" 且启用校验，默认已启用）</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getValidateClientProvidedNewSessionId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">boolean</span> found <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Container container <span class="token operator">:</span> <span class="token function">getHost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">findChildren</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                Manager m <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>Context<span class="token punctuation">)</span> container<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>m <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>m<span class="token punctuation">.</span><span class="token function">findSession</span><span class="token punctuation">(</span>sessionId<span class="token punctuation">)</span> <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            found <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                            <span class="token keyword">break</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>found<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 未找到则清空，避免伪造攻击</span>
+                sessionId <span class="token operator">=</span> null<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        sessionId <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 新建session（默认StandardSession）</span>
+    session <span class="token operator">=</span> manager<span class="token punctuation">.</span><span class="token function">createSession</span><span class="token punctuation">(</span>sessionId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 设置cookie到response中</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>session <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> trackModesIncludesCookie<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        Cookie cookie <span class="token operator">=</span> ApplicationSessionCookieConfig<span class="token punctuation">.</span><span class="token function">createSessionCookie</span><span class="token punctuation">(</span>
+                context<span class="token punctuation">,</span> session<span class="token punctuation">.</span><span class="token function">getIdInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token function">isSecure</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        response<span class="token punctuation">.</span><span class="token function">addSessionCookieInternal</span><span class="token punctuation">(</span>cookie<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>session <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    session<span class="token punctuation">.</span><span class="token function">access</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> session<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment" spellcheck="true">/**
+ * org.apache.catalina.session.ManagerBase#createSession中真正创建session
+ */</span>
+<span class="token keyword">public</span> Session <span class="token function">createSession</span><span class="token punctuation">(</span>String sessionId<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// session数量较校验（默认-1无上限）</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>maxActiveSessions <span class="token operator">>=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span>
+            <span class="token punctuation">(</span><span class="token function">getActiveSessions</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">>=</span> maxActiveSessions<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        rejectedSessions<span class="token operator">++</span><span class="token punctuation">;</span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">TooManyActiveSessionsException</span><span class="token punctuation">(</span>
+                sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"managerBase.createSession.ise"</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                maxActiveSessions<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    Session session <span class="token operator">=</span> <span class="token function">createEmptySession</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    session<span class="token punctuation">.</span><span class="token function">setNew</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    session<span class="token punctuation">.</span><span class="token function">setValid</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    session<span class="token punctuation">.</span><span class="token function">setCreationTime</span><span class="token punctuation">(</span>System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// session最大不活跃的时间（默认30分钟）</span>
+    session<span class="token punctuation">.</span><span class="token function">setMaxInactiveInterval</span><span class="token punctuation">(</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getSessionTimeout</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">*</span> <span class="token number">60</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    String id <span class="token operator">=</span> sessionId<span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>id <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        id <span class="token operator">=</span> <span class="token function">generateSessionId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 设置id并将这个session缓存到ManagerBase#sessions里</span>
+    session<span class="token punctuation">.</span><span class="token function">setId</span><span class="token punctuation">(</span>id<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    sessionCounter<span class="token operator">++</span><span class="token punctuation">;</span>
+
+    SessionTiming timing <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SessionTiming</span><span class="token punctuation">(</span>session<span class="token punctuation">.</span><span class="token function">getCreationTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>sessionCreationTiming<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        sessionCreationTiming<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>timing<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        sessionCreationTiming<span class="token punctuation">.</span><span class="token function">poll</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> session<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="刷新"><a href="#刷新" class="headerlink" title="刷新"></a>刷新</h3><p>只有<strong>在一次 HTTP 请求中真正访问了 Session，Tomcat 才会刷新它的访问时间</strong>，具体如下：</p>
+<blockquote>
+<ol>
+<li>当请求中第一次调用 <code>request.getSession()</code> 或相关方法时，会触发 <code>org.apache.catalina.Session#access()</code>，记录这次访问的时间</li>
+<li>而在请求结束的时候，会调用 <code>Session#endAccess()</code> 来记录会话访问的结束时间。调用链为：<br> <code>CoyoteAdapter#service（方法最后部分） → Request#recycle → Request#recycleSessionInfo → Session#endAccess()</code></li>
+</ol>
+</blockquote>
+<p>通过这套机制，Tomcat 仅在<strong>真正使用了Session的请求中才刷新它的访问时间，从而实现只在用到时才保活</strong></p>
+<h2 id="Session过期清理"><a href="#Session过期清理" class="headerlink" title="Session过期清理"></a>Session过期清理</h2><h3 id="入口"><a href="#入口" class="headerlink" title="入口"></a>入口</h3><p>被StandardEngine的backgroundThread定期触发，调用路径为：ContainerBackgroundProcessor#run -&gt; ContainerBackgroundProcessor#processChildren -&gt; StandardContext.backgroundProcess -&gt; Manager#backgroundProcess -&gt; ManagerBase#processExpires</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">processExpires</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">long</span> timeNow <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 所有session</span>
+    Session sessions<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">findSessions</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">int</span> expireHere <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>Session session <span class="token operator">:</span> sessions<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 对session校验是否式或并清理</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>session <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>session<span class="token punctuation">.</span><span class="token function">isValid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            expireHere<span class="token operator">++</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">long</span> timeEnd <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    processingTime <span class="token operator">+=</span> <span class="token punctuation">(</span>timeEnd <span class="token operator">-</span> timeNow<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="校验清理"><a href="#校验清理" class="headerlink" title="校验清理"></a>校验清理</h3><p>StandardSession#isValid为<strong>校验session是否有效，如果无效则进行清理</strong>。整体逻辑比较简单，稍微关注下会被触发的如下三个EventListener，如果有session和其attribute的监听需求就可以用到：</p>
+<ol>
+<li><strong>HttpSessionListener#sessionDestroyed</strong>：Session 被销毁时触发。适合用于监听整体 Session 生命周期的结束</li>
+<li><strong>HttpSessionBindingListener#valueUnbound</strong>：当某个属性从 Session 中移除，且<strong>该属性实现了该接口时触发。偏个体</strong></li>
+<li><strong>HttpSessionAttributeListener#attributeRemoved</strong>：Session 中的属性被移除时触发，<strong>属性可以不实现这个Listener。偏集中</strong></li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">isValid</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token keyword">this</span><span class="token punctuation">.</span>isValid<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>expiring<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>ACTIVITY_CHECK <span class="token operator">&amp;&amp;</span> accessCount<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>maxInactiveInterval <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 判断空闲时间是否超过最大不活跃时间，并进行清理</span>
+        <span class="token keyword">int</span> timeIdle <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token keyword">int</span><span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token function">getIdleTimeInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">/</span> 1000L<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>timeIdle <span class="token operator">>=</span> maxInactiveInterval<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">expire</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>isValid<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment" spellcheck="true">/*
+ *  使session过期（从缓存中移除），并根据是否notify决定是否通知相关EventListener
+ */</span>
+<span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">expire</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> notify<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>isValid<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>expiring <span class="token operator">||</span> <span class="token operator">!</span>isValid<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>manager <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        expiring <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+
+        Context context <span class="token operator">=</span> manager<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 是否通知相关Listener</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>notify<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            ClassLoader oldContextClassLoader <span class="token operator">=</span> null<span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                oldContextClassLoader <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">bind</span><span class="token punctuation">(</span>Globals<span class="token punctuation">.</span>IS_SECURITY_ENABLED<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                Object listeners<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getApplicationLifecycleListeners</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>listeners <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> listeners<span class="token punctuation">.</span>length <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    HttpSessionEvent event <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HttpSessionEvent</span><span class="token punctuation">(</span><span class="token function">getSession</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> listeners<span class="token punctuation">.</span>length<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// 触发HttpSessionListener的sessionDestroyed事件</span>
+                        <span class="token keyword">int</span> j <span class="token operator">=</span> <span class="token punctuation">(</span>listeners<span class="token punctuation">.</span>length <span class="token operator">-</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token operator">-</span> i<span class="token punctuation">;</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token punctuation">(</span>listeners<span class="token punctuation">[</span>j<span class="token punctuation">]</span> <span class="token keyword">instanceof</span> <span class="token class-name">HttpSessionListener</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token keyword">continue</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                        HttpSessionListener listener <span class="token operator">=</span> <span class="token punctuation">(</span>HttpSessionListener<span class="token punctuation">)</span> listeners<span class="token punctuation">[</span>j<span class="token punctuation">]</span><span class="token punctuation">;</span>
+                        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                            context<span class="token punctuation">.</span><span class="token function">fireContainerEvent</span><span class="token punctuation">(</span><span class="token string">"beforeSessionDestroyed"</span><span class="token punctuation">,</span>
+                                    listener<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            listener<span class="token punctuation">.</span><span class="token function">sessionDestroyed</span><span class="token punctuation">(</span>event<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            context<span class="token punctuation">.</span><span class="token function">fireContainerEvent</span><span class="token punctuation">(</span><span class="token string">"afterSessionDestroyed"</span><span class="token punctuation">,</span>
+                                    listener<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            manager<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getLogger</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"standardSession.sessionEvent"</span><span class="token punctuation">)</span><span class="token punctuation">,</span> t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                context<span class="token punctuation">.</span><span class="token function">unbind</span><span class="token punctuation">(</span>Globals<span class="token punctuation">.</span>IS_SECURITY_ENABLED<span class="token punctuation">,</span> oldContextClassLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ACTIVITY_CHECK<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            accessCount<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 从缓存中移除</span>
+        manager<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>notify<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">fireSessionEvent</span><span class="token punctuation">(</span>Session<span class="token punctuation">.</span>SESSION_DESTROYED_EVENT<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token function">setValid</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        expiring <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+
+        String keys<span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">keys</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ClassLoader oldContextClassLoader <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            oldContextClassLoader <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">bind</span><span class="token punctuation">(</span>Globals<span class="token punctuation">.</span>IS_SECURITY_ENABLED<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 触发session key相关Listener</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>String key <span class="token operator">:</span> keys<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token function">removeAttributeInternal</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> notify<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            context<span class="token punctuation">.</span><span class="token function">unbind</span><span class="token punctuation">(</span>Globals<span class="token punctuation">.</span>IS_SECURITY_ENABLED<span class="token punctuation">,</span> oldContextClassLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Session持久化"><a href="#Session持久化" class="headerlink" title="Session持久化"></a>Session持久化</h2><p>众所周知，Tomcat 中Web 应用支持热部署，在热加载过程中，原来的Context会被卸载，它所持有的所有对象（包括HttpSession）都会被销毁。</p>
+<p>但从业务逻辑角度来看，<strong>session 的生命周期不应该被应用自身的重部署打断</strong>。客户端用户都没登出，如果仅因为服务端代码热更新就丢失session数据，用户会难以接受</p>
+<p>所以为了解决这个问题，Tomcat 的StandardManager实现了 <strong>session 的持久化机制</strong>。核心思想是：</p>
+<ul>
+<li>在 <code>Context</code> 停止前（如热部署时），将内存中的所有有效 <code>session</code> 序列化写入磁盘</li>
+<li>在 <code>Context</code> 启动时，尝试从磁盘加载这些 session，并恢复到内存中</li>
+</ul>
+<p>两个核心方法如下：</p>
+<ol>
+<li>StandardManager#doUnload：context#stop时触发，将session序列化到磁盘</li>
+<li>StandardManager#doLoad：context#start时触发，将磁盘的session文件反序列化到内存</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">doUnload</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> IOException <span class="token punctuation">{</span>
+
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>sessions<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// nothing to do</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 默认为当前context的 ${javax.servlet.context.tempdir}/SESSIONS.ser 文件</span>
+    File file <span class="token operator">=</span> <span class="token function">file</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>file <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 即将被卸载的 session 实例</span>
+    List<span class="token operator">&lt;</span>StandardSession<span class="token operator">></span> list <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">try</span> <span class="token punctuation">(</span>FileOutputStream fos <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">FileOutputStream</span><span class="token punctuation">(</span>file<span class="token punctuation">.</span><span class="token function">getAbsolutePath</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            BufferedOutputStream bos <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BufferedOutputStream</span><span class="token punctuation">(</span>fos<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            ObjectOutputStream oos <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ObjectOutputStream</span><span class="token punctuation">(</span>bos<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>sessions<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            oos<span class="token punctuation">.</span><span class="token function">writeObject</span><span class="token punctuation">(</span>Integer<span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span>sessions<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 将session序列化到磁盘</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Session s <span class="token operator">:</span> sessions<span class="token punctuation">.</span><span class="token function">values</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                StandardSession session <span class="token operator">=</span> <span class="token punctuation">(</span>StandardSession<span class="token punctuation">)</span> s<span class="token punctuation">;</span>
+                list<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>session<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                session<span class="token punctuation">.</span><span class="token function">passivate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                session<span class="token punctuation">.</span><span class="token function">writeObjectData</span><span class="token punctuation">(</span>oos<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 清楚session，但不触发通知（毕竟未真正失活）</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>StandardSession session <span class="token operator">:</span> list<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            session<span class="token punctuation">.</span><span class="token function">expire</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            ExceptionUtils<span class="token punctuation">.</span><span class="token function">handleThrowable</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            session<span class="token punctuation">.</span><span class="token function">recycle</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+
+<span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">doLoad</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> ClassNotFoundException<span class="token punctuation">,</span> IOException <span class="token punctuation">{</span>
+
+    sessions<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    File file <span class="token operator">=</span> <span class="token function">file</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 没有就返回</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>file <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    Loader loader <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    ClassLoader classLoader <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    Log logger <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    <span class="token keyword">try</span> <span class="token punctuation">(</span>FileInputStream fis <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">FileInputStream</span><span class="token punctuation">(</span>file<span class="token punctuation">.</span><span class="token function">getAbsolutePath</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            BufferedInputStream bis <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">BufferedInputStream</span><span class="token punctuation">(</span>fis<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        Context c <span class="token operator">=</span> <span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        loader <span class="token operator">=</span> c<span class="token punctuation">.</span><span class="token function">getLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        logger <span class="token operator">=</span> c<span class="token punctuation">.</span><span class="token function">getLogger</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 使用当前contxet的WebappClassLoader，加载session</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>loader <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            classLoader <span class="token operator">=</span> loader<span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>classLoader <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            classLoader <span class="token operator">=</span> <span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>sessions<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">(</span>ObjectInputStream ois <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CustomObjectInputStream</span><span class="token punctuation">(</span>bis<span class="token punctuation">,</span> classLoader<span class="token punctuation">,</span> logger<span class="token punctuation">,</span>
+                    <span class="token function">getSessionAttributeValueClassNamePattern</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    <span class="token function">getWarnOnSessionAttributeFilterFailure</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                Integer count <span class="token operator">=</span> <span class="token punctuation">(</span>Integer<span class="token punctuation">)</span> ois<span class="token punctuation">.</span><span class="token function">readObject</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">int</span> n <span class="token operator">=</span> count<span class="token punctuation">.</span><span class="token function">intValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> i <span class="token operator">&lt;</span> n<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 反序列化到内存</span>
+                    StandardSession session <span class="token operator">=</span> <span class="token function">getNewSession</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    session<span class="token punctuation">.</span><span class="token function">readObjectData</span><span class="token punctuation">(</span>ois<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    session<span class="token punctuation">.</span><span class="token function">setManager</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    sessions<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>session<span class="token punctuation">.</span><span class="token function">getIdInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> session<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token comment" spellcheck="true">// 通知 session 已激活</span>
+                    session<span class="token punctuation">.</span><span class="token function">activate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>session<span class="token punctuation">.</span><span class="token function">isValidInternal</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        session<span class="token punctuation">.</span><span class="token function">setValid</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        session<span class="token punctuation">.</span><span class="token function">expire</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    sessionCounter<span class="token operator">++</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>file<span class="token punctuation">.</span><span class="token function">exists</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 删除持久化文件，避免重复加载</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>file<span class="token punctuation">.</span><span class="token function">delete</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        log<span class="token punctuation">.</span><span class="token function">warn</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span><span class="token string">"standardManager.deletePersistedFileFail"</span><span class="token punctuation">,</span> file<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">FileNotFoundException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/" rel="prev" title="Tomcat-热加载和相关Class的垃圾回收探讨">
+                  <i class="fa fa-angle-left"></i> Tomcat-热加载和相关Class的垃圾回收探讨
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="next" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  Spring-事物NOT_SUPPORTED策略下多数据源切换的问题 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">323k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">9:47</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>
