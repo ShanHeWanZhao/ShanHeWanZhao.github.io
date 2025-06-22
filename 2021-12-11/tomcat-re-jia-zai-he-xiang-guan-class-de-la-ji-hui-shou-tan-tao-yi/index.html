@@ -23,8 +23,8 @@
 
     <meta name="description" content="​	本文深入分析了 WebappClassLoader 的热加载整体流程，并对热加载过程中遗留的垃圾回收问题进行了系统性拆解。重点涵盖了：垃圾的分类、核心引用关系的梳理、各类资源的清理策略。最后详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Tomcat-热加载和相关Class的垃圾回收探讨">
-<meta property="og:url" content="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/index.html">
+<meta property="og:title" content="Tomcat-热加载和相关Class的垃圾回收探讨（一）">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/index.html">
 <meta property="og:site_name" content="Reef&#39;s Blog">
 <meta property="og:description" content="​	本文深入分析了 WebappClassLoader 的热加载整体流程，并对热加载过程中遗留的垃圾回收问题进行了系统性拆解。重点涵盖了：垃圾的分类、核心引用关系的梳理、各类资源的清理策略。最后详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议">
 <meta property="og:locale" content="zh_CN">
@@ -33,18 +33,19 @@
 <meta property="article:modified_time" content="2021-12-18T11:57:06.000Z">
 <meta property="article:author" content="reef">
 <meta property="article:tag" content="热加载">
+<meta property="article:tag" content="内存泄漏">
 <meta property="article:tag" content="垃圾回收">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="https://img.shanzhao.site/file/1749993196721_class-reference.png">
 
 
-<link rel="canonical" href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/">
+<link rel="canonical" href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/">
 
 
-<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/","path":"2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/","title":"Tomcat-热加载和相关Class的垃圾回收探讨"}</script>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/","path":"2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/","title":"Tomcat-热加载和相关Class的垃圾回收探讨（一）"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
-<title>Tomcat-热加载和相关Class的垃圾回收探讨 | Reef's Blog</title>
+<title>Tomcat-热加载和相关Class的垃圾回收探讨（一） | Reef's Blog</title>
   
 
 
@@ -182,7 +183,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">31</span>
+          <span class="site-state-item-count">32</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -193,7 +194,7 @@
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">29</span>
+        <span class="site-state-item-count">30</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
@@ -228,7 +229,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/favicon.png">
@@ -241,12 +242,12 @@
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="Tomcat-热加载和相关Class的垃圾回收探讨 | Reef's Blog">
+      <meta itemprop="name" content="Tomcat-热加载和相关Class的垃圾回收探讨（一） | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          Tomcat-热加载和相关Class的垃圾回收探讨
+          Tomcat-热加载和相关Class的垃圾回收探讨（一）
         </h1>
 
         <div class="post-meta-container">
@@ -303,8 +304,6 @@
     <div class="post-body" itemprop="articleBody"><hr>
 <p>​	本文深入分析了 WebappClassLoader 的热加载整体流程，并<strong>对热加载过程中遗留的垃圾回收问题进行了系统性拆解</strong>。重点涵盖了：<strong>垃圾的分类、核心引用关系的梳理、各类资源的清理策略</strong>。最后<strong>详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议</strong></p>
 <span id="more"></span>
-
-
 
 <h2 id="热加载"><a href="#热加载" class="headerlink" title="热加载"></a>热加载</h2><p>​	WebappLoader#backgroundProcess是负责检测和触发热加载的方法入口，其被standardEngine的backgroundThread线程周期性触发，被调用路径为：<strong>ContainerBackgroundProcessor#run -&gt; ContainerBackgroundProcessor#processChildren -&gt; StandardContext.backgroundProcess -&gt; Loader#backgroundProcess</strong></p>
 <p>​	<strong>当web可触发context的资源重加载时，backgroundThread线程会销毁（stop）当前context内部的所有资源，并进行重启context（start），start过程中使用了新的WebappClassLoader加载项目相关的class资源，因此可以在不重启整个 Tomcat 进程的前提下，以实现应用级别的热部署与资源更新</strong></p>
@@ -645,6 +644,7 @@
     <footer class="post-footer">
           <div class="post-tags">
               <a href="/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/" rel="tag"># 热加载</a>
+              <a href="/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/" rel="tag"># 内存泄漏</a>
               <a href="/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/" rel="tag"># 垃圾回收</a>
           </div>
 
@@ -657,8 +657,8 @@
                 </a>
             </div>
             <div class="post-nav-item">
-                <a href="/2021-12-28/tomcat-session-guan-li/" rel="next" title="Tomcat-Session管理">
-                  Tomcat-Session管理 <i class="fa fa-angle-right"></i>
+                <a href="/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/" rel="next" title="Tomcat-热加载之ThreadLocal内存泄露篇（二）">
+                  Tomcat-热加载之ThreadLocal内存泄露篇（二） <i class="fa fa-angle-right"></i>
                 </a>
             </div>
           </div>
@@ -694,14 +694,14 @@
       <i class="fa fa-chart-line"></i>
     </span>
       <span>站点总字数：</span>
-    <span title="站点总字数">323k</span>
+    <span title="站点总字数">333k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">9:47</span>
+    <span title="站点阅读时长">10:06</span>
   </span>
 </div>
 

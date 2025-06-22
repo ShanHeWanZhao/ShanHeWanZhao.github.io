@@ -55,10 +55,10 @@
   
   <entry>
     <title>Tomcat-Session管理</title>
-    <link href="https://blog.shanzhao.site/2021-12-28/tomcat-session-guan-li/"/>
-    <id>https://blog.shanzhao.site/2021-12-28/tomcat-session-guan-li/</id>
-    <published>2021-12-28T06:13:33.000Z</published>
-    <updated>2022-01-03T11:09:20.000Z</updated>
+    <link href="https://blog.shanzhao.site/2022-01-09/tomcat-session-guan-li/"/>
+    <id>https://blog.shanzhao.site/2022-01-09/tomcat-session-guan-li/</id>
+    <published>2022-01-09T06:13:33.000Z</published>
+    <updated>2022-01-14T11:09:20.000Z</updated>
     
     
     <summary type="html">&lt;hr&gt;
@@ -72,9 +72,33 @@
   </entry>
   
   <entry>
-    <title>Tomcat-热加载和相关Class的垃圾回收探讨</title>
-    <link href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/"/>
-    <id>https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/</id>
+    <title>Tomcat-热加载之ThreadLocal内存泄露篇（二）</title>
+    <link href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/"/>
+    <id>https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/</id>
+    <published>2021-12-23T11:45:06.000Z</published>
+    <updated>2021-12-28T13:56:17.000Z</updated>
+    
+    
+    <summary type="html">&lt;hr&gt;
+&lt;p&gt;​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现&lt;strong&gt;无效的ThreadLocalMap.Entry清除&lt;/strong&gt;、&lt;strong&gt;ThreadLocalLeakPreventionListener回收空闲worker线程&lt;/strong&gt;和&lt;strong&gt;TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收&lt;/strong&gt;这三种策略来优雅的解决ThreadLocal内存泄漏的问题&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
+    
+    
+    <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
+    
+    <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
+    
+    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Tomcat-热加载和相关Class的垃圾回收探讨（一）</title>
+    <link href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/"/>
+    <id>https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/</id>
     <published>2021-12-11T05:07:06.000Z</published>
     <updated>2021-12-18T11:57:06.000Z</updated>
     
@@ -88,6 +112,8 @@
     
     
     <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
+    
+    <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
     
     <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
     
@@ -388,26 +414,6 @@
     
     <summary type="html">&lt;hr&gt;
 &lt;p&gt;​	从源码分析了@Resource和@Autowired的依赖创建流程和这两个注解的的异同&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
-    
-    
-    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Spring-Bean的字段填充阶段处理</title>
-    <link href="https://blog.shanzhao.site/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/"/>
-    <id>https://blog.shanzhao.site/2021-01-14/spring-bean-de-zi-duan-tian-chong-jie-duan-chu-li/</id>
-    <published>2021-01-14T04:33:58.000Z</published>
-    <updated>2021-01-14T04:33:58.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	对CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor从源码分析了其依赖的解析、创建流程&lt;/p&gt;</summary>
     
     
     

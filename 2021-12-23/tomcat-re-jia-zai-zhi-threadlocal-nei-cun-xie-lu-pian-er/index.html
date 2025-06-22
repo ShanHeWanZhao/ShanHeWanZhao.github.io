@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现无效的ThreadLocalMap.Entry清除、ThreadLocalLeakPreventionListener回收空闲worker线程和TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收这三种策略来优雅的解决ThreadLocal内存泄漏的问题">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Tomcat-热加载之ThreadLocal内存泄露篇（二）">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现无效的ThreadLocalMap.Entry清除、ThreadLocalLeakPreventionListener回收空闲worker线程和TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收这三种策略来优雅的解决ThreadLocal内存泄漏的问题">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://img.shanzhao.site/file/1750513318047_tomcat-threadlocal-memory-leaking-sample-2.png">
+<meta property="og:image" content="https://img.shanzhao.site/file/1750518720532_tomcat-threadlocal-memory-leaking-sample-2.png">
+<meta property="og:image" content="https://img.shanzhao.site/file/1750520149093_tomcat-threadlocal-memory-leaking-sample-3.png">
+<meta property="article:published_time" content="2021-12-23T11:45:06.000Z">
+<meta property="article:modified_time" content="2021-12-28T13:56:17.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="热加载">
+<meta property="article:tag" content="内存泄漏">
+<meta property="article:tag" content="垃圾回收">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://img.shanzhao.site/file/1750513318047_tomcat-threadlocal-memory-leaking-sample-2.png">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/","path":"2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/","title":"Tomcat-热加载之ThreadLocal内存泄露篇（二）"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Tomcat-热加载之ThreadLocal内存泄露篇（二） | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%97%AE%E9%A2%98"><span class="nav-number">1.</span> <span class="nav-text">问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%A1%88%E4%BE%8B%E5%88%86%E6%9E%90"><span class="nav-number">2.</span> <span class="nav-text">案例分析</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#demo1"><span class="nav-number">2.1.</span> <span class="nav-text">demo1</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#demo2"><span class="nav-number">2.2.</span> <span class="nav-text">demo2</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#demo3"><span class="nav-number">2.3.</span> <span class="nav-text">demo3</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="nav-number">3.</span> <span class="nav-text">解决方案</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%B8%85%E9%99%A4ThreadLocalMap-Entry"><span class="nav-number">3.1.</span> <span class="nav-text">清除ThreadLocalMap$Entry</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">3.1.1.</span> <span class="nav-text">总结</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B%E5%9B%9E%E6%94%B6"><span class="nav-number">3.2.</span> <span class="nav-text">线程回收</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#ThreadLocalLeakPreventionListener"><span class="nav-number">3.2.1.</span> <span class="nav-text">ThreadLocalLeakPreventionListener</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#TaskQueue"><span class="nav-number">3.2.2.</span> <span class="nav-text">TaskQueue</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%80%BB%E7%BB%93-1"><span class="nav-number">3.2.3.</span> <span class="nav-text">总结</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%B8%E5%85%B3%E9%93%BE%E6%8E%A5"><span class="nav-number">4.</span> <span class="nav-text">相关链接</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">32</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">30</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Tomcat-热加载之ThreadLocal内存泄露篇（二） | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Tomcat-热加载之ThreadLocal内存泄露篇（二）
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2021-12-23 19:45:06" itemprop="dateCreated datePublished" datetime="2021-12-23T19:45:06+08:00">2021-12-23</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2021-12-28 21:56:17" itemprop="dateModified" datetime="2021-12-28T21:56:17+08:00">2021-12-28</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>9.8k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>18 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><hr>
+<p>​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现<strong>无效的ThreadLocalMap.Entry清除</strong>、<strong>ThreadLocalLeakPreventionListener回收空闲worker线程</strong>和<strong>TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收</strong>这三种策略来优雅的解决ThreadLocal内存泄漏的问题</p>
+<span id="more"></span>
+
+<p>​	<a href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/#%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6">上一篇</a>讨论了Tomcat热加载期间垃圾的产生与分类，并且探讨了对Context线程回收的必要性以及Tomcat的实现。而这篇会来分析一个更棘手的问题：如果<strong>项目中ThreadLocal如果使用不当，热加载后是如何引起内存泄漏的，并着重分析基于这个问题，Tomcat的考量以及如何优雅的解决这个问题</strong></p>
+<h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><p>​	Tomcat 在执行热加载时，会主动停止当前 <code>Context</code> 中由应用创建的线程（通过遍历 JVM 中所有线程并判断其 <code>contextClassLoader</code> 是否为当前 <code>WebappClassLoader</code> 来过滤）。但这并<strong>不包括用于处理 HTTP 请求的 Worker 线程。这些线程服务于整个 JVM 生命周期，</strong>不会被某个 Context 独占或绑定到某个特定的 <code>WebappClassLoader</code></p>
+<p>​	问题在于，<strong>ThreadLocal是和线程绑定的</strong>。如果某个应用将其资源（比如 Spring 的上下文、Class、Bean 等）放入了 Worker 线程的 <code>ThreadLocal</code> 中，而该资源又直接或间接引用了 <code>WebappClassLoader</code>，就会导致这个 <code>WebappClassLoader</code>和其加载的所有Class无法被 GC 回收。最终，随着热加载次数增加，最终触发 OOM</p>
+<blockquote>
+<p>换句话说：<strong>共享线程+ThreadLocal+Context类资源 &#x3D; 热加载内存泄漏的元凶之一。</strong></p>
+</blockquote>
+<h2 id="案例分析"><a href="#案例分析" class="headerlink" title="案例分析"></a>案例分析</h2><p>所有案例中MyCounter一致，为计数器。目的是实现对Tomcat worker线程处理了多少次http请求的计数。</p>
+<p><strong>分析之前可以看看我的<a href="https://blog.shanzhao.site/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/">这篇文章</a>，对ThreadLocal要有一个比较深刻的认识最好</strong></p>
+<h3 id="demo1"><a href="#demo1" class="headerlink" title="demo1"></a>demo1</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LeakingServlet</span> <span class="token keyword">extends</span> <span class="token class-name">HttpServlet</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">static</span> ThreadLocal<span class="token operator">&lt;</span>MyCounter<span class="token operator">></span> COUNTER_THREAD_LOCAL <span class="token operator">=</span> ThreadLocal<span class="token punctuation">.</span><span class="token function">withInitial</span><span class="token punctuation">(</span>MyCounter<span class="token operator">:</span><span class="token operator">:</span><span class="token keyword">new</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">MyCounter</span> <span class="token punctuation">{</span>
+        <span class="token keyword">private</span> <span class="token keyword">int</span> count <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">increment</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            count<span class="token operator">++</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">public</span> <span class="token keyword">int</span> <span class="token function">getCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> count<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">doGet</span><span class="token punctuation">(</span>HttpServletRequest req<span class="token punctuation">,</span> HttpServletResponse resp<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        MyCounter counter <span class="token operator">=</span> LeakingServlet<span class="token punctuation">.</span>COUNTER_THREAD_LOCAL<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        counter<span class="token punctuation">.</span><span class="token function">increment</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// doBusiness...</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>字段<strong>COUNTER_THREAD_LOCAL 是一个静态变量，被LeakingServlet.class对象给持有</strong></p>
+<blockquote>
+<p>​	当请求进入后，会触发一个如下的引用链图。ThreadLocal本身被Entry这个虚引用对象持有，但还被另一边的强引用LeakingServlet.class也持有了，会<strong>导致ThreadLocal不能触发虚引用的回收作用，致使对应的value（MyCounter对象）也不会回收，而MyCounter间接持有的WebappClassLoader和其所加载的所有class对象也都不能被回收，引发了内存泄漏</strong></p>
+</blockquote>
+<p><img src="https://img.shanzhao.site/file/1750513318047_tomcat-threadlocal-memory-leaking-sample-2.png" alt="tomcat-threadlocal-memory-leaking-sample-2.png"></p>
+<p align="center" style="color: #888;">demo1引用链</p>
+
+<h3 id="demo2"><a href="#demo2" class="headerlink" title="demo2"></a>demo2</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LeakingServlet</span> <span class="token keyword">extends</span> <span class="token class-name">HttpServlet</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">final</span> ThreadLocal<span class="token operator">&lt;</span>MyCounter<span class="token operator">></span> COUNTER_THREAD_LOCAL <span class="token operator">=</span> ThreadLocal<span class="token punctuation">.</span><span class="token function">withInitial</span><span class="token punctuation">(</span>MyCounter<span class="token operator">:</span><span class="token operator">:</span><span class="token keyword">new</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">MyCounter</span> <span class="token punctuation">{</span>
+        <span class="token keyword">private</span> <span class="token keyword">int</span> count <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">increment</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            count<span class="token operator">++</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">public</span> <span class="token keyword">int</span> <span class="token function">getCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> count<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">doGet</span><span class="token punctuation">(</span>HttpServletRequest req<span class="token punctuation">,</span> HttpServletResponse resp<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        MyCounter counter <span class="token operator">=</span> COUNTER_THREAD_LOCAL<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        counter<span class="token punctuation">.</span><span class="token function">increment</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// doBusiness...</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>​	此时<strong>COUNTER_THREAD_LOCAL非静态，被LeakingServlet对象持有</strong>。引用链图如下，此案例中理论上不会有内存泄漏</p>
+<blockquote>
+<p>​	<strong>持有ThreadLocal强引用的LeakingServlet对象会被置为null并被回收，回收后仅被虚引用持有的ThreadLocal就能被回收，那么其value（MyCounter对象）也能在后续ThreadLocalMap对Entry修改时被检测到并被手动释放后回收。上层引用链都断开，那么下面的WebappClassLoader也能被回收了</strong></p>
+</blockquote>
+<p>​	但这并不意味着立即释放，<strong>虽然最终是可以回收的，但在回收检测发生之前，ThreadLocalMap中的 value（MyCounter）依旧存活</strong>，仍然<strong>间接引用着WebappClassLoader及其加载的所有类，就导致这段「悬挂时间」里依旧存在内存压力</strong></p>
+<p><img src="https://img.shanzhao.site/file/1750518720532_tomcat-threadlocal-memory-leaking-sample-2.png" alt="tomcat-threadlocal-memory-leaking-sample-2.png"></p>
+<p align="center" style="color: #888;">demo2引用链</p>
+
+<h3 id="demo3"><a href="#demo3" class="headerlink" title="demo3"></a>demo3</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LeakingServlet</span> <span class="token keyword">extends</span> <span class="token class-name">HttpServlet</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">final</span> TransmittableThreadLocal<span class="token operator">&lt;</span>MyCounter<span class="token operator">></span> COUNTER_THREAD_LOCAL <span class="token operator">=</span> TransmittableThreadLocal<span class="token punctuation">.</span><span class="token function">withInitial</span><span class="token punctuation">(</span>MyCounter<span class="token operator">:</span><span class="token operator">:</span><span class="token keyword">new</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">MyCounter</span> <span class="token punctuation">{</span>
+        <span class="token keyword">private</span> <span class="token keyword">int</span> count <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">increment</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            count<span class="token operator">++</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">public</span> <span class="token keyword">int</span> <span class="token function">getCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> count<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">doGet</span><span class="token punctuation">(</span>HttpServletRequest req<span class="token punctuation">,</span> HttpServletResponse resp<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        MyCounter counter <span class="token operator">=</span> COUNTER_THREAD_LOCAL<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        counter<span class="token punctuation">.</span><span class="token function">increment</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// doBusiness...</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>此时COUNTER_THREAD_LOCAL还是非静态且被LeakingServlet对象持有，<strong>但ThreadLocal为第三方的TransmittableThreadLocal</strong>，其引用链图如下。<strong>核心分析其实和demo2一样，TransmittableThreadLocal对象还是能被回收，也同样具备因不能及时回收value而导致WebappClassLoader不能被回收的隐式风险</strong></p>
+<p><img src="https://img.shanzhao.site/file/1750520149093_tomcat-threadlocal-memory-leaking-sample-3.png" alt="tomcat-threadlocal-memory-leaking-sample-3.png"></p>
+<p align="center" style="color: #888;">demo3引用链</p>
+
+<h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><h3 id="清除ThreadLocalMap-Entry"><a href="#清除ThreadLocalMap-Entry" class="headerlink" title="清除ThreadLocalMap$Entry"></a>清除ThreadLocalMap$Entry</h3><p><strong>核心方法在WebappClassLoaderBase#checkThreadLocalsForLeaks</strong>，调用链为：</p>
+<blockquote>
+<ol>
+<li>WebappLoader#stop</li>
+<li>WebappClassLoaderBase#stop</li>
+<li>WebappClassLoaderBase#clearReferences </li>
+<li>WebappClassLoaderBase#checkThreadLocalsForLeaks（需要clearReferencesThreadLocals&#x3D;true，默认也为true）</li>
+</ol>
+</blockquote>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">checkThreadLocalsForLeaks</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 获取JVM的所有线程</span>
+    Thread<span class="token punctuation">[</span><span class="token punctuation">]</span> threads <span class="token operator">=</span> <span class="token function">getThreads</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 获取Thread中threadLocals与inheritableThreadLocals两个字段</span>
+        Field threadLocalsField <span class="token operator">=</span> Thread<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">.</span><span class="token function">getDeclaredField</span><span class="token punctuation">(</span><span class="token string">"threadLocals"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        threadLocalsField<span class="token punctuation">.</span><span class="token function">setAccessible</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Field inheritableThreadLocalsField <span class="token operator">=</span> Thread<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">.</span><span class="token function">getDeclaredField</span><span class="token punctuation">(</span><span class="token string">"inheritableThreadLocals"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        inheritableThreadLocalsField<span class="token punctuation">.</span><span class="token function">setAccessible</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// ThreadLocalMap.table 数组字段（用于存储 Entry 的数组）</span>
+        Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> tlmClass <span class="token operator">=</span> Class<span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span><span class="token string">"java.lang.ThreadLocal$ThreadLocalMap"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Field tableField <span class="token operator">=</span> tlmClass<span class="token punctuation">.</span><span class="token function">getDeclaredField</span><span class="token punctuation">(</span><span class="token string">"table"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        tableField<span class="token punctuation">.</span><span class="token function">setAccessible</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// ThreadLocalMap中删除过期Entry方法</span>
+        Method expungeStaleEntriesMethod <span class="token operator">=</span> tlmClass<span class="token punctuation">.</span><span class="token function">getDeclaredMethod</span><span class="token punctuation">(</span><span class="token string">"expungeStaleEntries"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        expungeStaleEntriesMethod<span class="token punctuation">.</span><span class="token function">setAccessible</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>Thread thread <span class="token operator">:</span> threads<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            Object threadLocalMap<span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>thread <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+                <span class="token comment" spellcheck="true">// 检查 threadLocals</span>
+                threadLocalMap <span class="token operator">=</span> threadLocalsField<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>thread<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>null <span class="token operator">!=</span> threadLocalMap<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 主动触发清理过期Entry（即key被回收的Entry）</span>
+                    expungeStaleEntriesMethod<span class="token punctuation">.</span><span class="token function">invoke</span><span class="token punctuation">(</span>threadLocalMap<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token function">checkThreadLocalMapForLeaks</span><span class="token punctuation">(</span>threadLocalMap<span class="token punctuation">,</span> tableField<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 检查 inheritableThreadLocals</span>
+                threadLocalMap <span class="token operator">=</span> inheritableThreadLocalsField<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>thread<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>null <span class="token operator">!=</span> threadLocalMap<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    expungeStaleEntriesMethod<span class="token punctuation">.</span><span class="token function">invoke</span><span class="token punctuation">(</span>threadLocalMap<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token function">checkThreadLocalMapForLeaks</span><span class="token punctuation">(</span>threadLocalMap<span class="token punctuation">,</span> tableField<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 异常处理...</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">checkThreadLocalMapForLeaks</span><span class="token punctuation">(</span>Object map<span class="token punctuation">,</span>
+        Field internalTableField<span class="token punctuation">)</span> <span class="token keyword">throws</span> IllegalAccessException<span class="token punctuation">,</span>
+        NoSuchFieldException <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>map <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        Object<span class="token punctuation">[</span><span class="token punctuation">]</span> table <span class="token operator">=</span> <span class="token punctuation">(</span>Object<span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">)</span> internalTableField<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>map<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>table <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Object obj <span class="token operator">:</span> table<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>obj <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">boolean</span> keyLoadedByWebapp <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                    <span class="token keyword">boolean</span> valueLoadedByWebapp <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                    <span class="token comment" spellcheck="true">// 检查key（即为ThreadLocal对象或其子类）</span>
+                    Object key <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>Reference<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span><span class="token punctuation">)</span> obj<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token comment" spellcheck="true">// loadedByThisOrChild用于检测指定的对象（也支持集合）及其所有父类是否有当前WebappClassLoader所加载</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token function">loadedByThisOrChild</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        keyLoadedByWebapp <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    <span class="token comment" spellcheck="true">// 检查value（ThreadLocal里真正存放的对象）</span>
+                    Field valueField <span class="token operator">=</span> obj<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDeclaredField</span><span class="token punctuation">(</span><span class="token string">"value"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    valueField<span class="token punctuation">.</span><span class="token function">setAccessible</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    Object value <span class="token operator">=</span> valueField<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>obj<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token function">loadedByThisOrChild</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        valueLoadedByWebapp <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    <span class="token comment" spellcheck="true">// key 或 value 被当前 WebappClassLoader 加载，说明有潜在泄漏</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>keyLoadedByWebapp <span class="token operator">||</span> valueLoadedByWebapp<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        Object<span class="token punctuation">[</span><span class="token punctuation">]</span> args <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Object</span><span class="token punctuation">[</span><span class="token number">5</span><span class="token punctuation">]</span><span class="token punctuation">;</span>
+                        args<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">getContextName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>key <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            args<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">getPrettyClassName</span><span class="token punctuation">(</span>key<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                                args<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span> <span class="token operator">=</span> key<span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                <span class="token comment" spellcheck="true">// ...</span>
+                            <span class="token punctuation">}</span>
+                        <span class="token punctuation">}</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            args<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span> <span class="token operator">=</span> <span class="token function">getPrettyClassName</span><span class="token punctuation">(</span>value<span class="token punctuation">.</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                                args<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span> <span class="token operator">=</span> value<span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                <span class="token comment" spellcheck="true">// ...</span>
+                            <span class="token punctuation">}</span>
+                        <span class="token punctuation">}</span>
+                        <span class="token comment" spellcheck="true">// =========== 仅打日志。value泄漏用error打印，key泄漏则用debug打印 ================</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>valueLoadedByWebapp<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span>
+                                    <span class="token string">"webappClassLoader.checkThreadLocalsForLeaks"</span><span class="token punctuation">,</span>
+                                    args<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>value <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token keyword">if</span> <span class="token punctuation">(</span>log<span class="token punctuation">.</span><span class="token function">isDebugEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                log<span class="token punctuation">.</span><span class="token function">debug</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span>
+                                        <span class="token string">"webappClassLoader.checkThreadLocalsForLeaksNull"</span><span class="token punctuation">,</span>
+                                        args<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span>
+                        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                            <span class="token keyword">if</span> <span class="token punctuation">(</span>log<span class="token punctuation">.</span><span class="token function">isDebugEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                log<span class="token punctuation">.</span><span class="token function">debug</span><span class="token punctuation">(</span>sm<span class="token punctuation">.</span><span class="token function">getString</span><span class="token punctuation">(</span>
+                                        <span class="token string">"webappClassLoader.checkThreadLocalsForLeaksNone"</span><span class="token punctuation">,</span>
+                                        args<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h4><p>其核心逻辑只有两个：</p>
+<ol>
+<li>通过<strong>反射调用所有线程里ThreadLocalMap#expungeStaleEntry，来主动清除需要被GC的Entry</strong>。解决案例中demo2和demo3的隐式隐患</li>
+<li>如果Entry里的key（ThreadLocal）和value的相关class由当前WebappClassLoader加载，也<strong>仅打日志</strong></li>
+</ol>
+<p><strong>为什么仅打日志呢？</strong></p>
+<blockquote>
+<p>​	 因为ThreadLocal中存放的通常是业务线程正在使用的上下文信息（如用户信息、缓存等）。<strong>Tomcat 无法判断这些值是否仍然有效或在使用中，如果直接释放掉可能导致运行中的Web程序抛出相关的空指针，因此选择了保守处理，只警告不干预</strong></p>
+</blockquote>
+<h3 id="线程回收"><a href="#线程回收" class="headerlink" title="线程回收"></a>线程回收</h3><h4 id="ThreadLocalLeakPreventionListener"><a href="#ThreadLocalLeakPreventionListener" class="headerlink" title="ThreadLocalLeakPreventionListener"></a>ThreadLocalLeakPreventionListener</h4><p>​	Tomcat 默认启用了 <code>ThreadLocalLeakPreventionListener</code>（已在 <code>server.xml</code> 中配置）。在触发热加载时，该Listener 会监听 <code>Lifecycle.AFTER_STOP_EVENT</code> 事件，并在收到该事件后调用所有 Worker 线程池的 <code>contextStopping()</code> 方法，从而<strong>优雅地中断并清理空闲线程，避免ThreadLocal导致的内存泄漏问题</strong>。</p>
+<p>​	可以先看看这篇<a href="https://blog.shanzhao.site/2020-05-12/java-yuan-ma-pian-xian-cheng-chi/#1-2-%E6%A0%B8%E5%BF%83%E6%96%B9%E6%B3%95">线程池相关源码解析文章</a>。ThreadPoolExecutor#contextStopping代码如下，核心就1件事：<strong>对空闲线程进行中断并退出（通过设置corePoolSize&#x3D;0来保证）</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">contextStopping</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 非常重要：记录当前 Context 停止的时间，用于后续判断线程是否需要回收</span>
+    <span class="token keyword">this</span><span class="token punctuation">.</span>lastContextStoppedTime<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span>System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">int</span> savedCorePoolSize <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getCorePoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    TaskQueue taskQueue <span class="token operator">=</span> <span class="token function">getQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">instanceof</span> <span class="token class-name">TaskQueue</span> <span class="token operator">?</span> <span class="token punctuation">(</span>TaskQueue<span class="token punctuation">)</span> <span class="token function">getQueue</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">:</span> null<span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>taskQueue <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 临时设置任务队列剩余容量为0</span>
+        <span class="token comment" spellcheck="true">// 但ThreadPoolExecutor#setCorePoolSize内部没发现哪里有检查queue.remainingCapacity() ==</span>
+        <span class="token comment" spellcheck="true">// 0的逻辑，可能是为了兼容其他逻辑吧（offer和poll）？？？</span>
+        taskQueue<span class="token punctuation">.</span><span class="token function">setForcedRemainingCapacity</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 将核心线程池设为0：内部会中断所有空闲线程并触发getTask()里的退出逻辑</span>
+    <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">setCorePoolSize</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// ======== 恢复线程池原始配置，避免影响http请求 ============</span>
+
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>taskQueue <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        taskQueue<span class="token punctuation">.</span><span class="token function">resetForcedRemainingCapacity</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">setCorePoolSize</span><span class="token punctuation">(</span>savedCorePoolSize<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="TaskQueue"><a href="#TaskQueue" class="headerlink" title="TaskQueue"></a>TaskQueue</h4><p>​	单靠上述的 <code>ThreadLocalLeakPreventionListener</code> 并不足以关闭运行中的 worker 线程。为此，Tomcat 自定义了一个 <code>TaskQueue</code> 作为线程池的任务队列，并重写了几个关键方法，以精细控制 worker 线程的创建与回收策略。</p>
+<p>​	这里重点关注其重写的 <code>poll</code> 和 <code>take</code> 方法 —— 它们是线程池中 worker 线程获取任务的主要途径。Tomcat 在此做了一个巧妙的设计：<strong>仅对需要被回收的线程（即线程创建时间早于当前 Context 的上次 stop 时间）应用 fallback 策略</strong></p>
+<ul>
+<li><strong>take() 方法原本是阻塞式的，这里被 fallback 到poll()，即允许超时等待，从而避免永久阻塞</strong></li>
+<li><strong>poll()若超时返回 null，则直接 fallback 到抛出异常，从而促使线程正常终止</strong></li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">TaskQueue</span> <span class="token keyword">extends</span> <span class="token class-name">LinkedBlockingQueue</span><span class="token operator">&lt;</span>Runnable<span class="token operator">></span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// ================= 重写的offer方法，调整线程的创建策略 ====================</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 目的：尽量优先创建线程，而不是把任务直接塞进队列
+     * 原因：Tomcat 设计希望在线程数未满时尽可能创建新线程，提高吞吐量。
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">offer</span><span class="token punctuation">(</span>Runnable o<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>parent <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span>o<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 如果线程池已达到最大线程数，那只能乖乖入队列</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>parent<span class="token punctuation">.</span><span class="token function">getPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> parent<span class="token punctuation">.</span><span class="token function">getMaximumPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span>o<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 还有空闲线程（已提交任务数 &lt;= 当前线程数），也入队</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>parent<span class="token punctuation">.</span><span class="token function">getSubmittedCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&lt;=</span> <span class="token punctuation">(</span>parent<span class="token punctuation">.</span><span class="token function">getPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span>o<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 线程数没达到最大限制，并且提交的任务数已多余当前线程数（请求压力大）。则返回 false 触发线程池直接创建新建线程</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>parent<span class="token punctuation">.</span><span class="token function">getPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> parent<span class="token punctuation">.</span><span class="token function">getMaximumPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 默认入队</span>
+        <span class="token keyword">return</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">offer</span><span class="token punctuation">(</span>o<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// ================= 重写poll和take方法（仅对需要被终结的线程施加fallback策略，进而调整了线程的回收策略） =========================</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> Runnable <span class="token function">poll</span><span class="token punctuation">(</span><span class="token keyword">long</span> timeout<span class="token punctuation">,</span> TimeUnit unit<span class="token punctuation">)</span>
+            <span class="token keyword">throws</span> InterruptedException <span class="token punctuation">{</span>
+        Runnable runnable <span class="token operator">=</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">poll</span><span class="token punctuation">(</span>timeout<span class="token punctuation">,</span> unit<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>runnable <span class="token operator">==</span> null <span class="token operator">&amp;&amp;</span> parent <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 内部会判断当前线程是否需要被终结，需要的话会抛出异常，最终终结当前线程</span>
+            parent<span class="token punctuation">.</span><span class="token function">stopCurrentThreadIfNeeded</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 只要有任务，还是直接返回，不影响活跃线程</span>
+        <span class="token keyword">return</span> runnable<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> Runnable <span class="token function">take</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> InterruptedException <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>parent <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> parent<span class="token punctuation">.</span><span class="token function">currentThreadShouldBeStopped</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// fallback为poll方法，即允许超时</span>
+            <span class="token keyword">return</span> <span class="token function">poll</span><span class="token punctuation">(</span>parent<span class="token punctuation">.</span><span class="token function">getKeepAliveTime</span><span class="token punctuation">(</span>TimeUnit<span class="token punctuation">.</span>MILLISECONDS<span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    TimeUnit<span class="token punctuation">.</span>MILLISECONDS<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 正常线程还是阻塞等待</span>
+        <span class="token keyword">return</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">take</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="总结-1"><a href="#总结-1" class="headerlink" title="总结"></a>总结</h4><p>​	<strong><code>ThreadLocalLeakPreventionListener</code> 负责主动回收空闲的 worker 线程，而 <code>TaskQueue</code> 则通过重写 <code>poll</code> 和 <code>take</code> 方法，利用线程池的任务获取机制，实现对线程回收的兜底策略</strong>。两者配合，仅在 <strong>线程空闲时</strong> 才进行处理，<strong>不影响活跃线程的正常工作</strong>。通过这种机制，<strong>Tomcat 能够在热加载后安全且优雅的清理掉旧的所有worker 线程，从而避免因ThreadLocal残留导致的内存泄漏。</strong></p>
+<h2 id="相关链接"><a href="#相关链接" class="headerlink" title="相关链接"></a>相关链接</h2><ul>
+<li><a href="https://blog.shanzhao.site/2020-11-21/tan-tan-threadlocal-wei-shi-me-bei-she-ji-wei-ruo-yin-yong/">ThreadLocal弱引用原因</a></li>
+<li><a href="https://blog.shanzhao.site/2020-05-12/java-yuan-ma-pian-xian-cheng-chi/#1-2-%E6%A0%B8%E5%BF%83%E6%96%B9%E6%B3%95">线程池源码解析</a></li>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://cwiki.apache.org/confluence/display/tomcat/MemoryLeakProtection">Tomcat内存泄漏原文</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/" rel="tag"># 热加载</a>
+              <a href="/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/" rel="tag"># 内存泄漏</a>
+              <a href="/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/" rel="tag"># 垃圾回收</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/" rel="prev" title="Tomcat-热加载和相关Class的垃圾回收探讨（一）">
+                  <i class="fa fa-angle-left"></i> Tomcat-热加载和相关Class的垃圾回收探讨（一）
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2022-01-09/tomcat-session-guan-li/" rel="next" title="Tomcat-Session管理">
+                  Tomcat-Session管理 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">333k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">10:06</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

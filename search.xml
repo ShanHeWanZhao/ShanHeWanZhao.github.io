@@ -1,6 +1,182 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>CMS</title>
+    <url>/2020-09-19/cms/</url>
+    <content><![CDATA[
+​	主要分析了CMS收集器的算法实现和收集流程，和部分关键参数对CMS的影响，以及三色标记如何解决对象漏标问题。并在最后总结了CMS的优缺点
+
+
+
+
+​	CMS（Concurrent Mark-Sweep）是一种基于标记-清除算法实现的老年代垃圾回收器，以获取最短停顿时间为目标，适合对响应时间敏感的应用（如 Web 系统）。其核心思想是尽可能地让 GC 工作与用户线程并发执行，降低停顿时间。
+​	一次CMS gc会算作两次full gc，分别为初始标记和最终标记（算上的时STW次数），但在多次收集后产生的空间碎片如果影响到了对象的分配，也会才用标记-整理算法收集一次
+​	清除算法会产生空间碎片，如果cms区预留的空闲内存不能满足新对象的分配，那么会触发Concurrent Mode Failure，这时会冻结用户线程，临时启用Serial Old收集器重新回收老年代的垃圾，全程STW，耗时很长
+
+初始标记(CMS initial mark): STW，仅标记GCRoots对象的下一个可达对象，很快
+并发标记(CMS concurent mark)
+重新标记(CMS remark): STW，解决并发标记时”那些消失的对象“
+并发清除(CMS concurrent sweep)
+
+1.参数
+-XX:+UseConcMarkSweepGC   ： 启用CMS收集器（年轻代默认使用ParNew收集器）
+
+–XX:CMSWaitDuration&#x3D;2000 ： cms后台线程的轮询间隔时间（ms单位)
+
+-XX:+UseCMSInitiatingOccupancyOnly : 使用基于设定的阈值进行CMS gc，值为CMSInitiatingOccupancyFraction
+
+-XX:CMSInitiatingOccupancyFraction&#x3D;80 : 在UseCMSInitiatingOccupancyOnly参数启用后生效。当CMS区（老年代）占比达到80%后，启用CMS垃圾回收。默认为-1，代表不启用，则老年代垃圾回收阈值算法为：**( (100 - MinHeapFreeRatio) + (CMSTriggerRatio * MinHeapFreeRatio) &#x2F; 100.0) &#x2F; 100.0** &#x3D; 92%
+
+-XX:ConcGCThreads&#x3D;2 ：并发gc线程数，默认为（ParallelGCThreads+3）&#x2F; 4。ParallelGCThreads为新生代并行GC线程数，当CPU数量小于8时，ParallelGCThreads的值就是CPU的数量，当CPU数量大于8时，ParallelGCThreads的值等于3+5*cpuCount &#x2F; 8 （可用jstack查看）
+
+
+2 三色标记2.1 含义
+
+
+颜色
+含义
+
+
+
+白色
+尚未被标记的对象，可能是垃圾
+
+
+灰色
+被标记为可达，但其内部引用的对象还没有全部扫描完
+
+
+黑色
+可达，且其所有引用的对象也都已经被标记（扫描完）
+
+
+​	在三色标记开始时，所有对象初始状态都是白色。GC 从 GCRoots 出发，只能扫描到 GCRoots 可达的对象。每当扫描到一个新对象时，它会先被标记为灰色（表示已经被发现但尚未处理完）。当该对象的所有引用对象也都被扫描并标记后，它就会被染为黑色（表示处理完毕，不可回收）。
+而对于那些不可达的对象，由于没有任何路径从 GCRoots 可以触达它们，因此它们不会被扫描，颜色保持为白色，最终被识别为垃圾对象。
+因此，在三色标记结束时，只会存在黑色和白色两类对象：
+
+黑色对象：可达、已完全处理，不能被回收
+白色对象：不可达、未被处理，将被回收
+
+2.2 问题
+浮动垃圾：被标记为黑色的对象还会继续存活。但如果我们的用户线程此时对黑色对象丢弃引用，这个黑色对象就不可达了，就应该在本次垃圾清理中被回收。但这个影响不大，下次GC可进行处理
+对象漏标：在并发标记阶段，应用线程可能会修改对象引用关系，导致本应可达的对象未被正确扫描，仍然保持白色，最终被误回收。有如下两种情况
+对黑色对象A（此时A已完全扫描完毕）内部赋值一个白色对象B。B产生了漏标
+对灰色对象C（此时C内部还未扫描完）内部暂时断开了一个对象D使其变为白色，并在扫描完成后重新将D赋值到C中
+
+
+
+2.3 增量更新（Incremental Update）顾名思义，表示增加了引用。增量更新关注的是引用新增的情况，尤其是解决以下对象漏标场景：
+
+黑色对象 A 在并发标记后，新增引用了一个未被标记的白色对象 B。	
+
+在这种情况下，为了避免漏标，写屏障机制会将 A 重新标记为灰色，使其在“重新标记（Remark）”阶段重新被扫描一次，从而发现并标记 B，确保其不会被错误回收。总结就是黑色对象A一旦新插入了白色对象B的引用之后，A就变回灰色对象了。
+​	CMS 使用增量更新策略，因为它是老年代回收器，老年代中的对象多数是长寿命的，结构稳定，引用新增比引用删除更常见。但增量更新只能处理“新增引用”，无法处理“引用删除”导致的漏标，因此并不完美。这也是 CMS 在 JDK9 被标记为过时的重要原因之一。
+2.4 原始快照（Snapshot-At-The-Beginning，SATB）​	保存一份并发标记开始时的引用快照，当后续并发标记过程中对这些引用删除时，都会被记录到SATB缓冲区，标记结束后SATB缓冲区的对象被重新标记为存活。
+​	原始快照只处理对灰色对象C删除白色对象D的情况（将D记录到SATB缓冲区），重新标记阶段会在将D标为活跃。但不处理黑色新增引用，需要依赖其他机制保证（一般都是依赖写屏障，将B直接标为存活）
+​	G1使用原始快照能完全避免对象漏标，因为它就是用写屏障直接标记白色对象为存活的方式来处理给黑色对象新增的白色对象这种漏标情况。即SATB处理删除，写屏障兜底新增。虽不可避免的会增加浮动垃圾，但肯定不会漏标
+3 cms gc触发条件
+原文
+foreground collector  ：空间分配不够触发
+background collector
+显式调用 System.gc()，且配置了 -XX:+ExplicitGCInvokesConcurrent
+未配置 UseCMSInitiatingOccupancyOnly 时，JVM 会根据运行统计数据动态判断
+OldGen 达到某个使用阈值（静态或动态计算）
+Young GC 失败或预计失败，JVM 触发 CMS 作为悲观策略
+元空间（Metaspace）扩容触发，且 CMSClassUnloadingEnabled=true（默认开启）
+
+
+
+4 总结
+CMS 是一种低停顿老年代收集器，适合延迟敏感型系统。
+优点是并发执行、停顿低，缺点如下
+空间碎片严重
+需要预留足够空间，否则触发Concurrent Mode Failure 会退化为Serial GC，非常耗时
+只用了增量更新，没有完全解决漏标
+会产生浮动垃圾
+
+
+推荐配合 CMSInitiatingOccupancyFraction 与 UseCMSInitiatingOccupancyOnly 控制触发阈值，防止内存不足时被动触发 Full GC。
+
+]]></content>
+      <categories>
+        <category>jvm</category>
+      </categories>
+      <tags>
+        <tag>CMS</tag>
+        <tag>三色标记</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>CloudFlare-CDN缓存清除</title>
+    <url>/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/</url>
+    <content><![CDATA[
+​	给出了一些api用于清除Cloudflare的CDN缓存方式
+ 
+
+
+
+​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
+1 purgeUrl
+2 使用ApiKey清除（不推荐）
+ZONE_ID：区域id，即你在CF上托管的根域名id
+EMAIL：你的邮箱
+API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
+
+2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{"purge_everything": true}'
+
+2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "X-Auth-Email: $EMAIL" \
+    -H "X-Auth-Key: $API_KEY" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
+
+3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
+
+3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+     -H "Authorization: Bearer $API_TOKEN" \
+     -H "Content-Type:application/json"
+
+3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{"purge_everything": true}'
+
+3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
+curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $API_TOKEN" \
+    -d '{
+    "files": [
+        "https://blog.shanzhao.site/css/my.css",
+        "https://blog.shanzhao.site/libs/others/snow.js"
+    ]
+}'
+
+4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
+5 参考链接
+官方清除缓存文档
+cloudflare dashboard创建token和查看ApiKey
+ZoneId获取
+
+]]></content>
+      <categories>
+        <category>cloudflare</category>
+      </categories>
+      <tags>
+        <tag>cdn缓存清除</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>G1</title>
     <url>/2020-11-25/g1/</url>
     <content><![CDATA[
@@ -262,182 +438,6 @@ ssh-keygen -t rsa
       </categories>
       <tags>
         <tag>Git</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>CMS</title>
-    <url>/2020-09-19/cms/</url>
-    <content><![CDATA[
-​	主要分析了CMS收集器的算法实现和收集流程，和部分关键参数对CMS的影响，以及三色标记如何解决对象漏标问题。并在最后总结了CMS的优缺点
-
-
-
-
-​	CMS（Concurrent Mark-Sweep）是一种基于标记-清除算法实现的老年代垃圾回收器，以获取最短停顿时间为目标，适合对响应时间敏感的应用（如 Web 系统）。其核心思想是尽可能地让 GC 工作与用户线程并发执行，降低停顿时间。
-​	一次CMS gc会算作两次full gc，分别为初始标记和最终标记（算上的时STW次数），但在多次收集后产生的空间碎片如果影响到了对象的分配，也会才用标记-整理算法收集一次
-​	清除算法会产生空间碎片，如果cms区预留的空闲内存不能满足新对象的分配，那么会触发Concurrent Mode Failure，这时会冻结用户线程，临时启用Serial Old收集器重新回收老年代的垃圾，全程STW，耗时很长
-
-初始标记(CMS initial mark): STW，仅标记GCRoots对象的下一个可达对象，很快
-并发标记(CMS concurent mark)
-重新标记(CMS remark): STW，解决并发标记时”那些消失的对象“
-并发清除(CMS concurrent sweep)
-
-1.参数
--XX:+UseConcMarkSweepGC   ： 启用CMS收集器（年轻代默认使用ParNew收集器）
-
-–XX:CMSWaitDuration&#x3D;2000 ： cms后台线程的轮询间隔时间（ms单位)
-
--XX:+UseCMSInitiatingOccupancyOnly : 使用基于设定的阈值进行CMS gc，值为CMSInitiatingOccupancyFraction
-
--XX:CMSInitiatingOccupancyFraction&#x3D;80 : 在UseCMSInitiatingOccupancyOnly参数启用后生效。当CMS区（老年代）占比达到80%后，启用CMS垃圾回收。默认为-1，代表不启用，则老年代垃圾回收阈值算法为：**( (100 - MinHeapFreeRatio) + (CMSTriggerRatio * MinHeapFreeRatio) &#x2F; 100.0) &#x2F; 100.0** &#x3D; 92%
-
--XX:ConcGCThreads&#x3D;2 ：并发gc线程数，默认为（ParallelGCThreads+3）&#x2F; 4。ParallelGCThreads为新生代并行GC线程数，当CPU数量小于8时，ParallelGCThreads的值就是CPU的数量，当CPU数量大于8时，ParallelGCThreads的值等于3+5*cpuCount &#x2F; 8 （可用jstack查看）
-
-
-2 三色标记2.1 含义
-
-
-颜色
-含义
-
-
-
-白色
-尚未被标记的对象，可能是垃圾
-
-
-灰色
-被标记为可达，但其内部引用的对象还没有全部扫描完
-
-
-黑色
-可达，且其所有引用的对象也都已经被标记（扫描完）
-
-
-​	在三色标记开始时，所有对象初始状态都是白色。GC 从 GCRoots 出发，只能扫描到 GCRoots 可达的对象。每当扫描到一个新对象时，它会先被标记为灰色（表示已经被发现但尚未处理完）。当该对象的所有引用对象也都被扫描并标记后，它就会被染为黑色（表示处理完毕，不可回收）。
-而对于那些不可达的对象，由于没有任何路径从 GCRoots 可以触达它们，因此它们不会被扫描，颜色保持为白色，最终被识别为垃圾对象。
-因此，在三色标记结束时，只会存在黑色和白色两类对象：
-
-黑色对象：可达、已完全处理，不能被回收
-白色对象：不可达、未被处理，将被回收
-
-2.2 问题
-浮动垃圾：被标记为黑色的对象还会继续存活。但如果我们的用户线程此时对黑色对象丢弃引用，这个黑色对象就不可达了，就应该在本次垃圾清理中被回收。但这个影响不大，下次GC可进行处理
-对象漏标：在并发标记阶段，应用线程可能会修改对象引用关系，导致本应可达的对象未被正确扫描，仍然保持白色，最终被误回收。有如下两种情况
-对黑色对象A（此时A已完全扫描完毕）内部赋值一个白色对象B。B产生了漏标
-对灰色对象C（此时C内部还未扫描完）内部暂时断开了一个对象D使其变为白色，并在扫描完成后重新将D赋值到C中
-
-
-
-2.3 增量更新（Incremental Update）顾名思义，表示增加了引用。增量更新关注的是引用新增的情况，尤其是解决以下对象漏标场景：
-
-黑色对象 A 在并发标记后，新增引用了一个未被标记的白色对象 B。	
-
-在这种情况下，为了避免漏标，写屏障机制会将 A 重新标记为灰色，使其在“重新标记（Remark）”阶段重新被扫描一次，从而发现并标记 B，确保其不会被错误回收。总结就是黑色对象A一旦新插入了白色对象B的引用之后，A就变回灰色对象了。
-​	CMS 使用增量更新策略，因为它是老年代回收器，老年代中的对象多数是长寿命的，结构稳定，引用新增比引用删除更常见。但增量更新只能处理“新增引用”，无法处理“引用删除”导致的漏标，因此并不完美。这也是 CMS 在 JDK9 被标记为过时的重要原因之一。
-2.4 原始快照（Snapshot-At-The-Beginning，SATB）​	保存一份并发标记开始时的引用快照，当后续并发标记过程中对这些引用删除时，都会被记录到SATB缓冲区，标记结束后SATB缓冲区的对象被重新标记为存活。
-​	原始快照只处理对灰色对象C删除白色对象D的情况（将D记录到SATB缓冲区），重新标记阶段会在将D标为活跃。但不处理黑色新增引用，需要依赖其他机制保证（一般都是依赖写屏障，将B直接标为存活）
-​	G1使用原始快照能完全避免对象漏标，因为它就是用写屏障直接标记白色对象为存活的方式来处理给黑色对象新增的白色对象这种漏标情况。即SATB处理删除，写屏障兜底新增。虽不可避免的会增加浮动垃圾，但肯定不会漏标
-3 cms gc触发条件
-原文
-foreground collector  ：空间分配不够触发
-background collector
-显式调用 System.gc()，且配置了 -XX:+ExplicitGCInvokesConcurrent
-未配置 UseCMSInitiatingOccupancyOnly 时，JVM 会根据运行统计数据动态判断
-OldGen 达到某个使用阈值（静态或动态计算）
-Young GC 失败或预计失败，JVM 触发 CMS 作为悲观策略
-元空间（Metaspace）扩容触发，且 CMSClassUnloadingEnabled=true（默认开启）
-
-
-
-4 总结
-CMS 是一种低停顿老年代收集器，适合延迟敏感型系统。
-优点是并发执行、停顿低，缺点如下
-空间碎片严重
-需要预留足够空间，否则触发Concurrent Mode Failure 会退化为Serial GC，非常耗时
-只用了增量更新，没有完全解决漏标
-会产生浮动垃圾
-
-
-推荐配合 CMSInitiatingOccupancyFraction 与 UseCMSInitiatingOccupancyOnly 控制触发阈值，防止内存不足时被动触发 Full GC。
-
-]]></content>
-      <categories>
-        <category>jvm</category>
-      </categories>
-      <tags>
-        <tag>CMS</tag>
-        <tag>三色标记</tag>
-      </tags>
-  </entry>
-  <entry>
-    <title>CloudFlare-CDN缓存清除</title>
-    <url>/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/</url>
-    <content><![CDATA[
-​	给出了一些api用于清除Cloudflare的CDN缓存方式
- 
-
-
-
-​		搭建个人博客网站时，域名托管到CF，会使用CF的CDN。当你重新修改博客网站的样式css和js文件等再重新部署，一般都不会立马生效，因为CDN里的缓存还在，前端访问用的还是旧css和js文件。这时我们需要主动清除CDN的缓存，来让缓存重新加载，以便让我们修改的样式在网站立马生效
-1 purgeUrl
-2 使用ApiKey清除（不推荐）
-ZONE_ID：区域id，即你在CF上托管的根域名id
-EMAIL：你的邮箱
-API_KEY：可自建apiKey，也可使用CF默认有的GlobalApiKey（个人资料 -&gt; API令牌 -&gt; API密钥 -&gt; Global API Key）
-
-2.1 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{"purge_everything": true}'
-
-2.2 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "X-Auth-Email: $EMAIL" \
-    -H "X-Auth-Key: $API_KEY" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
-
-3 自定义token清除（推荐）自定义token不仅可以最小化的控制权限，也可以设置token的有效时常。使用如下方式创建一个专用于清理指定根域名的token
-
-3.1 验证token是否生效curl -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
-     -H "Authorization: Bearer $API_TOKEN" \
-     -H "Content-Type:application/json"
-
-3.2 全部清除curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{"purge_everything": true}'
-
-3.3 批量清除具体文件一次性调用有文件数量限制： Free&#x2F;Pro&#x2F;Business一次上限30个，Enterprise一次上限500个
-curl https://api.cloudflare.com/client/v4/zones/$ZONE_ID/purge_cache \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -d '{
-    "files": [
-        "https://blog.shanzhao.site/css/my.css",
-        "https://blog.shanzhao.site/libs/others/snow.js"
-    ]
-}'
-
-4 其他还有其他的参数，比如tags，hosts，prefixes，但这些都是企业版的用户才能使用，这里就不写了
-5 参考链接
-官方清除缓存文档
-cloudflare dashboard创建token和查看ApiKey
-ZoneId获取
-
-]]></content>
-      <categories>
-        <category>cloudflare</category>
-      </categories>
-      <tags>
-        <tag>cdn缓存清除</tag>
       </tags>
   </entry>
   <entry>
@@ -1734,7 +1734,41 @@ final void tryTerminate() {
     }
 }
 
-1.2.3 execute（投递任务）// 执行execute的方法
+1.2.3 setCorePoolSize设置核心线程数 corePoolSize，并根据变化动态调整 worker 数量
+
+若变小：中断多余的空闲线程
+若变大：启动新的 worker 以尽快处理等待队列中的任务
+
+public void setCorePoolSize(int corePoolSize) {
+    if (corePoolSize &lt; 0 || maximumPoolSize &lt; corePoolSize) {
+        throw new IllegalArgumentException();
+    }
+    int delta = corePoolSize - this.corePoolSize;
+    this.corePoolSize = corePoolSize;
+    if (workerCountOf(ctl.get()) > corePoolSize) { // 需要减少
+        // 内部会对所有空闲线程发出中断信号，使其从阻塞中退出，从而在 getTask 时主动终结
+        interruptIdleWorkers();
+    } else if (delta > 0) { // 需要增加
+
+        // 最多不超过delta个线程
+        int k = Math.min(delta, workQueue.size());
+        // 动态增加worker数量，直至任务队列为空
+        while (k-- > 0 &amp;&amp; addWorker(null, true)) {
+            if (workQueue.isEmpty()) {
+                break;
+            }
+        }
+    }
+}
+
+1.2.4 execute（投递任务）核心流程：
+
+先判断线程池的工作线程数量是否小于核心线程数，小于核心线程数直接新建线程来执行
+如果核心线程数满了，则将Runnable投入到workQueue中
+如果workQueue满了，则创建非核心线程来继续执行任务
+如果线程池中的工作现场数量到达了maximumPoolSize的值，则使用拒绝策略来执行任务
+
+// 执行execute的方法
 public void execute(Runnable command) {
     if (command == null)
         throw new NullPointerException();
@@ -1760,7 +1794,7 @@ public void execute(Runnable command) {
         reject(command);
 }
 
-1.2.4 worker的运行和阻塞// Worker的Runnable方法
+1.2.5 worker#run/ Worker的Runnable方法
 public void run() {
     runWorker(this);
 }
@@ -1775,11 +1809,13 @@ final void runWorker(Worker w) {
         // 利用阻塞队列，一直循环取任务执行（阻塞队列为空时会阻塞当前想取出元素的线程）
         // 如果getTask为null，就代表会终结当前工作线程
         while (task != null || (task = getTask()) != null) {
+            // worker加锁。表示worker正在运行Runnable
             w.lock();
             if ((runStateAtLeast(ctl.get(), STOP) ||
-                 (Thread.interrupted() &amp;&amp;
-                  runStateAtLeast(ctl.get(), STOP))) &amp;&amp;
-                !wt.isInterrupted())
+                    (Thread.interrupted() &amp;&amp;
+                            runStateAtLeast(ctl.get(), STOP)))
+                    &amp;&amp;
+                    !wt.isInterrupted())
                 wt.interrupt();
             try {
                 beforeExecute(wt, task); // hook before
@@ -1787,11 +1823,14 @@ final void runWorker(Worker w) {
                 try {
                     task.run(); // 真正的运行Runnable
                 } catch (RuntimeException x) {
-                    thrown = x; throw x;
+                    thrown = x;
+                    throw x;
                 } catch (Error x) {
-                    thrown = x; throw x;
+                    thrown = x;
+                    throw x;
                 } catch (Throwable x) {
-                    thrown = x; throw new Error(x);
+                    thrown = x;
+                    throw new Error(x);
                 } finally {
                     afterExecute(task, thrown); // hook after
                 }
@@ -1806,15 +1845,21 @@ final void runWorker(Worker w) {
         processWorkerExit(w, completedAbruptly);
     }
 }
-// 核心方法之一，从阻塞队列中取任务
+
+/**
+ * 核心方法之一：从工作队列中获取一个任务
+ * 如果线程需要被回收（根据线程池状态、是否超时等判断），会返回 null来退出线程
+ */
 private Runnable getTask() {
-    boolean timedOut = false; // Did the last poll() time out?
+    // 上一次循环的poll()是否超时
+    boolean timedOut = false;
     // 死循环取任务
     for (;;) {
         int c = ctl.get();
+        // 获取当前线程池状态
         int rs = runStateOf(c);
 
-        // Check if queue empty only if necessary.
+        // 状态校验
         if (rs >= SHUTDOWN &amp;&amp; (rs >= STOP || workQueue.isEmpty())) {
             decrementWorkerCount();
             return null;
@@ -1822,43 +1867,35 @@ private Runnable getTask() {
 
         int wc = workerCountOf(c);
 
-        // 允许核心线程过期和非核心线程都可以超时取任务
+        // 是否允许超时：开启核心线程超时，或该线程为非核心线程
         boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
 
+        // 判断当前线程是否该终结：
         if ((wc > maximumPoolSize || (timed &amp;&amp; timedOut))
-            &amp;&amp; (wc > 1 || workQueue.isEmpty())) {
+                &amp;&amp; (wc > 1 || workQueue.isEmpty())) {
             // 原子性的尝试减少一个工作线程，减少成功才返回结束线程
-            if (compareAndDecrementWorkerCount(c)) 
+            if (compareAndDecrementWorkerCount(c))
                 return null;
             continue;
         }
 
         try {
-            // 如果是超时取任务，时间结束后还是取不到，则设置timedOut为true，下次循环就可以直接返回null退出了，这样，这个Worker也就终结了
-            Runnable r = timed ?
-                workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
-            workQueue.take();
-            // 不为null才返回，就不用担心返回null而终结了当前线程
+            // 根据timed选择超时（poll）还是阻塞（take）等待
+            Runnable r = timed ? workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) : workQueue.take();
             if (r != null)
-                return r;
+                return r; // 取到了任务，可以返回了
+
+            // 到这说明poll()超时了，没取到任务。设置timeOut，让下次循环可触发终止判断
             timedOut = true;
         } catch (InterruptedException retry) {
+            // poll或take阻塞时触发了中断（相当于唤醒），再次进行重试
             timedOut = false;
         }
     }
 }
 
-1.3 总结execute Runnable的流程
-
-先判断线程池的工作线程数量是否小于核心线程数，小于核心线程数直接新建线程来执行
-如果核心线程数满了，则将Runnable投入到workQueue中
-如果workQueue满了，则创建非核心线程来继续执行任务
-如果线程池中的工作现场数量到达了maximumPoolSize的值，则使用拒绝策略来执行任务
-
-Worker的工作流程
-​		调用getTask取任务来执行，如果取出的任务为空，则这个Worker也就结束了（终结了）。getTask不为空的话，还是先进性一系列的线程池状态校验，在执行hook函数（beforeExecute），在真正的执行这个Runnable，再执行hook函数（afterExecute），最后再将completedTasks加1，表示当前Worker完成的任务总数
-getTask流程（实现线程超时回收的关键）
-
+总体工作流程​		调用getTask取任务来执行，如果取出的任务为空，则这个Worker也就结束了（终结了）。getTask不为空的话，还是先进性一系列的线程池状态校验，在执行hook函数（beforeExecute），在真正的执行这个Runnable，再执行hook函数（afterExecute），最后再将completedTasks加1，表示当前Worker完成的任务总数
+getTask（实现线程超时回收的关键）
 先进行一系列的状态校验
 判断是否允许超时（满足任意一个就行）
 allowCoreThreadTimeOut为true（都允许核心线程超时了，那没任务的情况下线程池就不该有worker线程）
@@ -2691,731 +2728,6 @@ protected Map&lt;String, Object> findAutowireCandidates(
       </tags>
   </entry>
   <entry>
-    <title>Spring-AOP</title>
-    <url>/2021-02-08/spring-aop/</url>
-    <content><![CDATA[​	从源码分析了Spring AOP的实现逻辑，以及利用arthas对代理class进行反编译以更加清晰的理解源码流程
-
-
-
-
-@EnableAspectJAutoProxy​	其主要功能是向容器中注册AnnotationAwareAspectJAutoProxyCreator这个BeanDefinition，以此实现基于以下注解的代理功能
-
-
-
-注解名
-说明
-
-
-
-@Aspect
-声明一个类是切面类
-
-
-@Before
-前置通知，目标方法执行前执行
-
-
-@After
-后置通知，目标方法执行后执行（无论是否异常）
-
-
-@AfterReturning
-返回通知，目标方法正常返回后执行
-
-
-@AfterThrowing
-异常通知，目标方法抛出异常时执行
-
-
-@Around
-环绕通知，完全控制目标方法执行的时机，可决定是否继续执行目标方法
-
-
-@Pointcut
-定义可复用的切点表达式，供上述注解引用
-
-
-AnnotationAwareAspectJAutoProxyCreator​	Spring实现自动装配动态代理的Bean后置处理器，具有最高的执行优先级（表示是最先被执行的BeanPostProcessor。设置最高优先级的代码在org.springframework.aop.config.AopConfigUtils#registerOrEscalateApcAsRequired中）
-wrapIfNecessary​	bean进行包装（增强）的入口，它会在如下两个地方被调用
-
-postProcessAfterInitialization：常规的的bean初始化完成后hook，需要对bean进行代理并返回给容器
-getEarlyBeanReference：针对循环依赖需要提前获取bean的引用。Spring 会在三级缓存中暴露“早期对象引用”。如果此 bean 需要 AOP，必须在这个阶段就包上代理，否则依赖方会拿到原始对象，导致切面失效。
-
-protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
-    // 已经处理过
-    if (StringUtils.hasLength(beanName) &amp;&amp; this.targetSourcedBeans.contains(beanName)) {
-        return bean;
-    }
-    // 无需增强的bean缓存判断
-    if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
-        return bean;
-    }
-    // 是一个基础设施类或者指定的不需要代理
-    if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
-        this.advisedBeans.put(cacheKey, Boolean.FALSE);
-        return bean;
-    }
-
-    // 查找这个bean能使用的所有Advisor
-    Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
-    if (specificInterceptors != DO_NOT_PROXY) { // 存在增强器
-        this.advisedBeans.put(cacheKey, Boolean.TRUE);
-        // 创建其代理
-        Object proxy = createProxy(
-                bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
-        this.proxyTypes.put(cacheKey, proxy.getClass());
-        return proxy;
-    }
-    // 当前bean不需要增强，缓存起来
-    this.advisedBeans.put(cacheKey, Boolean.FALSE);
-    return bean;
-}
-
-获取Advisor阶段首先Advisor是什么？
-
-​	我理解为增强器，一个Advisor对应一个切面。既包含Advice，也包含过滤器（判断bean是否需要增强的东西）。所以能用一个Advisor来判断任意一个bean是否能被它增强，并提供增强的Advice。
-​	主要子接口为PointcutAdvisor，PointcutAdvisor提供了Pointcut，利用这个Pointcut即可以bean的class和method进行匹配看它是否能被增强。而Advisor获取的Advice则为真正执行代理方法的拦截器。
-
-findCandidateAdvisors有两种如下获取Advisor的方式
-
-查找所有实现了Advisor接口的BeanDefinition，并对其进行实例化（这种一般都是框架注册的增强器）
-
-注解方式：获取所有基于注解的切面bean，并进行实例化
-
-先拿到容器中所有Bean的beanName，再遍历这些beanName。通过BeanFactory获取当前beanName的Class，再判断Class上是否有@Aspect注解。如果存在@Aspect，就利用ReflectiveAspectJAdvisorFactory去解析这些Bean，将@Aspect Bean中的每个增强方法（如下注解，每个注解标注的方法就是一个增强方法）构造成一个Advisor（实现类为InstantiationModelAwarePointcutAdvisorImpl），最后封装到List里，返回给上层
-
-
-
-
-@Override
-protected List&lt;Advisor> findCandidateAdvisors() {
-    // 查找spring内置的增强器（包括不限于事务、缓存等）
-    List&lt;Advisor> advisors = super.findCandidateAdvisors();
-    // aspectJAdvisorsBuilder不会为空，默认为BeanFactoryAspectJAdvisorsBuilderAdapter
-    if (this.aspectJAdvisorsBuilder != null) {
-        // 获取所有的与@Aspect注解相关的Advisor
-        advisors.addAll(this.aspectJAdvisorsBuilder.buildAspectJAdvisors());
-    }
-    return advisors;
-}
-
-// 父类中的findAdvisorBeans
-public List&lt;Advisor> findAdvisorBeans() {
-    // 先从缓存中找，没有再搜索
-    String[] advisorNames = this.cachedAdvisorBeanNames;
-    if (advisorNames == null) { // 缓存为空
-        // 查找出所有实现了Advisor接口的BeanDefinition，并缓存
-        advisorNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
-                this.beanFactory, Advisor.class, true, false);
-        this.cachedAdvisorBeanNames = advisorNames;
-    }
-    if (advisorNames.length == 0) {
-        return new ArrayList&lt;>();
-    }
-
-    List&lt;Advisor> advisors = new ArrayList&lt;>();
-    for (String name : advisorNames) {
-        if (isEligibleBean(name)) {
-            if (this.beanFactory.isCurrentlyInCreation(name)) {
-                if (logger.isTraceEnabled()) {
-                    logger.trace("Skipping currently created advisor '" + name + "'");
-                }
-            } else {
-                try {
-                    // 尝试实例化这个Advisor Bean，并放入结果中
-                    advisors.add(this.beanFactory.getBean(name, Advisor.class));
-                } catch (BeanCreationException ex) {
-                    Throwable rootCause = ex.getMostSpecificCause();
-                    if (rootCause instanceof BeanCurrentlyInCreationException) {
-                        BeanCreationException bce = (BeanCreationException) rootCause;
-                        String bceBeanName = bce.getBeanName();
-                        if (bceBeanName != null &amp;&amp; this.beanFactory.isCurrentlyInCreation(bceBeanName)) {
-                            if (logger.isTraceEnabled()) {
-                                logger.trace("Skipping advisor '" + name +
-                                        "' with dependency on currently created bean: " + ex.getMessage());
-                            }
-                            // Ignore: indicates a reference back to the bean we're trying to advise.
-                            // We want to find advisors other than the currently created bean itself.
-                            continue;
-                        }
-                    }
-                    throw ex;
-                }
-            }
-        }
-    }
-    return advisors;
-}
-
-// BeanFactoryAspectJAdvisorsBuilder#buildAspectJAdvisors方法，找出基于注解的切面
-public List&lt;Advisor> buildAspectJAdvisors() {
-    // @Aspect注解BeanName的缓存
-    List&lt;String> aspectNames = this.aspectBeanNames;
-
-    if (aspectNames == null) {
-        synchronized (this) {
-            aspectNames = this.aspectBeanNames;
-            if (aspectNames == null) {
-                List&lt;Advisor> advisors = new ArrayList&lt;>();
-                aspectNames = new ArrayList&lt;>();
-                // 获取所有beanName
-                String[] beanNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
-                        this.beanFactory, Object.class, true, false);
-                for (String beanName : beanNames) {
-                    if (!isEligibleBean(beanName)) {
-                        continue;
-                    }
-                    // 获取这个bean的type
-                    Class&lt;?> beanType = this.beanFactory.getType(beanName);
-                    if (beanType == null) {
-                        continue;
-                    }
-                    // 存在 org.aspectj.lang.annotation.Aspect 注解
-                    if (this.advisorFactory.isAspect(beanType)) {
-                        aspectNames.add(beanName);
-                        AspectMetadata amd = new AspectMetadata(beanType, beanName);
-                        // 解析@Aspetc的value值，如果没有，默认kind就为SINGLETON
-                        if (amd.getAjType().getPerClause().getKind() == PerClauseKind.SINGLETON) {
-                            MetadataAwareAspectInstanceFactory factory = new BeanFactoryAspectInstanceFactory(
-                                    this.beanFactory, beanName);
-                            // 解析标记 AspectJ 注解中的增强方法，并将每个切点方法都构造成一个Advisor
-                            // 其实现类为InstantiationModelAwarePointcutAdvisorImpl
-                            List&lt;Advisor> classAdvisors = this.advisorFactory.getAdvisors(factory);
-                            // 缓存起来切面的解析结果
-                            if (this.beanFactory.isSingleton(beanName)) {
-                                this.advisorsCache.put(beanName, classAdvisors);
-                            } else {
-                                this.aspectFactoryCache.put(beanName, factory);
-                            }
-                            advisors.addAll(classAdvisors);
-                        } else {
-                            // Per target or per this.
-                            if (this.beanFactory.isSingleton(beanName)) {
-                                throw new IllegalArgumentException("Bean with name '" + beanName +
-                                        "' is a singleton, but aspect instantiation model is not singleton");
-                            }
-                            MetadataAwareAspectInstanceFactory factory = new PrototypeAspectInstanceFactory(
-                                    this.beanFactory, beanName);
-                            this.aspectFactoryCache.put(beanName, factory);
-                            advisors.addAll(this.advisorFactory.getAdvisors(factory));
-                        }
-                    }
-                }
-                this.aspectBeanNames = aspectNames;
-                return advisors;
-            }
-        }
-    }
-
-    if (aspectNames.isEmpty()) { // 没有自定义的@Aspect，返回空
-        return Collections.emptyList();
-    }
-    List&lt;Advisor> advisors = new ArrayList&lt;>();
-    for (String aspectName : aspectNames) {
-        List&lt;Advisor> cachedAdvisors = this.advisorsCache.get(aspectName);
-        if (cachedAdvisors != null) {
-            advisors.addAll(cachedAdvisors);
-        } else {
-            MetadataAwareAspectInstanceFactory factory = this.aspectFactoryCache.get(aspectName);
-            advisors.addAll(this.advisorFactory.getAdvisors(factory));
-        }
-    }
-    return advisors;
-}
-
-findAdvisorsThatCanApply​	将上面流程中获取到的所有Advisor做过滤，过滤出可以对当前bean进行增强的Advisor。核心方法在org.springframework.aop.support.AopUtils#canApply中
-public static boolean canApply(Pointcut pc, Class&lt;?> targetClass, boolean hasIntroductions) {
-    Assert.notNull(pc, "Pointcut must not be null");
-    if (!pc.getClassFilter().matches(targetClass)) { // 先按类匹配，如果类都匹配不了，那直接就不需要代理了
-        return false;
-    }
-
-    MethodMatcher methodMatcher = pc.getMethodMatcher(); // 获取方法匹配器
-    if (methodMatcher == MethodMatcher.TRUE) {
-        // No need to iterate the methods if we're matching any method anyway...
-        return true;
-    }
-
-    IntroductionAwareMethodMatcher introductionAwareMethodMatcher = null;
-    if (methodMatcher instanceof IntroductionAwareMethodMatcher) {
-        introductionAwareMethodMatcher = (IntroductionAwareMethodMatcher) methodMatcher;
-    }
-    // 目标类和其所有接口的集和
-    Set&lt;Class&lt;?>> classes = new LinkedHashSet&lt;>();
-    if (!Proxy.isProxyClass(targetClass)) {
-        classes.add(ClassUtils.getUserClass(targetClass));
-    }
-    classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
-
-    for (Class&lt;?> clazz : classes) {
-        Method[] methods = ReflectionUtils.getAllDeclaredMethods(clazz);
-        for (Method method : methods) {
-            // 对目标类和其所有接口的每个方法都进行匹配，只要能匹配上，就代表这个类可以增强，直接返回true
-            if (introductionAwareMethodMatcher != null
-                    ? introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions)
-                    : methodMatcher.matches(method, targetClass)) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-sortAdvisors​	源码就不分析了，直接说作用：它是 Spring AOP 中对多个 Advisor（增强器）进行排序的关键逻辑。它根据切面、通知类上的 @Order 注解或实现 Ordered 接口的优先级，对同一目标类或方法的所有 Advisor 进行排序。
-​	排序完成后，每个类或方法的增强器顺序就被固定下来。在运行时调用该方法时，AOP 拦截器链会严格按照这个顺序执行对应的切面逻辑，确保增强行为的预期一致性。
-开始增强（创建代理）cglib getProxycglib的增强实现主要步骤总结
-
-
-校验final方法（只是打个日志，final方法不能增强）
-
-创建org.springframework.cglib.proxy.Enhancer（核心的cglib增强器）
-
-对Enhancer进行一系列的填充，包括设置当前Class为增强类的父类。当前Class的所有接口，增强类也要实现。
-
-设置增强Class的命名策略（BySpringCGLIB）
-
-默认再将当前线程上下文的ClassLoader设为加载增强Class字节码的ClassLoader
-
-对Enhancer设置一些Callback，并设置固定的CallbackFilter（ProxyCallbackFilter）。非常重要：
- 
- ​									Callback数组（每一个Callback都是方法的拦截器）
- 
- ​	Callback数组的索引（ProxyCallbackFilter#accept实现），用来确定被增强的类的每一个方法该使用具体的某个拦截器，返回的是拦截器的数组索引
-
-生成增强Class的字节码并实例化（代理bean就产生了），将其返回
-
-
-
-// CglibAopProxy的创建代理方法
-public Object getProxy(@Nullable ClassLoader classLoader) {
-    if (logger.isTraceEnabled()) {
-        logger.trace("Creating CGLIB proxy: " + this.advised.getTargetSource());
-    }
-
-    try {
-        // 上一个被代理的目标类class（有可能已经是cglib的代理类了）
-        Class&lt;?> rootClass = this.advised.getTargetClass();
-        Assert.state(rootClass != null, "Target class must be available for creating a CGLIB proxy");
-        // 真正代理的目标类class
-        Class&lt;?> proxySuperClass = rootClass;
-        if (ClassUtils.isCglibProxyClass(rootClass)) { // 已经是个cglib代理类了，就需要把真正被代理类的class和接口找出来
-            proxySuperClass = rootClass.getSuperclass();
-            Class&lt;?>[] additionalInterfaces = rootClass.getInterfaces();
-            for (Class&lt;?> additionalInterface : additionalInterfaces) {
-                this.advised.addInterface(additionalInterface);
-            }
-        }
-
-        // 验证class的final相关方法并写日志
-        validateClassIfNecessary(proxySuperClass, classLoader);
-
-        // 创建通用的增强器，准备增强了
-        Enhancer enhancer = createEnhancer();
-        if (classLoader != null) {
-            enhancer.setClassLoader(classLoader);
-            if (classLoader instanceof SmartClassLoader &amp;&amp;
-                    ((SmartClassLoader) classLoader).isClassReloadable(proxySuperClass)) {
-                enhancer.setUseCache(false);
-            }
-        }
-        // 设置被代理类class为增强类的父类
-        enhancer.setSuperclass(proxySuperClass);
-        // 对增强类设置接口：Advised和SpringProxy
-        enhancer.setInterfaces(AopProxyUtils.completeProxiedInterfaces(this.advised));
-        enhancer.setNamingPolicy(SpringNamingPolicy.INSTANCE);
-        enhancer.setStrategy(new ClassLoaderAwareUndeclaredThrowableStrategy(classLoader));
-
-        // 设置拦截器（真正支持切面操作的拦截器）
-        Callback[] callbacks = getCallbacks(rootClass);
-        Class&lt;?>[] types = new Class&lt;?>[callbacks.length];
-        for (int x = 0; x &lt; types.length; x++) {
-            types[x] = callbacks[x].getClass();
-        }
-
-        // 非常重要，就是通过这个filter来确定某个方法应该使用哪一个Callback的
-        // 所以，代理类的任何一个方法只会用上一个Callback
-        enhancer.setCallbackFilter(new ProxyCallbackFilter(
-                this.advised.getConfigurationOnlyCopy(), this.fixedInterceptorMap, this.fixedInterceptorOffset));
-        enhancer.setCallbackTypes(types);
-
-        // 生成代理类的class并实例化其对象
-        return createProxyClassAndInstance(enhancer, callbacks);
-    } catch (CodeGenerationException | IllegalArgumentException ex) {
-        throw new AopConfigException("Could not generate CGLIB subclass of " + this.advised.getTargetClass() +
-                ": Common causes of this problem include using a final class or a non-visible class",
-                ex);
-    } catch (Throwable ex) {
-        // TargetSource.getTarget() failed
-        throw new AopConfigException("Unexpected AOP exception", ex);
-    }
-}
-
-jdk getProxy// JdkDynamicAopProxy的创建代理方法，该代理的InvocationHandler就为JdkDynamicAopProxy本身
-public Object getProxy(@Nullable ClassLoader classLoader) {
-   if (logger.isTraceEnabled()) {
-      logger.trace("Creating JDK dynamic proxy: " + this.advised.getTargetSource());
-   }
-   // 对增强类设置Interface：Advised和SpringProxy和DecoratingProxy
-   Class&lt;?>[] proxiedInterfaces = AopProxyUtils.completeProxiedInterfaces(this.advised, true);
-   findDefinedEqualsAndHashCodeMethods(proxiedInterfaces);
-   return Proxy.newProxyInstance(classLoader, proxiedInterfaces, this);
-}
-
-调用阶段cglib invokecglib代理类中方法有切面时的调用重点流程分析（这时使用的Callback就是DynamicAdvisedInterceptor）
-
-获取方法对应的拦截器链
-
- Spring 会调用 AdvisorChainFactory#getInterceptorsAndDynamicInterceptionAdvice 方法，为当前方法构建拦截器链。 它会遍历所有注册的 Advisor，并依次通过其中的 ClassFilter 和 MethodMatcher 判断当前方法是否匹配。如果匹配，就将该 Advisor 对应的拦截器（MethodInterceptor）加入到列表中，并最终缓存该方法与其拦截器链的映射关系。
-
-
-触发代理方法调用
-
-如果目标类采用了 CGLIB 代理（proxyTargetClass = true），则在调用代理对象方法时，会进入 CglibAopProxy.DynamicAdvisedInterceptor#intercept 方法。
-
-
-构造并执行拦截链
-
-Spring 会构造一个 CglibMethodInvocation 对象，它是 ReflectiveMethodInvocation 的子类，封装了目标对象、方法、参数、拦截器链等执行上下文。 调用 proceed() 方法开始执行拦截链。
-
-
-依次执行拦截器
-
-proceed() 方法会通过内部字段 currentInterceptorIndex（初始值为 -1）递增索引，按顺序执行拦截器链中的下一个 MethodInterceptor。 每个拦截器如果调用了 invocation.proceed()，则控制权会继续传递给下一个拦截器，实现“链式调用”。
-
-
-执行原始方法
-
-当所有拦截器都执行完后（即 currentInterceptorIndex &gt;= interceptors.size()），会最终调用原始目标对象的实际方法，实现增强与目标方法的结合。
-
-
-
-// DynamicAdvisedInterceptor#intercept的入口
-@Override
-@Nullable
-public Object intercept(Object proxy, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
-    Object oldProxy = null;
-    boolean setProxyContext = false;
-    Object target = null;
-    // 先准备目标对象源（调用原bean方法时会用到）
-    TargetSource targetSource = this.advised.getTargetSource();
-    try {
-        if (this.advised.exposeProxy) {
-            // 在当前线程上下文中设置了需要暴露代理，就要设置到当前线程ThreadLocal中
-            // 就是用来解决方法内部需要调用代理方法
-            oldProxy = AopContext.setCurrentProxy(proxy);
-            setProxyContext = true;
-        }
-        // 获取真实的，不是代理的目标对象
-        // 例：Session域从SimpleBeanTargetSource中获取，再转到BeanFactory，再转到SessionScope中，获取目标对象
-        target = targetSource.getTarget();
-        Class&lt;?> targetClass = (target != null ? target.getClass() : null);
-        // 对当前方法构造切面链并缓存
-        List&lt;Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
-        Object retVal;
-        // 无切面，且方法为public，直接调用原方法
-        if (chain.isEmpty() &amp;&amp; Modifier.isPublic(method.getModifiers())) {
-
-            Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
-            retVal = methodProxy.invoke(target, argsToUse);
-        } else { // 存在切面，构造方法调用器并执行
-            retVal = new CglibMethodInvocation(proxy, target, method, args, targetClass, chain, methodProxy).proceed();
-        }
-        retVal = processReturnType(proxy, target, method, retVal);
-        return retVal;
-    } finally {
-        if (target != null &amp;&amp; !targetSource.isStatic()) {
-            targetSource.releaseTarget(target);
-        }
-        if (setProxyContext) { // 方法代理全部执行完毕，恢复执行前的现场
-            AopContext.setCurrentProxy(oldProxy);
-        }
-    }
-}
-
-jdk invokepublic Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-    Object oldProxy = null;
-    boolean setProxyContext = false;
-
-    TargetSource targetSource = this.advised.targetSource;
-    Object target = null;
-
-    try {
-        // 一些通用方法的处理
-        if (!this.equalsDefined &amp;&amp; AopUtils.isEqualsMethod(method)) {
-            return equals(args[0]);
-        } else if (!this.hashCodeDefined &amp;&amp; AopUtils.isHashCodeMethod(method)) {
-            return hashCode();
-        } else if (method.getDeclaringClass() == DecoratingProxy.class) {
-            return AopProxyUtils.ultimateTargetClass(this.advised);
-        }
-        // opaque为false，且该方法的类为实现了Advised的接口，则使用advised字段调用该方法
-        else if (!this.advised.opaque &amp;&amp; method.getDeclaringClass().isInterface() &amp;&amp;
-                method.getDeclaringClass().isAssignableFrom(Advised.class)) {
-            // Service invocations on ProxyConfig with the proxy config...
-            return AopUtils.invokeJoinpointUsingReflection(this.advised, method, args);
-        }
-
-        Object retVal;
-
-        if (this.advised.exposeProxy) { // 需要暴露当前proxy，以便在本类中调用代理方法
-            oldProxy = AopContext.setCurrentProxy(proxy);
-            setProxyContext = true;
-        }
-
-        target = targetSource.getTarget();
-        Class&lt;?> targetClass = (target != null ? target.getClass() : null);
-
-        // 获取这个方法的所有拦截链
-        List&lt;Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
-
-        if (chain.isEmpty()) { // 拦截链为空，则直接调用原方法
-            Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
-            retVal = AopUtils.invokeJoinpointUsingReflection(target, method, argsToUse);
-        } else {
-            // 构造ReflectiveMethodInvocation，准备走代理方法了
-            MethodInvocation invocation = new ReflectiveMethodInvocation(proxy, target, method, args, targetClass,
-                    chain);
-            retVal = invocation.proceed();
-        }
-
-        // 处理返回值类型
-        Class&lt;?> returnType = method.getReturnType();
-        if (retVal != null &amp;&amp; retVal == target &amp;&amp;
-                returnType != Object.class &amp;&amp; returnType.isInstance(proxy) &amp;&amp;
-                !RawTargetAccess.class.isAssignableFrom(method.getDeclaringClass())) {
-            retVal = proxy;
-        } else if (retVal == null &amp;&amp; returnType != Void.TYPE &amp;&amp; returnType.isPrimitive()) {
-            throw new AopInvocationException(
-                    "Null return value from advice does not match primitive return type for: " + method);
-        }
-        return retVal;
-    } finally {
-        if (target != null &amp;&amp; !targetSource.isStatic()) {
-            targetSource.releaseTarget(target);
-        }
-        if (setProxyContext) {
-            // 恢复现场，移除当前线程上下文中的proxy
-            AopContext.setCurrentProxy(oldProxy);
-        }
-    }
-}
-
-ReflectiveMethodInvocation​	Spring AOP 的cglib和jdk代理都会用到的数据结构。是 方法拦截链执行的核心实现类。每当调用代理类中的方法时，都会构造一个ReflectiveMethodInvocation对象，内部封装了一个方法调用的上下文，包括目标对象、目标方法、方法参数、拦截器链等。核心是通过调用 proceed() 方法按顺序执行所有拦截器，最终调用目标方法。
-public class ReflectiveMethodInvocation implements ProxyMethodInvocation, Cloneable {
-    // 用于记录当前执行到第几个拦截器
-    private int currentInterceptorIndex = -1;
-
-    // 进行动态增强器的匹配判断，执行拦截器，和传播的实现
-    public Object proceed() throws Throwable {
-        // 执行完所有增强方法后执行切点方法
-        if (this.currentInterceptorIndex == this.interceptorsAndDynamicMethodMatchers.size() - 1) {
-            return invokeJoinpoint();
-        }
-
-        // 获取下一个要执行的拦截器
-        Object interceptorOrInterceptionAdvice = this.interceptorsAndDynamicMethodMatchers
-                .get(++this.currentInterceptorIndex);
-        // 调用拦截器方法时，都需要将this作为参数传递以保证当前拦截能传播给后面的增强器（proceed方法）
-
-        if (interceptorOrInterceptionAdvice instanceof InterceptorAndDynamicMethodMatcher) { // 动态匹配的增强器，需要进行动态参数匹配
-            InterceptorAndDynamicMethodMatcher dm = (InterceptorAndDynamicMethodMatcher) interceptorOrInterceptionAdvice;
-            Class&lt;?> targetClass = (this.targetClass != null ? this.targetClass : this.method.getDeclaringClass());
-            if (dm.methodMatcher.matches(this.method, targetClass, this.arguments)) {
-                // 匹配，执行拦截器
-                return dm.interceptor.invoke(this);
-            } else {
-                // 匹配失败就不执行拦截器，触发下一个拦截器的判断和执行
-                return proceed();
-            }
-        } else {
-            // 非动态拦截器，比如事务的TransactionInterceptor，和异步的 AnnotationAsyncExecutionInterceptor等等
-            return ((MethodInterceptor) interceptorOrInterceptionAdvice).invoke(this);
-        }
-    }
-}
-
-总结​	不论是cglib还是jdk的增强，增强的实现都可以总结为对原方法可使用的Advisor的收集，再构造成ReflectiveMethodInvocation，由ReflectiveMethodInvocation去进行动态增强器（一般都和参数有关）的判断，执行拦截器和拦截的传播。​	且Spring都会默认对代理bean实现两个接口（代码实现在AopProxyUtils#completeProxiedInterfaces中），分别是SpringProxy和Advised。SpringProxy用来表示当前bean已经被spring的增强了，而Advised则可以用来拿到原始bean（所以，要在代理bean中拿到原始bean，直接将代理bean强转为Advised，再利用其getTargetSource方法得到原始非代理bean）
-AOP测试被增强的class，其中@BizLog是注解切面，切面类为LogInterceptor，用来做日志打印的
-package site.shanzhao;
-
-import site.shanzhao.BizLog;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-@Component
-public class SpringAopDemo {
-
-    @Transactional
-    @BizLog
-    public void aopMethod(){
-        System.out.println("aopMethod run...............");
-    }
-
-    public void notAopMethod(){
-        System.out.println("notAopMethod run...............");
-    }
-}
-
-arthas解密sc
-sc -d site.shanzhao.SpringAopDemo：查看指定的class加载信息（这里有两个class信息，增强class和源class，我这里只关心增强的class）
-
-重点观察interfaces这一行，可以发现这个代理类实现了3个接口，分别为SpringProxy，Advised和Factory
-
-
-
-
- class-info        site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
- code-source       /Users/shanzhao/IdeaProjects/soil/target/classes/
- name              site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
- isInterface       false
- isAnnotation      false
- isEnum            false
- isAnonymousClass  false
- isArray           false
- isLocalClass      false
- isMemberClass     false
- isPrimitive       false
- isSynthetic       false
- simple-name       SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
- modifier          public
- annotation
- interfaces        org.springframework.aop.SpringProxy,org.springframework.aop.framework.Advised,org.springframework.cglib.proxy.Factory
- super-class       +-site.shanzhao.SpringAopDemo
-                     +-java.lang.Object
- class-loader      +-sun.misc.Launcher$AppClassLoader@18b4aac2
-                     +-sun.misc.Launcher$ExtClassLoader@13fee20c
- classLoaderHash   18b4aac2
-
-jad
-jad site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60：使用jad反编译代理class，这里只展示出了重点代码
-
-// package site.shanzhao;
-
-import java.lang.reflect.Method;
-import org.aopalliance.aop.Advice;
-import org.springframework.aop.Advisor;
-import org.springframework.aop.SpringProxy;
-import org.springframework.aop.TargetClassAware;
-import org.springframework.aop.TargetSource;
-import org.springframework.aop.framework.Advised;
-import org.springframework.aop.framework.AopConfigException;
-import org.springframework.cglib.core.ReflectUtils;
-import org.springframework.cglib.core.Signature;
-import org.springframework.cglib.proxy.Callback;
-import org.springframework.cglib.proxy.Dispatcher;
-import org.springframework.cglib.proxy.Factory;
-import org.springframework.cglib.proxy.MethodInterceptor;
-import org.springframework.cglib.proxy.MethodProxy;
-import org.springframework.cglib.proxy.NoOp;
-import site.shanzhao.SpringAopDemo;
-
-public class SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
-        extends SpringAopDemo
-        implements SpringProxy,
-        Advised,
-        Factory {
-    private boolean CGLIB$BOUND;
-    public static Object CGLIB$FACTORY_DATA;
-    private static final ThreadLocal CGLIB$THREAD_CALLBACKS;
-    private static final Callback[] CGLIB$STATIC_CALLBACKS;
-    private MethodInterceptor CGLIB$CALLBACK_0;
-    private MethodInterceptor CGLIB$CALLBACK_1;
-    private NoOp CGLIB$CALLBACK_2;
-    private Dispatcher CGLIB$CALLBACK_3;
-    private Dispatcher CGLIB$CALLBACK_4;
-    private MethodInterceptor CGLIB$CALLBACK_5;
-    private MethodInterceptor CGLIB$CALLBACK_6;
-
-    // 为org.springframework.aop.framework.Advised的接口，内部直接使用4号callback转化为ProxyFactory对象再调用目标方法
-    @Override
-    public final TargetSource getTargetSource() {
-        Dispatcher dispatcher = this.CGLIB$CALLBACK_4;
-        if (dispatcher == null) {
-            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
-            dispatcher = this.CGLIB$CALLBACK_4;
-        }
-        return ((Advised) dispatcher.loadObject()).getTargetSource();
-    }
-
-    // aop增强的方法，使用0号callback进行处理，实现类为DynamicAdvisedInterceptor。
-    // 应该有两个适合这个方法的Advisor，一个是@BizLog的LogInterceptor切面，另一个是事物切面
-    public final void aopMethod() {
-        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_0;
-        if (methodInterceptor == null) {
-            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
-            methodInterceptor = this.CGLIB$CALLBACK_0;
-        }
-        if (methodInterceptor != null) {
-            Object object = methodInterceptor.intercept(this, CGLIB$aopMethod$0$Method, CGLIB$emptyArgs,
-                    CGLIB$aopMethod$0$Proxy);
-            return;
-        }
-        super.aopMethod();
-    }
-
-    // 未增强的方法，同样使用0号callback进行处理，但却不会有适合这个方法的Advisor
-    public final void notAopMethod() {
-        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_0;
-        if (methodInterceptor == null) {
-            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
-            methodInterceptor = this.CGLIB$CALLBACK_0;
-        }
-        if (methodInterceptor != null) {
-            Object object = methodInterceptor.intercept(this, CGLIB$notAopMethod$1$Method, CGLIB$emptyArgs,
-                    CGLIB$notAopMethod$1$Proxy);
-            return;
-        }
-        super.notAopMethod();
-    }
-
-    // Object的equals方法，使用5号callback处理，实现类为EqualsInterceptor
-    public final boolean equals(Object object) {
-        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_5;
-        if (methodInterceptor == null) {
-            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
-            methodInterceptor = this.CGLIB$CALLBACK_5;
-        }
-        if (methodInterceptor != null) {
-            Object object2 = methodInterceptor.intercept(this, CGLIB$equals$2$Method, new Object[] { object },
-                    CGLIB$equals$2$Proxy);
-            return object2 == null ? false : (Boolean) object2;
-        }
-        return super.equals(object);
-    }
-
-}
-
-debug下代理类的信息这是从容器中直接获取SpringAopDemo这个class得到的对象，也就是代理类而不是源对象
-
-
-重点信息已用红框框处，逐个分析
-
-CGLIB$CALLBACK_0：通用拦截器，有切面和没有切面的普通方法方法都会用
-advised：实现为org.springframework.aop.framework.ProxyFactory。是 Spring AOP 中封装代理创建逻辑的核心工具类，实现了 Advised 接口。它通过维护一系列配置和内部结构，完成对目标对象的方法级别增强。
-targetSource：内部封装了源对象，可以将当前代理类强转为Advised，在调用其getTargetSource方法获取到源对象
-methodCache：缓存方法与其对应增强（Advisor）链的映射，加快方法调用时的拦截查找过程。
-notAopMethod：没有切面，所以size&#x3D;0
-aopMethod：有两个切面，缓存的size&#x3D;2
-
-
-advisor：代理类所有的Advisor
-proxyTargetClass：是否直接代理的目标class。为true则表示cglib proxy，fasle则是jdk proxy
-exposeProxy：是否将当前代理暴露到 ThreadLocal 上下文中，允许在目标对象内部通过 AopContext.currentProxy() 获取自身代理对象，用于内部方法调用也能被增强。
-frozen：表示配置是否被冻结。默认为false，支持在运行时动态添加或移除 Advisor。如果设置为 true，配置将被锁定，并跳过 methodCache 的清理逻辑以提升性能。
-
-
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>BeanPostProcessor</tag>
-        <tag>AOP</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Spring-AbstractAdvisingBeanPostProcessor</title>
     <url>/2021-02-17/spring-abstractadvisingbeanpostprocessor/</url>
     <content><![CDATA[
@@ -4143,6 +3455,731 @@ return wrappedBean;
       </categories>
       <tags>
         <tag>spring三级缓存</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Spring-AOP</title>
+    <url>/2021-02-08/spring-aop/</url>
+    <content><![CDATA[​	从源码分析了Spring AOP的实现逻辑，以及利用arthas对代理class进行反编译以更加清晰的理解源码流程
+
+
+
+
+@EnableAspectJAutoProxy​	其主要功能是向容器中注册AnnotationAwareAspectJAutoProxyCreator这个BeanDefinition，以此实现基于以下注解的代理功能
+
+
+
+注解名
+说明
+
+
+
+@Aspect
+声明一个类是切面类
+
+
+@Before
+前置通知，目标方法执行前执行
+
+
+@After
+后置通知，目标方法执行后执行（无论是否异常）
+
+
+@AfterReturning
+返回通知，目标方法正常返回后执行
+
+
+@AfterThrowing
+异常通知，目标方法抛出异常时执行
+
+
+@Around
+环绕通知，完全控制目标方法执行的时机，可决定是否继续执行目标方法
+
+
+@Pointcut
+定义可复用的切点表达式，供上述注解引用
+
+
+AnnotationAwareAspectJAutoProxyCreator​	Spring实现自动装配动态代理的Bean后置处理器，具有最高的执行优先级（表示是最先被执行的BeanPostProcessor。设置最高优先级的代码在org.springframework.aop.config.AopConfigUtils#registerOrEscalateApcAsRequired中）
+wrapIfNecessary​	bean进行包装（增强）的入口，它会在如下两个地方被调用
+
+postProcessAfterInitialization：常规的的bean初始化完成后hook，需要对bean进行代理并返回给容器
+getEarlyBeanReference：针对循环依赖需要提前获取bean的引用。Spring 会在三级缓存中暴露“早期对象引用”。如果此 bean 需要 AOP，必须在这个阶段就包上代理，否则依赖方会拿到原始对象，导致切面失效。
+
+protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
+    // 已经处理过
+    if (StringUtils.hasLength(beanName) &amp;&amp; this.targetSourcedBeans.contains(beanName)) {
+        return bean;
+    }
+    // 无需增强的bean缓存判断
+    if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
+        return bean;
+    }
+    // 是一个基础设施类或者指定的不需要代理
+    if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
+        this.advisedBeans.put(cacheKey, Boolean.FALSE);
+        return bean;
+    }
+
+    // 查找这个bean能使用的所有Advisor
+    Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+    if (specificInterceptors != DO_NOT_PROXY) { // 存在增强器
+        this.advisedBeans.put(cacheKey, Boolean.TRUE);
+        // 创建其代理
+        Object proxy = createProxy(
+                bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+        this.proxyTypes.put(cacheKey, proxy.getClass());
+        return proxy;
+    }
+    // 当前bean不需要增强，缓存起来
+    this.advisedBeans.put(cacheKey, Boolean.FALSE);
+    return bean;
+}
+
+获取Advisor阶段首先Advisor是什么？
+
+​	我理解为增强器，一个Advisor对应一个切面。既包含Advice，也包含过滤器（判断bean是否需要增强的东西）。所以能用一个Advisor来判断任意一个bean是否能被它增强，并提供增强的Advice。
+​	主要子接口为PointcutAdvisor，PointcutAdvisor提供了Pointcut，利用这个Pointcut即可以bean的class和method进行匹配看它是否能被增强。而Advisor获取的Advice则为真正执行代理方法的拦截器。
+
+findCandidateAdvisors有两种如下获取Advisor的方式
+
+查找所有实现了Advisor接口的BeanDefinition，并对其进行实例化（这种一般都是框架注册的增强器）
+
+注解方式：获取所有基于注解的切面bean，并进行实例化
+
+先拿到容器中所有Bean的beanName，再遍历这些beanName。通过BeanFactory获取当前beanName的Class，再判断Class上是否有@Aspect注解。如果存在@Aspect，就利用ReflectiveAspectJAdvisorFactory去解析这些Bean，将@Aspect Bean中的每个增强方法（如下注解，每个注解标注的方法就是一个增强方法）构造成一个Advisor（实现类为InstantiationModelAwarePointcutAdvisorImpl），最后封装到List里，返回给上层
+
+
+
+
+@Override
+protected List&lt;Advisor> findCandidateAdvisors() {
+    // 查找spring内置的增强器（包括不限于事务、缓存等）
+    List&lt;Advisor> advisors = super.findCandidateAdvisors();
+    // aspectJAdvisorsBuilder不会为空，默认为BeanFactoryAspectJAdvisorsBuilderAdapter
+    if (this.aspectJAdvisorsBuilder != null) {
+        // 获取所有的与@Aspect注解相关的Advisor
+        advisors.addAll(this.aspectJAdvisorsBuilder.buildAspectJAdvisors());
+    }
+    return advisors;
+}
+
+// 父类中的findAdvisorBeans
+public List&lt;Advisor> findAdvisorBeans() {
+    // 先从缓存中找，没有再搜索
+    String[] advisorNames = this.cachedAdvisorBeanNames;
+    if (advisorNames == null) { // 缓存为空
+        // 查找出所有实现了Advisor接口的BeanDefinition，并缓存
+        advisorNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
+                this.beanFactory, Advisor.class, true, false);
+        this.cachedAdvisorBeanNames = advisorNames;
+    }
+    if (advisorNames.length == 0) {
+        return new ArrayList&lt;>();
+    }
+
+    List&lt;Advisor> advisors = new ArrayList&lt;>();
+    for (String name : advisorNames) {
+        if (isEligibleBean(name)) {
+            if (this.beanFactory.isCurrentlyInCreation(name)) {
+                if (logger.isTraceEnabled()) {
+                    logger.trace("Skipping currently created advisor '" + name + "'");
+                }
+            } else {
+                try {
+                    // 尝试实例化这个Advisor Bean，并放入结果中
+                    advisors.add(this.beanFactory.getBean(name, Advisor.class));
+                } catch (BeanCreationException ex) {
+                    Throwable rootCause = ex.getMostSpecificCause();
+                    if (rootCause instanceof BeanCurrentlyInCreationException) {
+                        BeanCreationException bce = (BeanCreationException) rootCause;
+                        String bceBeanName = bce.getBeanName();
+                        if (bceBeanName != null &amp;&amp; this.beanFactory.isCurrentlyInCreation(bceBeanName)) {
+                            if (logger.isTraceEnabled()) {
+                                logger.trace("Skipping advisor '" + name +
+                                        "' with dependency on currently created bean: " + ex.getMessage());
+                            }
+                            // Ignore: indicates a reference back to the bean we're trying to advise.
+                            // We want to find advisors other than the currently created bean itself.
+                            continue;
+                        }
+                    }
+                    throw ex;
+                }
+            }
+        }
+    }
+    return advisors;
+}
+
+// BeanFactoryAspectJAdvisorsBuilder#buildAspectJAdvisors方法，找出基于注解的切面
+public List&lt;Advisor> buildAspectJAdvisors() {
+    // @Aspect注解BeanName的缓存
+    List&lt;String> aspectNames = this.aspectBeanNames;
+
+    if (aspectNames == null) {
+        synchronized (this) {
+            aspectNames = this.aspectBeanNames;
+            if (aspectNames == null) {
+                List&lt;Advisor> advisors = new ArrayList&lt;>();
+                aspectNames = new ArrayList&lt;>();
+                // 获取所有beanName
+                String[] beanNames = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(
+                        this.beanFactory, Object.class, true, false);
+                for (String beanName : beanNames) {
+                    if (!isEligibleBean(beanName)) {
+                        continue;
+                    }
+                    // 获取这个bean的type
+                    Class&lt;?> beanType = this.beanFactory.getType(beanName);
+                    if (beanType == null) {
+                        continue;
+                    }
+                    // 存在 org.aspectj.lang.annotation.Aspect 注解
+                    if (this.advisorFactory.isAspect(beanType)) {
+                        aspectNames.add(beanName);
+                        AspectMetadata amd = new AspectMetadata(beanType, beanName);
+                        // 解析@Aspetc的value值，如果没有，默认kind就为SINGLETON
+                        if (amd.getAjType().getPerClause().getKind() == PerClauseKind.SINGLETON) {
+                            MetadataAwareAspectInstanceFactory factory = new BeanFactoryAspectInstanceFactory(
+                                    this.beanFactory, beanName);
+                            // 解析标记 AspectJ 注解中的增强方法，并将每个切点方法都构造成一个Advisor
+                            // 其实现类为InstantiationModelAwarePointcutAdvisorImpl
+                            List&lt;Advisor> classAdvisors = this.advisorFactory.getAdvisors(factory);
+                            // 缓存起来切面的解析结果
+                            if (this.beanFactory.isSingleton(beanName)) {
+                                this.advisorsCache.put(beanName, classAdvisors);
+                            } else {
+                                this.aspectFactoryCache.put(beanName, factory);
+                            }
+                            advisors.addAll(classAdvisors);
+                        } else {
+                            // Per target or per this.
+                            if (this.beanFactory.isSingleton(beanName)) {
+                                throw new IllegalArgumentException("Bean with name '" + beanName +
+                                        "' is a singleton, but aspect instantiation model is not singleton");
+                            }
+                            MetadataAwareAspectInstanceFactory factory = new PrototypeAspectInstanceFactory(
+                                    this.beanFactory, beanName);
+                            this.aspectFactoryCache.put(beanName, factory);
+                            advisors.addAll(this.advisorFactory.getAdvisors(factory));
+                        }
+                    }
+                }
+                this.aspectBeanNames = aspectNames;
+                return advisors;
+            }
+        }
+    }
+
+    if (aspectNames.isEmpty()) { // 没有自定义的@Aspect，返回空
+        return Collections.emptyList();
+    }
+    List&lt;Advisor> advisors = new ArrayList&lt;>();
+    for (String aspectName : aspectNames) {
+        List&lt;Advisor> cachedAdvisors = this.advisorsCache.get(aspectName);
+        if (cachedAdvisors != null) {
+            advisors.addAll(cachedAdvisors);
+        } else {
+            MetadataAwareAspectInstanceFactory factory = this.aspectFactoryCache.get(aspectName);
+            advisors.addAll(this.advisorFactory.getAdvisors(factory));
+        }
+    }
+    return advisors;
+}
+
+findAdvisorsThatCanApply​	将上面流程中获取到的所有Advisor做过滤，过滤出可以对当前bean进行增强的Advisor。核心方法在org.springframework.aop.support.AopUtils#canApply中
+public static boolean canApply(Pointcut pc, Class&lt;?> targetClass, boolean hasIntroductions) {
+    Assert.notNull(pc, "Pointcut must not be null");
+    if (!pc.getClassFilter().matches(targetClass)) { // 先按类匹配，如果类都匹配不了，那直接就不需要代理了
+        return false;
+    }
+
+    MethodMatcher methodMatcher = pc.getMethodMatcher(); // 获取方法匹配器
+    if (methodMatcher == MethodMatcher.TRUE) {
+        // No need to iterate the methods if we're matching any method anyway...
+        return true;
+    }
+
+    IntroductionAwareMethodMatcher introductionAwareMethodMatcher = null;
+    if (methodMatcher instanceof IntroductionAwareMethodMatcher) {
+        introductionAwareMethodMatcher = (IntroductionAwareMethodMatcher) methodMatcher;
+    }
+    // 目标类和其所有接口的集和
+    Set&lt;Class&lt;?>> classes = new LinkedHashSet&lt;>();
+    if (!Proxy.isProxyClass(targetClass)) {
+        classes.add(ClassUtils.getUserClass(targetClass));
+    }
+    classes.addAll(ClassUtils.getAllInterfacesForClassAsSet(targetClass));
+
+    for (Class&lt;?> clazz : classes) {
+        Method[] methods = ReflectionUtils.getAllDeclaredMethods(clazz);
+        for (Method method : methods) {
+            // 对目标类和其所有接口的每个方法都进行匹配，只要能匹配上，就代表这个类可以增强，直接返回true
+            if (introductionAwareMethodMatcher != null
+                    ? introductionAwareMethodMatcher.matches(method, targetClass, hasIntroductions)
+                    : methodMatcher.matches(method, targetClass)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+sortAdvisors​	源码就不分析了，直接说作用：它是 Spring AOP 中对多个 Advisor（增强器）进行排序的关键逻辑。它根据切面、通知类上的 @Order 注解或实现 Ordered 接口的优先级，对同一目标类或方法的所有 Advisor 进行排序。
+​	排序完成后，每个类或方法的增强器顺序就被固定下来。在运行时调用该方法时，AOP 拦截器链会严格按照这个顺序执行对应的切面逻辑，确保增强行为的预期一致性。
+开始增强（创建代理）cglib getProxycglib的增强实现主要步骤总结
+
+
+校验final方法（只是打个日志，final方法不能增强）
+
+创建org.springframework.cglib.proxy.Enhancer（核心的cglib增强器）
+
+对Enhancer进行一系列的填充，包括设置当前Class为增强类的父类。当前Class的所有接口，增强类也要实现。
+
+设置增强Class的命名策略（BySpringCGLIB）
+
+默认再将当前线程上下文的ClassLoader设为加载增强Class字节码的ClassLoader
+
+对Enhancer设置一些Callback，并设置固定的CallbackFilter（ProxyCallbackFilter）。非常重要：
+ 
+ ​									Callback数组（每一个Callback都是方法的拦截器）
+ 
+ ​	Callback数组的索引（ProxyCallbackFilter#accept实现），用来确定被增强的类的每一个方法该使用具体的某个拦截器，返回的是拦截器的数组索引
+
+生成增强Class的字节码并实例化（代理bean就产生了），将其返回
+
+
+
+// CglibAopProxy的创建代理方法
+public Object getProxy(@Nullable ClassLoader classLoader) {
+    if (logger.isTraceEnabled()) {
+        logger.trace("Creating CGLIB proxy: " + this.advised.getTargetSource());
+    }
+
+    try {
+        // 上一个被代理的目标类class（有可能已经是cglib的代理类了）
+        Class&lt;?> rootClass = this.advised.getTargetClass();
+        Assert.state(rootClass != null, "Target class must be available for creating a CGLIB proxy");
+        // 真正代理的目标类class
+        Class&lt;?> proxySuperClass = rootClass;
+        if (ClassUtils.isCglibProxyClass(rootClass)) { // 已经是个cglib代理类了，就需要把真正被代理类的class和接口找出来
+            proxySuperClass = rootClass.getSuperclass();
+            Class&lt;?>[] additionalInterfaces = rootClass.getInterfaces();
+            for (Class&lt;?> additionalInterface : additionalInterfaces) {
+                this.advised.addInterface(additionalInterface);
+            }
+        }
+
+        // 验证class的final相关方法并写日志
+        validateClassIfNecessary(proxySuperClass, classLoader);
+
+        // 创建通用的增强器，准备增强了
+        Enhancer enhancer = createEnhancer();
+        if (classLoader != null) {
+            enhancer.setClassLoader(classLoader);
+            if (classLoader instanceof SmartClassLoader &amp;&amp;
+                    ((SmartClassLoader) classLoader).isClassReloadable(proxySuperClass)) {
+                enhancer.setUseCache(false);
+            }
+        }
+        // 设置被代理类class为增强类的父类
+        enhancer.setSuperclass(proxySuperClass);
+        // 对增强类设置接口：Advised和SpringProxy
+        enhancer.setInterfaces(AopProxyUtils.completeProxiedInterfaces(this.advised));
+        enhancer.setNamingPolicy(SpringNamingPolicy.INSTANCE);
+        enhancer.setStrategy(new ClassLoaderAwareUndeclaredThrowableStrategy(classLoader));
+
+        // 设置拦截器（真正支持切面操作的拦截器）
+        Callback[] callbacks = getCallbacks(rootClass);
+        Class&lt;?>[] types = new Class&lt;?>[callbacks.length];
+        for (int x = 0; x &lt; types.length; x++) {
+            types[x] = callbacks[x].getClass();
+        }
+
+        // 非常重要，就是通过这个filter来确定某个方法应该使用哪一个Callback的
+        // 所以，代理类的任何一个方法只会用上一个Callback
+        enhancer.setCallbackFilter(new ProxyCallbackFilter(
+                this.advised.getConfigurationOnlyCopy(), this.fixedInterceptorMap, this.fixedInterceptorOffset));
+        enhancer.setCallbackTypes(types);
+
+        // 生成代理类的class并实例化其对象
+        return createProxyClassAndInstance(enhancer, callbacks);
+    } catch (CodeGenerationException | IllegalArgumentException ex) {
+        throw new AopConfigException("Could not generate CGLIB subclass of " + this.advised.getTargetClass() +
+                ": Common causes of this problem include using a final class or a non-visible class",
+                ex);
+    } catch (Throwable ex) {
+        // TargetSource.getTarget() failed
+        throw new AopConfigException("Unexpected AOP exception", ex);
+    }
+}
+
+jdk getProxy// JdkDynamicAopProxy的创建代理方法，该代理的InvocationHandler就为JdkDynamicAopProxy本身
+public Object getProxy(@Nullable ClassLoader classLoader) {
+   if (logger.isTraceEnabled()) {
+      logger.trace("Creating JDK dynamic proxy: " + this.advised.getTargetSource());
+   }
+   // 对增强类设置Interface：Advised和SpringProxy和DecoratingProxy
+   Class&lt;?>[] proxiedInterfaces = AopProxyUtils.completeProxiedInterfaces(this.advised, true);
+   findDefinedEqualsAndHashCodeMethods(proxiedInterfaces);
+   return Proxy.newProxyInstance(classLoader, proxiedInterfaces, this);
+}
+
+调用阶段cglib invokecglib代理类中方法有切面时的调用重点流程分析（这时使用的Callback就是DynamicAdvisedInterceptor）
+
+获取方法对应的拦截器链
+
+ Spring 会调用 AdvisorChainFactory#getInterceptorsAndDynamicInterceptionAdvice 方法，为当前方法构建拦截器链。 它会遍历所有注册的 Advisor，并依次通过其中的 ClassFilter 和 MethodMatcher 判断当前方法是否匹配。如果匹配，就将该 Advisor 对应的拦截器（MethodInterceptor）加入到列表中，并最终缓存该方法与其拦截器链的映射关系。
+
+
+触发代理方法调用
+
+如果目标类采用了 CGLIB 代理（proxyTargetClass = true），则在调用代理对象方法时，会进入 CglibAopProxy.DynamicAdvisedInterceptor#intercept 方法。
+
+
+构造并执行拦截链
+
+Spring 会构造一个 CglibMethodInvocation 对象，它是 ReflectiveMethodInvocation 的子类，封装了目标对象、方法、参数、拦截器链等执行上下文。 调用 proceed() 方法开始执行拦截链。
+
+
+依次执行拦截器
+
+proceed() 方法会通过内部字段 currentInterceptorIndex（初始值为 -1）递增索引，按顺序执行拦截器链中的下一个 MethodInterceptor。 每个拦截器如果调用了 invocation.proceed()，则控制权会继续传递给下一个拦截器，实现“链式调用”。
+
+
+执行原始方法
+
+当所有拦截器都执行完后（即 currentInterceptorIndex &gt;= interceptors.size()），会最终调用原始目标对象的实际方法，实现增强与目标方法的结合。
+
+
+
+// DynamicAdvisedInterceptor#intercept的入口
+@Override
+@Nullable
+public Object intercept(Object proxy, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
+    Object oldProxy = null;
+    boolean setProxyContext = false;
+    Object target = null;
+    // 先准备目标对象源（调用原bean方法时会用到）
+    TargetSource targetSource = this.advised.getTargetSource();
+    try {
+        if (this.advised.exposeProxy) {
+            // 在当前线程上下文中设置了需要暴露代理，就要设置到当前线程ThreadLocal中
+            // 就是用来解决方法内部需要调用代理方法
+            oldProxy = AopContext.setCurrentProxy(proxy);
+            setProxyContext = true;
+        }
+        // 获取真实的，不是代理的目标对象
+        // 例：Session域从SimpleBeanTargetSource中获取，再转到BeanFactory，再转到SessionScope中，获取目标对象
+        target = targetSource.getTarget();
+        Class&lt;?> targetClass = (target != null ? target.getClass() : null);
+        // 对当前方法构造切面链并缓存
+        List&lt;Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
+        Object retVal;
+        // 无切面，且方法为public，直接调用原方法
+        if (chain.isEmpty() &amp;&amp; Modifier.isPublic(method.getModifiers())) {
+
+            Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
+            retVal = methodProxy.invoke(target, argsToUse);
+        } else { // 存在切面，构造方法调用器并执行
+            retVal = new CglibMethodInvocation(proxy, target, method, args, targetClass, chain, methodProxy).proceed();
+        }
+        retVal = processReturnType(proxy, target, method, retVal);
+        return retVal;
+    } finally {
+        if (target != null &amp;&amp; !targetSource.isStatic()) {
+            targetSource.releaseTarget(target);
+        }
+        if (setProxyContext) { // 方法代理全部执行完毕，恢复执行前的现场
+            AopContext.setCurrentProxy(oldProxy);
+        }
+    }
+}
+
+jdk invokepublic Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    Object oldProxy = null;
+    boolean setProxyContext = false;
+
+    TargetSource targetSource = this.advised.targetSource;
+    Object target = null;
+
+    try {
+        // 一些通用方法的处理
+        if (!this.equalsDefined &amp;&amp; AopUtils.isEqualsMethod(method)) {
+            return equals(args[0]);
+        } else if (!this.hashCodeDefined &amp;&amp; AopUtils.isHashCodeMethod(method)) {
+            return hashCode();
+        } else if (method.getDeclaringClass() == DecoratingProxy.class) {
+            return AopProxyUtils.ultimateTargetClass(this.advised);
+        }
+        // opaque为false，且该方法的类为实现了Advised的接口，则使用advised字段调用该方法
+        else if (!this.advised.opaque &amp;&amp; method.getDeclaringClass().isInterface() &amp;&amp;
+                method.getDeclaringClass().isAssignableFrom(Advised.class)) {
+            // Service invocations on ProxyConfig with the proxy config...
+            return AopUtils.invokeJoinpointUsingReflection(this.advised, method, args);
+        }
+
+        Object retVal;
+
+        if (this.advised.exposeProxy) { // 需要暴露当前proxy，以便在本类中调用代理方法
+            oldProxy = AopContext.setCurrentProxy(proxy);
+            setProxyContext = true;
+        }
+
+        target = targetSource.getTarget();
+        Class&lt;?> targetClass = (target != null ? target.getClass() : null);
+
+        // 获取这个方法的所有拦截链
+        List&lt;Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
+
+        if (chain.isEmpty()) { // 拦截链为空，则直接调用原方法
+            Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
+            retVal = AopUtils.invokeJoinpointUsingReflection(target, method, argsToUse);
+        } else {
+            // 构造ReflectiveMethodInvocation，准备走代理方法了
+            MethodInvocation invocation = new ReflectiveMethodInvocation(proxy, target, method, args, targetClass,
+                    chain);
+            retVal = invocation.proceed();
+        }
+
+        // 处理返回值类型
+        Class&lt;?> returnType = method.getReturnType();
+        if (retVal != null &amp;&amp; retVal == target &amp;&amp;
+                returnType != Object.class &amp;&amp; returnType.isInstance(proxy) &amp;&amp;
+                !RawTargetAccess.class.isAssignableFrom(method.getDeclaringClass())) {
+            retVal = proxy;
+        } else if (retVal == null &amp;&amp; returnType != Void.TYPE &amp;&amp; returnType.isPrimitive()) {
+            throw new AopInvocationException(
+                    "Null return value from advice does not match primitive return type for: " + method);
+        }
+        return retVal;
+    } finally {
+        if (target != null &amp;&amp; !targetSource.isStatic()) {
+            targetSource.releaseTarget(target);
+        }
+        if (setProxyContext) {
+            // 恢复现场，移除当前线程上下文中的proxy
+            AopContext.setCurrentProxy(oldProxy);
+        }
+    }
+}
+
+ReflectiveMethodInvocation​	Spring AOP 的cglib和jdk代理都会用到的数据结构。是 方法拦截链执行的核心实现类。每当调用代理类中的方法时，都会构造一个ReflectiveMethodInvocation对象，内部封装了一个方法调用的上下文，包括目标对象、目标方法、方法参数、拦截器链等。核心是通过调用 proceed() 方法按顺序执行所有拦截器，最终调用目标方法。
+public class ReflectiveMethodInvocation implements ProxyMethodInvocation, Cloneable {
+    // 用于记录当前执行到第几个拦截器
+    private int currentInterceptorIndex = -1;
+
+    // 进行动态增强器的匹配判断，执行拦截器，和传播的实现
+    public Object proceed() throws Throwable {
+        // 执行完所有增强方法后执行切点方法
+        if (this.currentInterceptorIndex == this.interceptorsAndDynamicMethodMatchers.size() - 1) {
+            return invokeJoinpoint();
+        }
+
+        // 获取下一个要执行的拦截器
+        Object interceptorOrInterceptionAdvice = this.interceptorsAndDynamicMethodMatchers
+                .get(++this.currentInterceptorIndex);
+        // 调用拦截器方法时，都需要将this作为参数传递以保证当前拦截能传播给后面的增强器（proceed方法）
+
+        if (interceptorOrInterceptionAdvice instanceof InterceptorAndDynamicMethodMatcher) { // 动态匹配的增强器，需要进行动态参数匹配
+            InterceptorAndDynamicMethodMatcher dm = (InterceptorAndDynamicMethodMatcher) interceptorOrInterceptionAdvice;
+            Class&lt;?> targetClass = (this.targetClass != null ? this.targetClass : this.method.getDeclaringClass());
+            if (dm.methodMatcher.matches(this.method, targetClass, this.arguments)) {
+                // 匹配，执行拦截器
+                return dm.interceptor.invoke(this);
+            } else {
+                // 匹配失败就不执行拦截器，触发下一个拦截器的判断和执行
+                return proceed();
+            }
+        } else {
+            // 非动态拦截器，比如事务的TransactionInterceptor，和异步的 AnnotationAsyncExecutionInterceptor等等
+            return ((MethodInterceptor) interceptorOrInterceptionAdvice).invoke(this);
+        }
+    }
+}
+
+总结​	不论是cglib还是jdk的增强，增强的实现都可以总结为对原方法可使用的Advisor的收集，再构造成ReflectiveMethodInvocation，由ReflectiveMethodInvocation去进行动态增强器（一般都和参数有关）的判断，执行拦截器和拦截的传播。​	且Spring都会默认对代理bean实现两个接口（代码实现在AopProxyUtils#completeProxiedInterfaces中），分别是SpringProxy和Advised。SpringProxy用来表示当前bean已经被spring的增强了，而Advised则可以用来拿到原始bean（所以，要在代理bean中拿到原始bean，直接将代理bean强转为Advised，再利用其getTargetSource方法得到原始非代理bean）
+AOP测试被增强的class，其中@BizLog是注解切面，切面类为LogInterceptor，用来做日志打印的
+package site.shanzhao;
+
+import site.shanzhao.BizLog;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+@Component
+public class SpringAopDemo {
+
+    @Transactional
+    @BizLog
+    public void aopMethod(){
+        System.out.println("aopMethod run...............");
+    }
+
+    public void notAopMethod(){
+        System.out.println("notAopMethod run...............");
+    }
+}
+
+arthas解密sc
+sc -d site.shanzhao.SpringAopDemo：查看指定的class加载信息（这里有两个class信息，增强class和源class，我这里只关心增强的class）
+
+重点观察interfaces这一行，可以发现这个代理类实现了3个接口，分别为SpringProxy，Advised和Factory
+
+
+
+
+ class-info        site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
+ code-source       /Users/shanzhao/IdeaProjects/soil/target/classes/
+ name              site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
+ isInterface       false
+ isAnnotation      false
+ isEnum            false
+ isAnonymousClass  false
+ isArray           false
+ isLocalClass      false
+ isMemberClass     false
+ isPrimitive       false
+ isSynthetic       false
+ simple-name       SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
+ modifier          public
+ annotation
+ interfaces        org.springframework.aop.SpringProxy,org.springframework.aop.framework.Advised,org.springframework.cglib.proxy.Factory
+ super-class       +-site.shanzhao.SpringAopDemo
+                     +-java.lang.Object
+ class-loader      +-sun.misc.Launcher$AppClassLoader@18b4aac2
+                     +-sun.misc.Launcher$ExtClassLoader@13fee20c
+ classLoaderHash   18b4aac2
+
+jad
+jad site.shanzhao.SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60：使用jad反编译代理class，这里只展示出了重点代码
+
+// package site.shanzhao;
+
+import java.lang.reflect.Method;
+import org.aopalliance.aop.Advice;
+import org.springframework.aop.Advisor;
+import org.springframework.aop.SpringProxy;
+import org.springframework.aop.TargetClassAware;
+import org.springframework.aop.TargetSource;
+import org.springframework.aop.framework.Advised;
+import org.springframework.aop.framework.AopConfigException;
+import org.springframework.cglib.core.ReflectUtils;
+import org.springframework.cglib.core.Signature;
+import org.springframework.cglib.proxy.Callback;
+import org.springframework.cglib.proxy.Dispatcher;
+import org.springframework.cglib.proxy.Factory;
+import org.springframework.cglib.proxy.MethodInterceptor;
+import org.springframework.cglib.proxy.MethodProxy;
+import org.springframework.cglib.proxy.NoOp;
+import site.shanzhao.SpringAopDemo;
+
+public class SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60
+        extends SpringAopDemo
+        implements SpringProxy,
+        Advised,
+        Factory {
+    private boolean CGLIB$BOUND;
+    public static Object CGLIB$FACTORY_DATA;
+    private static final ThreadLocal CGLIB$THREAD_CALLBACKS;
+    private static final Callback[] CGLIB$STATIC_CALLBACKS;
+    private MethodInterceptor CGLIB$CALLBACK_0;
+    private MethodInterceptor CGLIB$CALLBACK_1;
+    private NoOp CGLIB$CALLBACK_2;
+    private Dispatcher CGLIB$CALLBACK_3;
+    private Dispatcher CGLIB$CALLBACK_4;
+    private MethodInterceptor CGLIB$CALLBACK_5;
+    private MethodInterceptor CGLIB$CALLBACK_6;
+
+    // 为org.springframework.aop.framework.Advised的接口，内部直接使用4号callback转化为ProxyFactory对象再调用目标方法
+    @Override
+    public final TargetSource getTargetSource() {
+        Dispatcher dispatcher = this.CGLIB$CALLBACK_4;
+        if (dispatcher == null) {
+            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
+            dispatcher = this.CGLIB$CALLBACK_4;
+        }
+        return ((Advised) dispatcher.loadObject()).getTargetSource();
+    }
+
+    // aop增强的方法，使用0号callback进行处理，实现类为DynamicAdvisedInterceptor。
+    // 应该有两个适合这个方法的Advisor，一个是@BizLog的LogInterceptor切面，另一个是事物切面
+    public final void aopMethod() {
+        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_0;
+        if (methodInterceptor == null) {
+            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
+            methodInterceptor = this.CGLIB$CALLBACK_0;
+        }
+        if (methodInterceptor != null) {
+            Object object = methodInterceptor.intercept(this, CGLIB$aopMethod$0$Method, CGLIB$emptyArgs,
+                    CGLIB$aopMethod$0$Proxy);
+            return;
+        }
+        super.aopMethod();
+    }
+
+    // 未增强的方法，同样使用0号callback进行处理，但却不会有适合这个方法的Advisor
+    public final void notAopMethod() {
+        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_0;
+        if (methodInterceptor == null) {
+            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
+            methodInterceptor = this.CGLIB$CALLBACK_0;
+        }
+        if (methodInterceptor != null) {
+            Object object = methodInterceptor.intercept(this, CGLIB$notAopMethod$1$Method, CGLIB$emptyArgs,
+                    CGLIB$notAopMethod$1$Proxy);
+            return;
+        }
+        super.notAopMethod();
+    }
+
+    // Object的equals方法，使用5号callback处理，实现类为EqualsInterceptor
+    public final boolean equals(Object object) {
+        MethodInterceptor methodInterceptor = this.CGLIB$CALLBACK_5;
+        if (methodInterceptor == null) {
+            SpringAopDemo$$EnhancerBySpringCGLIB$$6d7e1f60.CGLIB$BIND_CALLBACKS(this);
+            methodInterceptor = this.CGLIB$CALLBACK_5;
+        }
+        if (methodInterceptor != null) {
+            Object object2 = methodInterceptor.intercept(this, CGLIB$equals$2$Method, new Object[] { object },
+                    CGLIB$equals$2$Proxy);
+            return object2 == null ? false : (Boolean) object2;
+        }
+        return super.equals(object);
+    }
+
+}
+
+debug下代理类的信息这是从容器中直接获取SpringAopDemo这个class得到的对象，也就是代理类而不是源对象
+
+
+重点信息已用红框框处，逐个分析
+
+CGLIB$CALLBACK_0：通用拦截器，有切面和没有切面的普通方法方法都会用
+advised：实现为org.springframework.aop.framework.ProxyFactory。是 Spring AOP 中封装代理创建逻辑的核心工具类，实现了 Advised 接口。它通过维护一系列配置和内部结构，完成对目标对象的方法级别增强。
+targetSource：内部封装了源对象，可以将当前代理类强转为Advised，在调用其getTargetSource方法获取到源对象
+methodCache：缓存方法与其对应增强（Advisor）链的映射，加快方法调用时的拦截查找过程。
+notAopMethod：没有切面，所以size&#x3D;0
+aopMethod：有两个切面，缓存的size&#x3D;2
+
+
+advisor：代理类所有的Advisor
+proxyTargetClass：是否直接代理的目标class。为true则表示cglib proxy，fasle则是jdk proxy
+exposeProxy：是否将当前代理暴露到 ThreadLocal 上下文中，允许在目标对象内部通过 AopContext.currentProxy() 获取自身代理对象，用于内部方法调用也能被增强。
+frozen：表示配置是否被冻结。默认为false，支持在运行时动态添加或移除 Advisor。如果设置为 true，配置将被锁定，并跳过 methodCache 的清理逻辑以提升性能。
+
+
+
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+      <tags>
+        <tag>BeanPostProcessor</tag>
+        <tag>AOP</tag>
       </tags>
   </entry>
   <entry>
@@ -5601,69 +5638,450 @@ full configration class的增强​	和lite configration class唯一的区别，
       </tags>
   </entry>
   <entry>
-    <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
-    <url>/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</url>
-    <content><![CDATA[​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考
+    <title>Spring-其他重要的BeanPostProcesor</title>
+    <url>/2021-04-01/spring-qi-ta-chong-yao-de-beanpostprocesor/</url>
+    <content><![CDATA[
+​	AsyncAnnotationBeanPostProcessor和ScheduledAnnotationBeanPostProcessor源码解析
 
 
 
 
-起因今天写代码时遇到一个多数据源的切换问题，框架为Spring和Mybatus-Plus。在完全没事物的情况下pgsql和mysql切换没问题，但在@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)下却切换不了。翻了以前的Spring-Transactional文章和代码，遂记录一下原因和解决思路，以及整体的思考
-​	在有事物的情况下多数据源切换不了这是很正常的，毕竟Connection绑定到ThreadLocal了。但我开始简单的认为只要使用Propagation.NOT_SUPPORTED传播策略，毕竟这都不支持事物了，应该就能进行数据源切换。实际就是代码报错了，还是切换不了
-伪代码ProductService#recommend被调用在一个事物里
-public class ProductService {
+AsyncAnnotationBeanPostProcessor@EnableAsync​	其主要功能是向容器中注册AsyncAnnotationBeanPostProcessor这个BeanDefinition，其继承了AbstractBeanFactoryAwareAdvisingPostProcessor，可以处理指定的Advisor以此实现@Async的代理，来开启异步
+主要属性
 
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void recommend(int i){
 
-        // pgsqlMapper这个mapper有注解 @DS("postgresql")，走pqsql库
-        pgsqlMapper.queryById(i);
-        
-        // 走mysql库
-        msyqlMapper.queryById(i);
+
+属性
+说明
+
+
+
+annotation
+自定义的异步注解，可以用来定制化
+
+
+proxyTargetClass
+是否代理目标类。默认为false，即走jdk代理；为true则用cglib代理
+
+
+mode
+AOP 模式，取值有： PROXY（默认）：使用 Spring 的代理机制 ASPECTJ：使用 AspectJ（需要额外依赖与编译时&#x2F;加载时织入配置）
+
+
+order
+AsyncAnnotationBeanPostProcessor的执行顺序，默认最后才执行
+
+
+AsyncAnnotationAdvisor​	在AsyncAnnotationBeanPostProcessor#setBeanFactory（bean初始化阶段的一个hook方法，用于给bean填充BeanFactory）中设置的Advisor
+
+public class AsyncAnnotationAdvisor extends AbstractPointcutAdvisor implements BeanFactoryAware {
+
+    private Advice advice;
+
+    private Pointcut pointcut;
+
+    public AsyncAnnotationAdvisor(
+            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
+
+        Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes = new LinkedHashSet&lt;>(2);
+        // 支持@Async
+        asyncAnnotationTypes.add(Async.class);
+        try {
+            // 也支持EJB的@Asynchronous
+            asyncAnnotationTypes.add((Class&lt;? extends Annotation>) ClassUtils.forName("javax.ejb.Asynchronous",
+                    AsyncAnnotationAdvisor.class.getClassLoader()));
+        } catch (ClassNotFoundException ex) {
+            // 类路径里不存在@javax.ejb.Asynchronous，也无所谓
+        }
+        this.advice = buildAdvice(executor, exceptionHandler);
+        this.pointcut = buildPointcut(asyncAnnotationTypes);
     }
-    
+
+    /**
+     * 构建异步拦截器 Advice：用于真正执行异步调用逻辑
+     */
+    protected Advice buildAdvice(
+            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
+
+        AnnotationAsyncExecutionInterceptor interceptor = new AnnotationAsyncExecutionInterceptor(null);
+        interceptor.configure(executor, exceptionHandler);
+        return interceptor;
+    }
+
+    /**
+     * 将asyncAnnotationTypes所有注解构造成一个ComposablePointcut，只要class或method上存在任意一个asyncAnnotationType，即可进行代理
+     */
+    protected Pointcut buildPointcut(Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes) {
+        ComposablePointcut result = null;
+        for (Class&lt;? extends Annotation> asyncAnnotationType : asyncAnnotationTypes) {
+            // AnnotationMatchingPointcut是用于注解进行匹配的Pointcut
+            // cpc用于class匹配（只要class上存在asyncAnnotationType注解就行）
+            Pointcut cpc = new AnnotationMatchingPointcut(asyncAnnotationType, true);
+            // mpc用于方法匹配（只要method上存在asyncAnnotationType注解就行）
+            Pointcut mpc = new AnnotationMatchingPointcut(null, asyncAnnotationType, true);
+            // ComposablePointcut为注解组合，或逻辑。只要内部的ClasaFilter匹配一个就为true。MethodMatcher匹配一个就为true
+            if (result == null) {
+                result = new ComposablePointcut(cpc);
+            } else {
+                result.union(cpc);
+            }
+            result = result.union(mpc);
+        }
+        return (result != null ? result : Pointcut.TRUE);
+    }
+
 }
 
-分析原因​	ProductService#recommend使用了@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)注解，它构造出来的DefaultTransactionStatus中有如下两个字段需要重点关注。
-public class DefaultTransactionStatus extends AbstractTransactionStatus {
-    // 是否开启了真实的物理事物
-    private final boolean newTransaction;
-    // 是否由当前事务初始化并管理事务同步器（如注册连接绑定、hook 回调）
-    private final boolean newSynchronization;
-}
+AnnotationAsyncExecutionInterceptor​	拦截器核心，用于解析指定的执行器，并异步执行目标方法
+public class AnnotationAsyncExecutionInterceptor extends AsyncExecutionInterceptor {
 
-​	其中newTransaction&#x3D;false, newSynchronization&#x3D;true（受AbstractPlatformTransactionManager.transactionSynchronization字段控制）。
+    public Object invoke(final MethodInvocation invocation) throws Throwable {
+        Class&lt;?> targetClass = (invocation.getThis() != null ? AopUtils.getTargetClass(invocation.getThis()) : null);
+        Method specificMethod = ClassUtils.getMostSpecificMethod(invocation.getMethod(), targetClass);
+        final Method userDeclaredMethod = BridgeMethodResolver.findBridgedMethod(specificMethod);
 
-表示尽管当前未开启物理事务，但事务管理器仍会初始化事务同步器（TransactionSynchronizationManager.initSynchronization()），并允许资源绑定（如 ConnectionHolder）与注册事务hook（TransactionSynchronization）。
-换句话说，“没有物理事务，但仍可进行事务性资源管理和 hook 回调”
+        // 根据@Async的value来获取容器中对象的执行器，准备在这个Executor中执行代理逻辑
+        AsyncTaskExecutor executor = determineAsyncExecutor(userDeclaredMethod);
+        if (executor == null) {
+            throw new IllegalStateException(
+                    "No executor specified and no default executor set on AsyncExecutionInterceptor either");
+        }
 
-​	所以当触发pgsqlMapper.queryById(i)方法时，会绑定如下资源。（这一切必须要newSynchronization&#x3D;true）
+        // 构建Callable
+        Callable&lt;Object> task = () -> {
+            try {
+                Object result = invocation.proceed();
+                if (result instanceof Future) {
+                    return ((Future&lt;?>) result).get();
+                }
+            }
+            catch (ExecutionException ex) {
+                handleError(ex.getCause(), userDeclaredMethod, invocation.getArguments());
+            }
+            catch (Throwable ex) {
+                handleError(ex, userDeclaredMethod, invocation.getArguments());
+            }
+            return null;
+        };
 
+        // 提交任务到Executor中
+        return doSubmit(task, executor, invocation.getMethod().getReturnType());
+    }
 
-获取SqlSession时（SqlSessionUtils#getSqlSession）将SqlSessionFactory -&gt; SqlSessionHolder 给缓存到TransactionSynchronizationManager#resources中
-获取Connection时（DataSourceUtils#doGetConnection）将DataSource -&gt; ConnectionHolder 也缓存到TransactionSynchronizationManager#resources中
-
-
-​	所以，当走到第二个方法msyqlMapper.queryById(i)时，会拿到上一步中缓存的SqlSessionHolder，内部操作的是同一个Connection（具体为DefaultSqlSession.executor.transaction.connection），即pgsql的Connection，所以报错了
-解决办法​	将这个字段AbstractPlatformTransactionManager.transactionSynchronization由默认的SYNCHRONIZATION_ALWAYS改为SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。直接获取这个AbstractPlatformTransactionManager bean再进行改动有些不优雅，我翻了一遍发现有这个PlatformTransactionManagerCustomizer接口，可以对PlatformTransactionManager的子类进行定制化修改。所以可以添加如下的bean到容器中即可
-@Component
-public class TransactionSynchronizationCustomizer implements PlatformTransactionManagerCustomizer&lt;AbstractPlatformTransactionManager>{
-
-    @Override
-    public void customize(AbstractPlatformTransactionManager transactionManager) {
-        // 解决Propagation.NOT_SUPPORTED下多数据源不能切换动态切换的问题
-        transactionManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
+    /**
+     *  可知对于CompletableFuture，ListenableFuture，Future这三种返回值都是支持的，但对于其他返回值都直接返回null了
+     */
+    protected Object doSubmit(Callable&lt;Object> task, AsyncTaskExecutor executor, Class&lt;?> returnType) {
+        if (CompletableFuture.class.isAssignableFrom(returnType)) {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return task.call();
+                }
+                catch (Throwable ex) {
+                    throw new CompletionException(ex);
+                }
+            }, executor);
+        }
+        else if (ListenableFuture.class.isAssignableFrom(returnType)) {
+            return ((AsyncListenableTaskExecutor) executor).submitListenable(task);
+        }
+        else if (Future.class.isAssignableFrom(returnType)) {
+            return executor.submit(task);
+        }
+        else {
+            executor.submit(task);
+            return null;
+        }
     }
 }
 
-思考（重点）​		在 Spring 的事务模型中，Propagation.NOT_SUPPORTED 虽然会挂起当前事务，但默认配置下（SYNCHRONIZATION_ALWAYS）仍会注册事务同步器。 这导致即使没有物理事务，依然会出现线程绑定连接的行为（如通过 DataSourceUtils.getConnection() 获得的 Connection 会复用）。
-​	所以如果希望这个方法在语义上和“非事务环境”（即不使用@Transactional等情况）一致，避免隐式连接绑定，应将 transactionSynchronization 设置为 SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。
-​	看样子应该是Spring 为了支持某些非事务性方法（Propagation.NOT_SUPPORTED）也能参与事务资源控制才这样设计的
+总结
+方法或类上只要存在@Async或@Asynchronous即可走异步
+可使用@Async的value字段指定异步线程池（前提是要这个线程池在容器中）
+如未指定value，则使用容器中的AsyncConfigurer提供的Executor
+如果容器中没有AsyncConfigurer，则使用默认的SimpleAsyncTaskExecutor。其每次execute都会新开一个线程
+
+
+
+
+只支持CompletableFuture，ListenableFuture，Future这三种返回值。其余返回值都直接返回null
+异步切面会在这个方法中的所有切面里最先执行（因为其AsyncAnnotationBeanPostProcessor.beforeExistingAdvisors &#x3D; true）
+
+ScheduledAnnotationBeanPostProcessor@EnableScheduling​	向容器中注册ScheduledAnnotationBeanPostProcessor这个BeanDefinition，用于@Schedules和@Scheduled的解析和注册
+ScheduledAnnotationBeanPostProcessor核心源码public class ScheduledAnnotationBeanPostProcessor
+        implements ScheduledTaskHolder, MergedBeanDefinitionPostProcessor, DestructionAwareBeanPostProcessor,
+        Ordered, EmbeddedValueResolverAware, BeanNameAware, BeanFactoryAware, ApplicationContextAware,
+        SmartInitializingSingleton, ApplicationListener&lt;ContextRefreshedEvent>, DisposableBean {
+
+    /**
+     * bean初始化完成后的hook，只做定时任务的解析和封装，这里并不执行
+     */
+    public Object postProcessAfterInitialization(Object bean, String beanName) {
+        if (bean instanceof AopInfrastructureBean || bean instanceof TaskScheduler ||
+                bean instanceof ScheduledExecutorService) {
+            // Ignore AOP infrastructure such as scoped proxies.
+            return bean;
+        }
+
+        Class&lt;?> targetClass = AopProxyUtils.ultimateTargetClass(bean);
+        if (!this.nonAnnotatedClasses.contains(targetClass)) {
+            // 解析方法上的@Schedules和@Scheduled
+            Map&lt;Method, Set&lt;Scheduled>> annotatedMethods = MethodIntrospector.selectMethods(targetClass,
+                    (MethodIntrospector.MetadataLookup&lt;Set&lt;Scheduled>>) method -> {
+                        Set&lt;Scheduled> scheduledMethods = AnnotatedElementUtils.getMergedRepeatableAnnotations(
+                                method, Scheduled.class, Schedules.class);
+                        return (!scheduledMethods.isEmpty() ? scheduledMethods : null);
+                    });
+            if (annotatedMethods.isEmpty()) {
+                this.nonAnnotatedClasses.add(targetClass);
+            } else {
+                // 存在注解，对每个定时任务方法进行处理
+                annotatedMethods.forEach((method, scheduledMethods) -> scheduledMethods
+                        .forEach(scheduled -> processScheduled(scheduled, method, bean)));
+            }
+        }
+        return bean;
+    }
+
+    /**
+     * 解析@Scheduled注解，可知其定时字段优先级：cron > fixedDelay > fixedDelayString > fixedRate > fixedRateString
+     */
+    protected void processScheduled(Scheduled scheduled, Method method, Object bean) {
+        try {
+            // 将方法封装为可直接运行的Runnable（方法不能有参数）
+            Runnable runnable = createRunnable(bean, method);
+            // 是否已处理过（一个@Scheduled只能使用一个定时）
+            boolean processedSchedule = false;
+            String errorMessage = "Exactly one of the 'cron', 'fixedDelay(String)', or 'fixedRate(String)' attributes is required";
+
+            Set&lt;ScheduledTask> tasks = new LinkedHashSet&lt;>(4);
+
+            // 解析初始延时
+            long initialDelay = scheduled.initialDelay();
+            String initialDelayString = scheduled.initialDelayString();
+            if (StringUtils.hasText(initialDelayString)) {
+                Assert.isTrue(initialDelay &lt; 0, "Specify 'initialDelay' or 'initialDelayString', not both");
+                if (this.embeddedValueResolver != null) {
+                    initialDelayString = this.embeddedValueResolver.resolveStringValue(initialDelayString);
+                }
+                if (StringUtils.hasLength(initialDelayString)) {
+                    try {
+                        initialDelay = parseDelayAsLong(initialDelayString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid initialDelayString value \"" + initialDelayString
+                                        + "\" - cannot parse into long");
+                    }
+                }
+            }
+
+            // 优先解析cron表达式
+            String cron = scheduled.cron();
+            if (StringUtils.hasText(cron)) {
+                String zone = scheduled.zone();
+                if (this.embeddedValueResolver != null) {
+                    cron = this.embeddedValueResolver.resolveStringValue(cron);
+                    zone = this.embeddedValueResolver.resolveStringValue(zone);
+                }
+                if (StringUtils.hasLength(cron)) {
+                    // 校验cron不支持初始延时
+                    Assert.isTrue(initialDelay == -1, "'initialDelay' not supported for cron triggers");
+                    processedSchedule = true;
+                    if (!Scheduled.CRON_DISABLED.equals(cron)) {
+                        TimeZone timeZone;
+                        if (StringUtils.hasText(zone)) {
+                            timeZone = StringUtils.parseTimeZoneString(zone);
+                        } else {
+                            timeZone = TimeZone.getDefault();
+                        }
+                        // 构造为CronTask，先缓存起来
+                        tasks.add(this.registrar
+                                .scheduleCronTask(new CronTask(runnable, new CronTrigger(cron, timeZone))));
+                    }
+                }
+            }
+
+            if (initialDelay &lt; 0) {
+                initialDelay = 0;
+            }
+
+            // 解析固定周期
+            long fixedDelay = scheduled.fixedDelay();
+            if (fixedDelay >= 0) {
+                Assert.isTrue(!processedSchedule, errorMessage);
+                processedSchedule = true;
+                tasks.add(
+                        this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
+            }
+            String fixedDelayString = scheduled.fixedDelayString();
+            if (StringUtils.hasText(fixedDelayString)) {
+                if (this.embeddedValueResolver != null) {
+                    fixedDelayString = this.embeddedValueResolver.resolveStringValue(fixedDelayString);
+                }
+                if (StringUtils.hasLength(fixedDelayString)) {
+                    Assert.isTrue(!processedSchedule, errorMessage);
+                    processedSchedule = true;
+                    try {
+                        fixedDelay = parseDelayAsLong(fixedDelayString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid fixedDelayString value \"" + fixedDelayString + "\" - cannot parse into long");
+                    }
+                    // 构造为FixedDelayTask，先缓存起来
+                    tasks.add(this.registrar
+                            .scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
+                }
+            }
+
+            // 最后才解析固定频率
+            long fixedRate = scheduled.fixedRate();
+            if (fixedRate >= 0) {
+                Assert.isTrue(!processedSchedule, errorMessage);
+                processedSchedule = true;
+                tasks.add(this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
+            }
+            String fixedRateString = scheduled.fixedRateString();
+            if (StringUtils.hasText(fixedRateString)) {
+                if (this.embeddedValueResolver != null) {
+                    fixedRateString = this.embeddedValueResolver.resolveStringValue(fixedRateString);
+                }
+                if (StringUtils.hasLength(fixedRateString)) {
+                    Assert.isTrue(!processedSchedule, errorMessage);
+                    processedSchedule = true;
+                    try {
+                        fixedRate = parseDelayAsLong(fixedRateString);
+                    } catch (RuntimeException ex) {
+                        throw new IllegalArgumentException(
+                                "Invalid fixedRateString value \"" + fixedRateString + "\" - cannot parse into long");
+                    }
+                    // 构造为FixedRateTask，先缓存起来
+                    tasks.add(
+                            this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
+                }
+            }
+
+            // 校验使用了注解的必须有定时任务
+            Assert.isTrue(processedSchedule, errorMessage);
+
+            // Finally register the scheduled tasks
+            synchronized (this.scheduledTasks) {
+                Set&lt;ScheduledTask> regTasks = this.scheduledTasks.computeIfAbsent(bean, key -> new LinkedHashSet&lt;>(4));
+                regTasks.addAll(tasks);
+            }
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException(
+                    "Encountered invalid @Scheduled method '" + method.getName() + "': " + ex.getMessage());
+        }
+    }
+
+    /**
+     * ContextRefreshed事件，表示容器刷新完毕，可以真正的注册定时任务了
+     */
+    public void onApplicationEvent(ContextRefreshedEvent event) {
+        if (event.getApplicationContext() == this.applicationContext) {
+            finishRegistration();
+        }
+    }
+
+    /**
+     * 开始真正的投递定时任务到线程池中。
+     * 定时线程池优先级：
+     * 1. scheduler
+     * 2. TaskScheduler(beanName为taskScheduler) bean
+     * 3. 任意TaskScheduler bean
+     * 4. ScheduledExecutorService(beanName为taskScheduler) bean
+     * 5. 任意ScheduledExecutorService bean
+     * 6. ScheduledThreadPoolExecutor（线程数为1）
+     */
+    private void finishRegistration() {
+        if (this.scheduler != null) {
+            this.registrar.setScheduler(this.scheduler);
+        }
+
+        if (this.beanFactory instanceof ListableBeanFactory) {
+            Map&lt;String, SchedulingConfigurer> beans = ((ListableBeanFactory) this.beanFactory)
+                    .getBeansOfType(SchedulingConfigurer.class);
+            List&lt;SchedulingConfigurer> configurers = new ArrayList&lt;>(beans.values());
+            AnnotationAwareOrderComparator.sort(configurers);
+            for (SchedulingConfigurer configurer : configurers) {
+                configurer.configureTasks(this.registrar);
+            }
+        }
+
+        if (this.registrar.hasTasks() &amp;&amp; this.registrar.getScheduler() == null) {
+            Assert.state(this.beanFactory != null, "BeanFactory must be set to find scheduler by type");
+            try {
+                // 先获取beanName为taskScheduler的TaskScheduler bean
+                this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, false));
+            } catch (NoUniqueBeanDefinitionException ex) {
+                try {
+                    // 再按class获取TaskScheduler bean
+                    this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, true));
+                } catch (NoSuchBeanDefinitionException ex2) {
+
+                }
+            } catch (NoSuchBeanDefinitionException ex) {
+                try {
+                    // 再获取beanName为taskScheduler的ScheduledExecutorService bean
+                    this.registrar.setScheduler(
+                            resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, false));
+                } catch (NoUniqueBeanDefinitionException ex2) {
+                    try {
+                        // 再按class获取ScheduledExecutorService bean
+                        this.registrar.setScheduler(
+                                resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, true));
+                    } catch (NoSuchBeanDefinitionException ex3) {
+
+                    }
+                } catch (NoSuchBeanDefinitionException ex2) {
+
+                }
+            }
+        }
+        // 到这了如果taskScheduler还没有，内部则会创建一个容量为1的ScheduledThreadPoolExecutor去执行定时任务
+        // 将bean解析完成的所有定时任务投递到定时任务线程吃
+        this.registrar.afterPropertiesSet();
+    }
+
+}
+
+总结
+bean初始化完成后解析才@Scheduled和@Schedules（只是解析，并不投递），缓存到统一的ScheduledTaskRegistrar中
+@Scheduled只能解析为一个定时任务，优先级：
+cron
+fixedDelay
+fixedDelayString
+fixedRate
+fixedRateString
+
+
+要定时成多个任务需要使用@Schedules
+
+
+ContextRefreshedEvent事件触发，开始投递任务
+先获取任务定时器，定时线程池优先级：
+ScheduledAnnotationBeanPostProcessor#scheduler（只能为TaskScheduler或ScheduledExecutorService的子类）
+任意TaskScheduler  bean
+TaskScheduler(beanName为taskScheduler)  bean
+任意ScheduledExecutorService  bean
+ScheduledExecutorService(beanName为taskScheduler)  bean
+ScheduledThreadPoolExecutor（线程数为1），即默认线程池
+
+
+将解析阶段ScheduledTaskRegistrar内缓存的Task都投递到定时线程池中
+
+
+重点了解下cron，它会被封装为ReschedulingRunnable，每次执行完后才根据cron计算下一次任务的执行时间，这样循环动态的计算执行时间
+
 ]]></content>
       <categories>
         <category>Spring</category>
       </categories>
+      <tags>
+        <tag>BeanPostProcessor</tag>
+        <tag>Async注解</tag>
+        <tag>Scheduled注解</tag>
+      </tags>
   </entry>
   <entry>
     <title>Spring-Transactional</title>
@@ -6613,452 +7031,6 @@ DataSourceUtils​		前面我们分析了 Spring 事务的整体流程，但还�
       </tags>
   </entry>
   <entry>
-    <title>Spring-其他重要的BeanPostProcesor</title>
-    <url>/2021-04-01/spring-qi-ta-chong-yao-de-beanpostprocesor/</url>
-    <content><![CDATA[
-​	AsyncAnnotationBeanPostProcessor和ScheduledAnnotationBeanPostProcessor源码解析
-
-
-
-
-AsyncAnnotationBeanPostProcessor@EnableAsync​	其主要功能是向容器中注册AsyncAnnotationBeanPostProcessor这个BeanDefinition，其继承了AbstractBeanFactoryAwareAdvisingPostProcessor，可以处理指定的Advisor以此实现@Async的代理，来开启异步
-主要属性
-
-
-
-属性
-说明
-
-
-
-annotation
-自定义的异步注解，可以用来定制化
-
-
-proxyTargetClass
-是否代理目标类。默认为false，即走jdk代理；为true则用cglib代理
-
-
-mode
-AOP 模式，取值有： PROXY（默认）：使用 Spring 的代理机制 ASPECTJ：使用 AspectJ（需要额外依赖与编译时&#x2F;加载时织入配置）
-
-
-order
-AsyncAnnotationBeanPostProcessor的执行顺序，默认最后才执行
-
-
-AsyncAnnotationAdvisor​	在AsyncAnnotationBeanPostProcessor#setBeanFactory（bean初始化阶段的一个hook方法，用于给bean填充BeanFactory）中设置的Advisor
-
-public class AsyncAnnotationAdvisor extends AbstractPointcutAdvisor implements BeanFactoryAware {
-
-    private Advice advice;
-
-    private Pointcut pointcut;
-
-    public AsyncAnnotationAdvisor(
-            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
-
-        Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes = new LinkedHashSet&lt;>(2);
-        // 支持@Async
-        asyncAnnotationTypes.add(Async.class);
-        try {
-            // 也支持EJB的@Asynchronous
-            asyncAnnotationTypes.add((Class&lt;? extends Annotation>) ClassUtils.forName("javax.ejb.Asynchronous",
-                    AsyncAnnotationAdvisor.class.getClassLoader()));
-        } catch (ClassNotFoundException ex) {
-            // 类路径里不存在@javax.ejb.Asynchronous，也无所谓
-        }
-        this.advice = buildAdvice(executor, exceptionHandler);
-        this.pointcut = buildPointcut(asyncAnnotationTypes);
-    }
-
-    /**
-     * 构建异步拦截器 Advice：用于真正执行异步调用逻辑
-     */
-    protected Advice buildAdvice(
-            @Nullable Supplier&lt;Executor> executor, @Nullable Supplier&lt;AsyncUncaughtExceptionHandler> exceptionHandler) {
-
-        AnnotationAsyncExecutionInterceptor interceptor = new AnnotationAsyncExecutionInterceptor(null);
-        interceptor.configure(executor, exceptionHandler);
-        return interceptor;
-    }
-
-    /**
-     * 将asyncAnnotationTypes所有注解构造成一个ComposablePointcut，只要class或method上存在任意一个asyncAnnotationType，即可进行代理
-     */
-    protected Pointcut buildPointcut(Set&lt;Class&lt;? extends Annotation>> asyncAnnotationTypes) {
-        ComposablePointcut result = null;
-        for (Class&lt;? extends Annotation> asyncAnnotationType : asyncAnnotationTypes) {
-            // AnnotationMatchingPointcut是用于注解进行匹配的Pointcut
-            // cpc用于class匹配（只要class上存在asyncAnnotationType注解就行）
-            Pointcut cpc = new AnnotationMatchingPointcut(asyncAnnotationType, true);
-            // mpc用于方法匹配（只要method上存在asyncAnnotationType注解就行）
-            Pointcut mpc = new AnnotationMatchingPointcut(null, asyncAnnotationType, true);
-            // ComposablePointcut为注解组合，或逻辑。只要内部的ClasaFilter匹配一个就为true。MethodMatcher匹配一个就为true
-            if (result == null) {
-                result = new ComposablePointcut(cpc);
-            } else {
-                result.union(cpc);
-            }
-            result = result.union(mpc);
-        }
-        return (result != null ? result : Pointcut.TRUE);
-    }
-
-}
-
-AnnotationAsyncExecutionInterceptor​	拦截器核心，用于解析指定的执行器，并异步执行目标方法
-public class AnnotationAsyncExecutionInterceptor extends AsyncExecutionInterceptor {
-
-    public Object invoke(final MethodInvocation invocation) throws Throwable {
-        Class&lt;?> targetClass = (invocation.getThis() != null ? AopUtils.getTargetClass(invocation.getThis()) : null);
-        Method specificMethod = ClassUtils.getMostSpecificMethod(invocation.getMethod(), targetClass);
-        final Method userDeclaredMethod = BridgeMethodResolver.findBridgedMethod(specificMethod);
-
-        // 根据@Async的value来获取容器中对象的执行器，准备在这个Executor中执行代理逻辑
-        AsyncTaskExecutor executor = determineAsyncExecutor(userDeclaredMethod);
-        if (executor == null) {
-            throw new IllegalStateException(
-                    "No executor specified and no default executor set on AsyncExecutionInterceptor either");
-        }
-
-        // 构建Callable
-        Callable&lt;Object> task = () -> {
-            try {
-                Object result = invocation.proceed();
-                if (result instanceof Future) {
-                    return ((Future&lt;?>) result).get();
-                }
-            }
-            catch (ExecutionException ex) {
-                handleError(ex.getCause(), userDeclaredMethod, invocation.getArguments());
-            }
-            catch (Throwable ex) {
-                handleError(ex, userDeclaredMethod, invocation.getArguments());
-            }
-            return null;
-        };
-
-        // 提交任务到Executor中
-        return doSubmit(task, executor, invocation.getMethod().getReturnType());
-    }
-
-    /**
-     *  可知对于CompletableFuture，ListenableFuture，Future这三种返回值都是支持的，但对于其他返回值都直接返回null了
-     */
-    protected Object doSubmit(Callable&lt;Object> task, AsyncTaskExecutor executor, Class&lt;?> returnType) {
-        if (CompletableFuture.class.isAssignableFrom(returnType)) {
-            return CompletableFuture.supplyAsync(() -> {
-                try {
-                    return task.call();
-                }
-                catch (Throwable ex) {
-                    throw new CompletionException(ex);
-                }
-            }, executor);
-        }
-        else if (ListenableFuture.class.isAssignableFrom(returnType)) {
-            return ((AsyncListenableTaskExecutor) executor).submitListenable(task);
-        }
-        else if (Future.class.isAssignableFrom(returnType)) {
-            return executor.submit(task);
-        }
-        else {
-            executor.submit(task);
-            return null;
-        }
-    }
-}
-
-总结
-方法或类上只要存在@Async或@Asynchronous即可走异步
-可使用@Async的value字段指定异步线程池（前提是要这个线程池在容器中）
-如未指定value，则使用容器中的AsyncConfigurer提供的Executor
-如果容器中没有AsyncConfigurer，则使用默认的SimpleAsyncTaskExecutor。其每次execute都会新开一个线程
-
-
-
-
-只支持CompletableFuture，ListenableFuture，Future这三种返回值。其余返回值都直接返回null
-异步切面会在这个方法中的所有切面里最先执行（因为其AsyncAnnotationBeanPostProcessor.beforeExistingAdvisors &#x3D; true）
-
-ScheduledAnnotationBeanPostProcessor@EnableScheduling​	向容器中注册ScheduledAnnotationBeanPostProcessor这个BeanDefinition，用于@Schedules和@Scheduled的解析和注册
-ScheduledAnnotationBeanPostProcessor核心源码public class ScheduledAnnotationBeanPostProcessor
-        implements ScheduledTaskHolder, MergedBeanDefinitionPostProcessor, DestructionAwareBeanPostProcessor,
-        Ordered, EmbeddedValueResolverAware, BeanNameAware, BeanFactoryAware, ApplicationContextAware,
-        SmartInitializingSingleton, ApplicationListener&lt;ContextRefreshedEvent>, DisposableBean {
-
-    /**
-     * bean初始化完成后的hook，只做定时任务的解析和封装，这里并不执行
-     */
-    public Object postProcessAfterInitialization(Object bean, String beanName) {
-        if (bean instanceof AopInfrastructureBean || bean instanceof TaskScheduler ||
-                bean instanceof ScheduledExecutorService) {
-            // Ignore AOP infrastructure such as scoped proxies.
-            return bean;
-        }
-
-        Class&lt;?> targetClass = AopProxyUtils.ultimateTargetClass(bean);
-        if (!this.nonAnnotatedClasses.contains(targetClass)) {
-            // 解析方法上的@Schedules和@Scheduled
-            Map&lt;Method, Set&lt;Scheduled>> annotatedMethods = MethodIntrospector.selectMethods(targetClass,
-                    (MethodIntrospector.MetadataLookup&lt;Set&lt;Scheduled>>) method -> {
-                        Set&lt;Scheduled> scheduledMethods = AnnotatedElementUtils.getMergedRepeatableAnnotations(
-                                method, Scheduled.class, Schedules.class);
-                        return (!scheduledMethods.isEmpty() ? scheduledMethods : null);
-                    });
-            if (annotatedMethods.isEmpty()) {
-                this.nonAnnotatedClasses.add(targetClass);
-            } else {
-                // 存在注解，对每个定时任务方法进行处理
-                annotatedMethods.forEach((method, scheduledMethods) -> scheduledMethods
-                        .forEach(scheduled -> processScheduled(scheduled, method, bean)));
-            }
-        }
-        return bean;
-    }
-
-    /**
-     * 解析@Scheduled注解，可知其定时字段优先级：cron > fixedDelay > fixedDelayString > fixedRate > fixedRateString
-     */
-    protected void processScheduled(Scheduled scheduled, Method method, Object bean) {
-        try {
-            // 将方法封装为可直接运行的Runnable（方法不能有参数）
-            Runnable runnable = createRunnable(bean, method);
-            // 是否已处理过（一个@Scheduled只能使用一个定时）
-            boolean processedSchedule = false;
-            String errorMessage = "Exactly one of the 'cron', 'fixedDelay(String)', or 'fixedRate(String)' attributes is required";
-
-            Set&lt;ScheduledTask> tasks = new LinkedHashSet&lt;>(4);
-
-            // 解析初始延时
-            long initialDelay = scheduled.initialDelay();
-            String initialDelayString = scheduled.initialDelayString();
-            if (StringUtils.hasText(initialDelayString)) {
-                Assert.isTrue(initialDelay &lt; 0, "Specify 'initialDelay' or 'initialDelayString', not both");
-                if (this.embeddedValueResolver != null) {
-                    initialDelayString = this.embeddedValueResolver.resolveStringValue(initialDelayString);
-                }
-                if (StringUtils.hasLength(initialDelayString)) {
-                    try {
-                        initialDelay = parseDelayAsLong(initialDelayString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid initialDelayString value \"" + initialDelayString
-                                        + "\" - cannot parse into long");
-                    }
-                }
-            }
-
-            // 优先解析cron表达式
-            String cron = scheduled.cron();
-            if (StringUtils.hasText(cron)) {
-                String zone = scheduled.zone();
-                if (this.embeddedValueResolver != null) {
-                    cron = this.embeddedValueResolver.resolveStringValue(cron);
-                    zone = this.embeddedValueResolver.resolveStringValue(zone);
-                }
-                if (StringUtils.hasLength(cron)) {
-                    // 校验cron不支持初始延时
-                    Assert.isTrue(initialDelay == -1, "'initialDelay' not supported for cron triggers");
-                    processedSchedule = true;
-                    if (!Scheduled.CRON_DISABLED.equals(cron)) {
-                        TimeZone timeZone;
-                        if (StringUtils.hasText(zone)) {
-                            timeZone = StringUtils.parseTimeZoneString(zone);
-                        } else {
-                            timeZone = TimeZone.getDefault();
-                        }
-                        // 构造为CronTask，先缓存起来
-                        tasks.add(this.registrar
-                                .scheduleCronTask(new CronTask(runnable, new CronTrigger(cron, timeZone))));
-                    }
-                }
-            }
-
-            if (initialDelay &lt; 0) {
-                initialDelay = 0;
-            }
-
-            // 解析固定周期
-            long fixedDelay = scheduled.fixedDelay();
-            if (fixedDelay >= 0) {
-                Assert.isTrue(!processedSchedule, errorMessage);
-                processedSchedule = true;
-                tasks.add(
-                        this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
-            }
-            String fixedDelayString = scheduled.fixedDelayString();
-            if (StringUtils.hasText(fixedDelayString)) {
-                if (this.embeddedValueResolver != null) {
-                    fixedDelayString = this.embeddedValueResolver.resolveStringValue(fixedDelayString);
-                }
-                if (StringUtils.hasLength(fixedDelayString)) {
-                    Assert.isTrue(!processedSchedule, errorMessage);
-                    processedSchedule = true;
-                    try {
-                        fixedDelay = parseDelayAsLong(fixedDelayString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid fixedDelayString value \"" + fixedDelayString + "\" - cannot parse into long");
-                    }
-                    // 构造为FixedDelayTask，先缓存起来
-                    tasks.add(this.registrar
-                            .scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
-                }
-            }
-
-            // 最后才解析固定频率
-            long fixedRate = scheduled.fixedRate();
-            if (fixedRate >= 0) {
-                Assert.isTrue(!processedSchedule, errorMessage);
-                processedSchedule = true;
-                tasks.add(this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
-            }
-            String fixedRateString = scheduled.fixedRateString();
-            if (StringUtils.hasText(fixedRateString)) {
-                if (this.embeddedValueResolver != null) {
-                    fixedRateString = this.embeddedValueResolver.resolveStringValue(fixedRateString);
-                }
-                if (StringUtils.hasLength(fixedRateString)) {
-                    Assert.isTrue(!processedSchedule, errorMessage);
-                    processedSchedule = true;
-                    try {
-                        fixedRate = parseDelayAsLong(fixedRateString);
-                    } catch (RuntimeException ex) {
-                        throw new IllegalArgumentException(
-                                "Invalid fixedRateString value \"" + fixedRateString + "\" - cannot parse into long");
-                    }
-                    // 构造为FixedRateTask，先缓存起来
-                    tasks.add(
-                            this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
-                }
-            }
-
-            // 校验使用了注解的必须有定时任务
-            Assert.isTrue(processedSchedule, errorMessage);
-
-            // Finally register the scheduled tasks
-            synchronized (this.scheduledTasks) {
-                Set&lt;ScheduledTask> regTasks = this.scheduledTasks.computeIfAbsent(bean, key -> new LinkedHashSet&lt;>(4));
-                regTasks.addAll(tasks);
-            }
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalStateException(
-                    "Encountered invalid @Scheduled method '" + method.getName() + "': " + ex.getMessage());
-        }
-    }
-
-    /**
-     * ContextRefreshed事件，表示容器刷新完毕，可以真正的注册定时任务了
-     */
-    public void onApplicationEvent(ContextRefreshedEvent event) {
-        if (event.getApplicationContext() == this.applicationContext) {
-            finishRegistration();
-        }
-    }
-
-    /**
-     * 开始真正的投递定时任务到线程池中。
-     * 定时线程池优先级：
-     * 1. scheduler
-     * 2. TaskScheduler(beanName为taskScheduler) bean
-     * 3. 任意TaskScheduler bean
-     * 4. ScheduledExecutorService(beanName为taskScheduler) bean
-     * 5. 任意ScheduledExecutorService bean
-     * 6. ScheduledThreadPoolExecutor（线程数为1）
-     */
-    private void finishRegistration() {
-        if (this.scheduler != null) {
-            this.registrar.setScheduler(this.scheduler);
-        }
-
-        if (this.beanFactory instanceof ListableBeanFactory) {
-            Map&lt;String, SchedulingConfigurer> beans = ((ListableBeanFactory) this.beanFactory)
-                    .getBeansOfType(SchedulingConfigurer.class);
-            List&lt;SchedulingConfigurer> configurers = new ArrayList&lt;>(beans.values());
-            AnnotationAwareOrderComparator.sort(configurers);
-            for (SchedulingConfigurer configurer : configurers) {
-                configurer.configureTasks(this.registrar);
-            }
-        }
-
-        if (this.registrar.hasTasks() &amp;&amp; this.registrar.getScheduler() == null) {
-            Assert.state(this.beanFactory != null, "BeanFactory must be set to find scheduler by type");
-            try {
-                // 先获取beanName为taskScheduler的TaskScheduler bean
-                this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, false));
-            } catch (NoUniqueBeanDefinitionException ex) {
-                try {
-                    // 再按class获取TaskScheduler bean
-                    this.registrar.setTaskScheduler(resolveSchedulerBean(this.beanFactory, TaskScheduler.class, true));
-                } catch (NoSuchBeanDefinitionException ex2) {
-
-                }
-            } catch (NoSuchBeanDefinitionException ex) {
-                try {
-                    // 再获取beanName为taskScheduler的ScheduledExecutorService bean
-                    this.registrar.setScheduler(
-                            resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, false));
-                } catch (NoUniqueBeanDefinitionException ex2) {
-                    try {
-                        // 再按class获取ScheduledExecutorService bean
-                        this.registrar.setScheduler(
-                                resolveSchedulerBean(this.beanFactory, ScheduledExecutorService.class, true));
-                    } catch (NoSuchBeanDefinitionException ex3) {
-
-                    }
-                } catch (NoSuchBeanDefinitionException ex2) {
-
-                }
-            }
-        }
-        // 到这了如果taskScheduler还没有，内部则会创建一个容量为1的ScheduledThreadPoolExecutor去执行定时任务
-        // 将bean解析完成的所有定时任务投递到定时任务线程吃
-        this.registrar.afterPropertiesSet();
-    }
-
-}
-
-总结
-bean初始化完成后解析才@Scheduled和@Schedules（只是解析，并不投递），缓存到统一的ScheduledTaskRegistrar中
-@Scheduled只能解析为一个定时任务，优先级：
-cron
-fixedDelay
-fixedDelayString
-fixedRate
-fixedRateString
-
-
-要定时成多个任务需要使用@Schedules
-
-
-ContextRefreshedEvent事件触发，开始投递任务
-先获取任务定时器，定时线程池优先级：
-ScheduledAnnotationBeanPostProcessor#scheduler（只能为TaskScheduler或ScheduledExecutorService的子类）
-任意TaskScheduler  bean
-TaskScheduler(beanName为taskScheduler)  bean
-任意ScheduledExecutorService  bean
-ScheduledExecutorService(beanName为taskScheduler)  bean
-ScheduledThreadPoolExecutor（线程数为1），即默认线程池
-
-
-将解析阶段ScheduledTaskRegistrar内缓存的Task都投递到定时线程池中
-
-
-重点了解下cron，它会被封装为ReschedulingRunnable，每次执行完后才根据cron计算下一次任务的执行时间，这样循环动态的计算执行时间
-
-]]></content>
-      <categories>
-        <category>Spring</category>
-      </categories>
-      <tags>
-        <tag>BeanPostProcessor</tag>
-        <tag>Async注解</tag>
-        <tag>Scheduled注解</tag>
-      </tags>
-  </entry>
-  <entry>
     <title>Spring-容器refresh</title>
     <url>/2021-06-03/spring-rong-qi-refresh/</url>
     <content><![CDATA[
@@ -7544,6 +7516,71 @@ protected void finishRefresh() {
     LiveBeansView.registerApplicationContext(this);
 }
 
+]]></content>
+      <categories>
+        <category>Spring</category>
+      </categories>
+  </entry>
+  <entry>
+    <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
+    <url>/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</url>
+    <content><![CDATA[​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考
+
+
+
+
+起因今天写代码时遇到一个多数据源的切换问题，框架为Spring和Mybatus-Plus。在完全没事物的情况下pgsql和mysql切换没问题，但在@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)下却切换不了。翻了以前的Spring-Transactional文章和代码，遂记录一下原因和解决思路，以及整体的思考
+​	在有事物的情况下多数据源切换不了这是很正常的，毕竟Connection绑定到ThreadLocal了。但我开始简单的认为只要使用Propagation.NOT_SUPPORTED传播策略，毕竟这都不支持事物了，应该就能进行数据源切换。实际就是代码报错了，还是切换不了
+伪代码ProductService#recommend被调用在一个事物里
+public class ProductService {
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void recommend(int i){
+
+        // pgsqlMapper这个mapper有注解 @DS("postgresql")，走pqsql库
+        pgsqlMapper.queryById(i);
+        
+        // 走mysql库
+        msyqlMapper.queryById(i);
+    }
+    
+}
+
+分析原因​	ProductService#recommend使用了@Transactional(propagation &#x3D; Propagation.NOT_SUPPORTED)注解，它构造出来的DefaultTransactionStatus中有如下两个字段需要重点关注。
+public class DefaultTransactionStatus extends AbstractTransactionStatus {
+    // 是否开启了真实的物理事物
+    private final boolean newTransaction;
+    // 是否由当前事务初始化并管理事务同步器（如注册连接绑定、hook 回调）
+    private final boolean newSynchronization;
+}
+
+​	其中newTransaction&#x3D;false, newSynchronization&#x3D;true（受AbstractPlatformTransactionManager.transactionSynchronization字段控制）。
+
+表示尽管当前未开启物理事务，但事务管理器仍会初始化事务同步器（TransactionSynchronizationManager.initSynchronization()），并允许资源绑定（如 ConnectionHolder）与注册事务hook（TransactionSynchronization）。
+换句话说，“没有物理事务，但仍可进行事务性资源管理和 hook 回调”
+
+​	所以当触发pgsqlMapper.queryById(i)方法时，会绑定如下资源。（这一切必须要newSynchronization&#x3D;true）
+
+
+获取SqlSession时（SqlSessionUtils#getSqlSession）将SqlSessionFactory -&gt; SqlSessionHolder 给缓存到TransactionSynchronizationManager#resources中
+获取Connection时（DataSourceUtils#doGetConnection）将DataSource -&gt; ConnectionHolder 也缓存到TransactionSynchronizationManager#resources中
+
+
+​	所以，当走到第二个方法msyqlMapper.queryById(i)时，会拿到上一步中缓存的SqlSessionHolder，内部操作的是同一个Connection（具体为DefaultSqlSession.executor.transaction.connection），即pgsql的Connection，所以报错了
+解决办法​	将这个字段AbstractPlatformTransactionManager.transactionSynchronization由默认的SYNCHRONIZATION_ALWAYS改为SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。直接获取这个AbstractPlatformTransactionManager bean再进行改动有些不优雅，我翻了一遍发现有这个PlatformTransactionManagerCustomizer接口，可以对PlatformTransactionManager的子类进行定制化修改。所以可以添加如下的bean到容器中即可
+@Component
+public class TransactionSynchronizationCustomizer implements PlatformTransactionManagerCustomizer&lt;AbstractPlatformTransactionManager>{
+
+    @Override
+    public void customize(AbstractPlatformTransactionManager transactionManager) {
+        // 解决Propagation.NOT_SUPPORTED下多数据源不能切换动态切换的问题
+        transactionManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
+    }
+}
+
+思考（重点）​		在 Spring 的事务模型中，Propagation.NOT_SUPPORTED 虽然会挂起当前事务，但默认配置下（SYNCHRONIZATION_ALWAYS）仍会注册事务同步器。 这导致即使没有物理事务，依然会出现线程绑定连接的行为（如通过 DataSourceUtils.getConnection() 获得的 Connection 会复用）。
+​	所以如果希望这个方法在语义上和“非事务环境”（即不使用@Transactional等情况）一致，避免隐式连接绑定，应将 transactionSynchronization 设置为 SYNCHRONIZATION_ON_ACTUAL_TRANSACTION。
+​	看样子应该是Spring 为了支持某些非事务性方法（Propagation.NOT_SUPPORTED）也能参与事务资源控制才这样设计的
 ]]></content>
       <categories>
         <category>Spring</category>
@@ -8479,6 +8516,96 @@ protected void deployDirectory(ContextName cn, File dir) {
       </tags>
   </entry>
   <entry>
+    <title>Tomcat-启动流程和http请求流程</title>
+    <url>/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/</url>
+    <content><![CDATA[
+​	分析并总结了tomcat的启动流程和整个http请求流程，重点可关注启动流程的UML图和请求流程图
+
+
+
+
+启动流程通过前面几篇的铺垫，现在终于可以进入到tomcat的启动流程了
+
+
+架构和Lifecycle
+Server,Service,Conncector,ProtocolHandler和NioEndpoint
+Engine,Host和HostConfig
+Context,ContextConfig和Wrapper
+
+
+​	Tomcat 的启动通常通过执行 catalina.sh start 命令完成。通过如下脚本可知是调用 org.apache.catalina.startup.Bootstrap#main(String[] args) 方法，并传入了 start 参数。
+
+Bootstrap#main
+启动流程UML
+
+Bootstrap 初始化​	主要是初始化三个类加载器（Common、Catalina、Shared），并实例化Catalina对象，为后续的load和start方法做准备
+Catalina#load()​	解析 conf/server.xml 配置文件，构建出一个Server树，并初始化Server（Server#init）
+Catalina#start()​	启动Server组件（Server#start）
+重点
+容器的init() 并不会向子容器递归传播
+
+​	除了 Engine 容器在 load() 阶段被显式初始化外，其余子容器（如 Host、Context、Wrapper）的初始化会延迟到 start() 阶段。也就是说，start() 阶段才是触发完整容器结构构建的关键时机
+
+
+Socket 层组件的启动滞后于容器启动
+
+​	只有整个容器启动完毕，确保业务逻辑准备完毕，然后才启动 Connector 及其内部的 ProtocolHandler 和 Endpoint（负责监听端口与处理 Socket 请求）。避免http请求到来时，容器还不可用的状态
+
+
+Context 容器由 HostConfig 解析生成
+
+​	Host 启动时会触发其绑定的 LifecycleListener — HostConfig，来解析和构造StandardContext子容器
+
+
+Wrapper、Filter、Listener 由 ContextConfig 解析构建
+
+​	Context启动中会触其绑定的 LifecycleListener — ContextConfig，来进行全部的web.xml解析，完成对 Wrapper（即 Servlet）、Filter、Listener 等组件的构建与注册
+
+
+
+请求流程
+流程总结
+Acceptor线程（监听并接受连接）
+
+
+Acceptor线程监听到8080端口产生的连接，将其构造为PollerEvent提交到Poller 的事件队列中
+
+
+
+Poller线程（事件注册和监听）
+
+
+轮询处理事件队列，将 PollerEvent 注册到 Java NIO 的 Selector 中，监听 OP_READ 事件
+当某个 channel 上有数据可读时，构造一个 SocketProcessor 实例，并提交给后端的 worker 线程池执行。
+
+
+
+Worker线程（处理Socket请求）
+
+
+SocketProcessor#doRun：进行tcp握手处理
+ConnectionHandler#process：从 Processor 缓存池中获取或新建协议处理器（如 Http11Processor），并交由其处理请求
+AbstractProcessorLight#process：对不同的socket状态进行分发和处理（SocketEvent.OPEN_READ则走到Http11Processor#service）
+Http11Processor#service：通过Http11InputBuffer解析http请求，构造成Request和Response。并分发给CoyoteAdapter#service
+CoyoteAdapter#service：通过Mapper组件将请求 URL 映射到对应的 Host、Context、Wrapper并缓存，再调用顶层容器（Engine）的 Pipeline，正式进入容器级别的处理逻辑。
+请求通过容器中内部Pipeline里的Valve，从basic Valve流出再流向下一层容器中的first Valve：StandardEngineValve -&gt; StandardHostValve -&gt; StandardContextValve -&gt; StandardWrapperValve
+最后一个阀门StandardWrapperValve：先进行Servlet的分配，再构造ApplicationFilterChain（过滤出对当前url能使用的Filter），依次调用 doFilter() 进行链式处理，全部通过后最终便走到Servlet#service中
+
+
+
+
+重点
+Tomcat 使用 责任链（Pipeline + Valve） 模式处理请求流转，清晰解耦了容器级别的处理职责
+Processor 实例在请求结束后可被复用，避免重复构造，提升性能
+NIO + 多线程池模型实现高并发处理，前端是少量 Acceptor&#x2F;Poller 线程，后端是灵活扩展的 Worker 线程池。
+
+worker线程栈示例
+]]></content>
+      <categories>
+        <category>Tomcat</category>
+      </categories>
+  </entry>
+  <entry>
     <title>Tomcat-Server和Service</title>
     <url>/2021-09-04/tomcat-server-he-service/</url>
     <content><![CDATA[
@@ -9038,98 +9165,8 @@ Mapper​	同上面的MapperListener，理解作用即可，源码深入分析�
       </tags>
   </entry>
   <entry>
-    <title>Tomcat-启动流程和http请求流程</title>
-    <url>/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/</url>
-    <content><![CDATA[
-​	分析并总结了tomcat的启动流程和整个http请求流程，重点可关注启动流程的UML图和请求流程图
-
-
-
-
-启动流程通过前面几篇的铺垫，现在终于可以进入到tomcat的启动流程了
-
-
-架构和Lifecycle
-Server,Service,Conncector,ProtocolHandler和NioEndpoint
-Engine,Host和HostConfig
-Context,ContextConfig和Wrapper
-
-
-​	Tomcat 的启动通常通过执行 catalina.sh start 命令完成。通过如下脚本可知是调用 org.apache.catalina.startup.Bootstrap#main(String[] args) 方法，并传入了 start 参数。
-
-Bootstrap#main
-启动流程UML
-
-Bootstrap 初始化​	主要是初始化三个类加载器（Common、Catalina、Shared），并实例化Catalina对象，为后续的load和start方法做准备
-Catalina#load()​	解析 conf/server.xml 配置文件，构建出一个Server树，并初始化Server（Server#init）
-Catalina#start()​	启动Server组件（Server#start）
-重点
-容器的init() 并不会向子容器递归传播
-
-​	除了 Engine 容器在 load() 阶段被显式初始化外，其余子容器（如 Host、Context、Wrapper）的初始化会延迟到 start() 阶段。也就是说，start() 阶段才是触发完整容器结构构建的关键时机
-
-
-Socket 层组件的启动滞后于容器启动
-
-​	只有整个容器启动完毕，确保业务逻辑准备完毕，然后才启动 Connector 及其内部的 ProtocolHandler 和 Endpoint（负责监听端口与处理 Socket 请求）。避免http请求到来时，容器还不可用的状态
-
-
-Context 容器由 HostConfig 解析生成
-
-​	Host 启动时会触发其绑定的 LifecycleListener — HostConfig，来解析和构造StandardContext子容器
-
-
-Wrapper、Filter、Listener 由 ContextConfig 解析构建
-
-​	Context启动中会触其绑定的 LifecycleListener — ContextConfig，来进行全部的web.xml解析，完成对 Wrapper（即 Servlet）、Filter、Listener 等组件的构建与注册
-
-
-
-请求流程
-流程总结
-Acceptor线程（监听并接受连接）
-
-
-Acceptor线程监听到8080端口产生的连接，将其构造为PollerEvent提交到Poller 的事件队列中
-
-
-
-Poller线程（事件注册和监听）
-
-
-轮询处理事件队列，将 PollerEvent 注册到 Java NIO 的 Selector 中，监听 OP_READ 事件
-当某个 channel 上有数据可读时，构造一个 SocketProcessor 实例，并提交给后端的 worker 线程池执行。
-
-
-
-Worker线程（处理Socket请求）
-
-
-SocketProcessor#doRun：进行tcp握手处理
-ConnectionHandler#process：从 Processor 缓存池中获取或新建协议处理器（如 Http11Processor），并交由其处理请求
-AbstractProcessorLight#process：对不同的socket状态进行分发和处理（SocketEvent.OPEN_READ则走到Http11Processor#service）
-Http11Processor#service：通过Http11InputBuffer解析http请求，构造成Request和Response。并分发给CoyoteAdapter#service
-CoyoteAdapter#service：通过Mapper组件将请求 URL 映射到对应的 Host、Context、Wrapper并缓存，再调用顶层容器（Engine）的 Pipeline，正式进入容器级别的处理逻辑。
-请求通过容器中内部Pipeline里的Valve，从basic Valve流出再流向下一层容器中的first Valve：StandardEngineValve -&gt; StandardHostValve -&gt; StandardContextValve -&gt; StandardWrapperValve
-最后一个阀门StandardWrapperValve：先进行Servlet的分配，再构造ApplicationFilterChain（过滤出对当前url能使用的Filter），依次调用 doFilter() 进行链式处理，全部通过后最终便走到Servlet#service中
-
-
-
-
-重点
-Tomcat 使用 责任链（Pipeline + Valve） 模式处理请求流转，清晰解耦了容器级别的处理职责
-Processor 实例在请求结束后可被复用，避免重复构造，提升性能
-NIO + 多线程池模型实现高并发处理，前端是少量 Acceptor&#x2F;Poller 线程，后端是灵活扩展的 Worker 线程池。
-
-worker线程栈示例
-]]></content>
-      <categories>
-        <category>Tomcat</category>
-      </categories>
-  </entry>
-  <entry>
     <title>Tomcat-Session管理</title>
-    <url>/2021-12-28/tomcat-session-guan-li/</url>
+    <url>/2022-01-09/tomcat-session-guan-li/</url>
     <content><![CDATA[
 ​	本文从源码出发，剖析 Tomcat 中 Session 的懒加载、保活与生命周期控制机制，并解析了 StandardManager 如何借助序列化完成热部署场景下的 Session 持久化与自动恢复
 
@@ -9537,581 +9574,339 @@ protected void doLoad() throws ClassNotFoundException, IOException {
       </categories>
   </entry>
   <entry>
-    <title>Tomcat-整体架构和Lifecycle</title>
-    <url>/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/</url>
+    <title>Tomcat-热加载之ThreadLocal内存泄露篇（二）</title>
+    <url>/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/</url>
     <content><![CDATA[
-​	基于Tomcat-8.5.x版本，简单分析了整体的架构和核心组件。并详细分析和总结了Lifecycle机制
+​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现无效的ThreadLocalMap.Entry清除、ThreadLocalLeakPreventionListener回收空闲worker线程和TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收这三种策略来优雅的解决ThreadLocal内存泄漏的问题
 
 
+​	上一篇讨论了Tomcat热加载期间垃圾的产生与分类，并且探讨了对Context线程回收的必要性以及Tomcat的实现。而这篇会来分析一个更棘手的问题：如果项目中ThreadLocal如果使用不当，热加载后是如何引起内存泄漏的，并着重分析基于这个问题，Tomcat的考量以及如何优雅的解决这个问题
+问题​	Tomcat 在执行热加载时，会主动停止当前 Context 中由应用创建的线程（通过遍历 JVM 中所有线程并判断其 contextClassLoader 是否为当前 WebappClassLoader 来过滤）。但这并不包括用于处理 HTTP 请求的 Worker 线程。这些线程服务于整个 JVM 生命周期，不会被某个 Context 独占或绑定到某个特定的 WebappClassLoader
+​	问题在于，ThreadLocal是和线程绑定的。如果某个应用将其资源（比如 Spring 的上下文、Class、Bean 等）放入了 Worker 线程的 ThreadLocal 中，而该资源又直接或间接引用了 WebappClassLoader，就会导致这个 WebappClassLoader和其加载的所有Class无法被 GC 回收。最终，随着热加载次数增加，最终触发 OOM
 
+换句话说：共享线程+ThreadLocal+Context类资源 &#x3D; 热加载内存泄漏的元凶之一。
 
-核心组件和架构Tomcat 的架构可以抽象为一棵树，核心组件结构如下：
+案例分析所有案例中MyCounter一致，为计数器。目的是实现对Tomcat worker线程处理了多少次http请求的计数。
+分析之前可以看看我的这篇文章，对ThreadLocal要有一个比较深刻的认识最好
+demo1public class LeakingServlet extends HttpServlet {
 
-根节点是 Server，表示整个 Tomcat 实例（即一个 JVM 进程）
-Server 下包含一个或多个 Service，代表一组 Web 服务
-每个 Service 包含：
-一个或多个 Connector，负责监听不同协议&#x2F;端口的请求（如 HTTP、HTTPS）
-唯一的一个 Engine，与Service一对一的关系，用于处理由 Connector 接收到的请求
+    public final static ThreadLocal&lt;MyCounter> COUNTER_THREAD_LOCAL = ThreadLocal.withInitial(MyCounter::new);
 
+    public static class MyCounter {
+        private int count = 0;
 
-Engine 下包含多个 Host，每个 Host 对应一个虚拟主机（通过域名区分）
-每个 Host管理多个 Context，每个 Context 对应一个 Web 应用（即一个 war）
-每个 Context 下包含多个 Wrapper，每个 Wrapper 对应一个具体的 Servlet
+        public void increment() {
+            count++;
+        }
 
+        public int getCount() {
+            return count;
+        }
+    }
 
-Lifecycle​	Lifecycle 是 Tomcat 中最核心的接口之一。所有关键组件都实现了该接口，以便在生命周期事件（如init、start、stop等）到来时执行自身的职责，并将事件级联传递给子组件。因此，深入理解 Lifecycle 的作用和机制，是阅读和掌握 Tomcat 源码的基础。
-public interface Lifecycle {
-
-    // ======================== 生命周期事件常量 ========================
-
-    String BEFORE_INIT_EVENT = "before_init";
-    String AFTER_INIT_EVENT = "after_init";
-
-    String BEFORE_START_EVENT = "before_start";
-    String START_EVENT = "start";
-    String AFTER_START_EVENT = "after_start";
-
-    String BEFORE_STOP_EVENT = "before_stop";
-    String STOP_EVENT = "stop";
-    String AFTER_STOP_EVENT = "after_stop";
-
-    String BEFORE_DESTROY_EVENT = "before_destroy";
-    String AFTER_DESTROY_EVENT = "after_destroy";
-
-    /** 周期性事件（如后台定时任务触发） */
-    String PERIODIC_EVENT = "periodic";
-
-    /** 配置启动事件（内部扩展使用） */
-    String CONFIGURE_START_EVENT = "configure_start";
-    /** 配置停止事件（内部扩展使用） */
-    String CONFIGURE_STOP_EVENT = "configure_stop";
-
-    // ======================== 生命周期监听器相关方法 ========================
-
-    void addLifecycleListener(LifecycleListener listener);
-
-    LifecycleListener[] findLifecycleListeners();
-
-    void removeLifecycleListener(LifecycleListener listener);
-
-    // ======================== 生命周期控制方法 ========================
-
-    /**
-     * 初始化组件。组件只能初始化一次，且必须在启动前完成。
-     */
-    void init() throws LifecycleException;
-
-    /**
-     * 启动组件。如果未初始化，会隐式调用 init()
-     */
-    void start() throws LifecycleException;
-
-    /**
-     * 停止组件。可在调用 start() 后再次调用以恢复运行
-     */
-    void stop() throws LifecycleException;
-
-    /**
-     * 销毁组件，释放资源。此操作不可逆。
-     */
-    void destroy() throws LifecycleException;
-
-    LifecycleState getState();
-
-    String getStateName();
-
-    /**
-     * 标记接口：表示该组件只能使用一次（单次使用后即不可重启）
-     */
-    interface SingleUse {
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
+        MyCounter counter = LeakingServlet.COUNTER_THREAD_LOCAL.get();
+        counter.increment();
+        // doBusiness...
     }
 }
 
-LifecycleState​	组件的生命周期状态枚举。每个状态标记了当前组件是否处于“可用”状态（available），以及对应的生命周期事件名（lifecycleEvent）
-public enum LifecycleState {
+字段COUNTER_THREAD_LOCAL 是一个静态变量，被LeakingServlet.class对象给持有
 
-    // 初始状态，尚未进行任何初始化操作
-    NEW(false, null),
+​	当请求进入后，会触发一个如下的引用链图。ThreadLocal本身被Entry这个虚引用对象持有，但还被另一边的强引用LeakingServlet.class也持有了，会导致ThreadLocal不能触发虚引用的回收作用，致使对应的value（MyCounter对象）也不会回收，而MyCounter间接持有的WebappClassLoader和其所加载的所有class对象也都不能被回收，引发了内存泄漏
 
-    // ================= 初始化阶段 =================
 
-    // 初始化中，调用 init() 时进入此状态，发布 before_init 事件
-    INITIALIZING(false, Lifecycle.BEFORE_INIT_EVENT),
+demo1引用链
 
-    // 初始化完成，进入 INITIALIZED 状态，发布 after_init 事件
-    INITIALIZED(false, Lifecycle.AFTER_INIT_EVENT),
+demo2public class LeakingServlet extends HttpServlet {
 
-    // ================= 启动阶段 =================
+    public final ThreadLocal&lt;MyCounter> COUNTER_THREAD_LOCAL = ThreadLocal.withInitial(MyCounter::new);
 
-    // 启动准备中，准备启动前进入该状态，发布 before_start 事件
-    STARTING_PREP(false, Lifecycle.BEFORE_START_EVENT),
+    public static class MyCounter {
+        private int count = 0;
 
-    // 正在启动，执行 startInternal() 时进入此状态，发布 start 事件
-    STARTING(true, Lifecycle.START_EVENT),
+        public void increment() {
+            count++;
+        }
 
-    // 启动完成，组件已处于工作状态，发布 after_start 事件
-    STARTED(true, Lifecycle.AFTER_START_EVENT),
-
-    // ================= 停止阶段 =================
-
-    // 停止准备阶段，准备停止时进入该状态，发布 before_stop 事件
-    STOPPING_PREP(true, Lifecycle.BEFORE_STOP_EVENT),
-
-    // 正在停止，组件关闭过程中进入该状态，发布 stop 事件
-    STOPPING(false, Lifecycle.STOP_EVENT),
-
-    // 停止完成，组件已不可用，发布 after_stop 事件
-    STOPPED(false, Lifecycle.AFTER_STOP_EVENT),
-
-    // ================= 销毁阶段 =================
-
-    // 销毁准备阶段，发布 before_destroy 事件
-    DESTROYING(false, Lifecycle.BEFORE_DESTROY_EVENT),
-
-    // 销毁完成，组件进入不可恢复终态，发布 after_destroy 事件
-    DESTROYED(false, Lifecycle.AFTER_DESTROY_EVENT),
-
-    // ================= 异常状态 =================
-
-    // 异常失败状态，组件启动或运行中发生未处理异常，进入失败态。无生命周期事件发布
-    FAILED(false, null);
-
-    /**
-     * 当前状态是否为组件的“可用”状态，即是否可对外提供服务（如 STARTING、STARTED 等）
-     */
-    private final boolean available;
-
-    private final String lifecycleEvent;
-
-    LifecycleState(boolean available, String lifecycleEvent) {
-        this.available = available;
-        this.lifecycleEvent = lifecycleEvent;
+        public int getCount() {
+            return count;
+        }
     }
 
-    public boolean isAvailable() {
-        return available;
-    }
-
-    public String getLifecycleEvent() {
-        return lifecycleEvent;
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
+        MyCounter counter = COUNTER_THREAD_LOCAL.get();
+        counter.increment();
+        // doBusiness...
     }
 }
 
-LifecycleBase​	LifecycleBase 是 Lifecycle 接口的基础实现类，提供了生命周期控制方法（如 init()、start()、stop()、destroy()）的通用模板逻辑。Tomcat 中绝大多数实现了 Lifecycle 接口的核心组件，都会继承该类，从而复用其统一的状态管理和事件分发机制。
-​	核心start方法分析如下，（其余的init，stop等方法差不太多，就不做详细的分析了）
-public abstract class LifecycleBase implements Lifecycle {
-    /**
-     * 启动组件。线程安全，具备幂等性。
-     * 
-     * 生命周期状态迁移如下：
-     * NEW -> INITIALIZED -> STARTING_PREP -> STARTING -> STARTED
-     * 如果启动失败，将进入 FAILED 状态。
-     */
-    public final synchronized void start() throws LifecycleException {
+​	此时COUNTER_THREAD_LOCAL非静态，被LeakingServlet对象持有。引用链图如下，此案例中理论上不会有内存泄漏
 
-        if (LifecycleState.STARTING_PREP.equals(state) || LifecycleState.STARTING.equals(state) ||
-                LifecycleState.STARTED.equals(state)) {
-            // 正在启动中或已启动，无视直接返回
-            return;
+​	持有ThreadLocal强引用的LeakingServlet对象会被置为null并被回收，回收后仅被虚引用持有的ThreadLocal就能被回收，那么其value（MyCounter对象）也能在后续ThreadLocalMap对Entry修改时被检测到并被手动释放后回收。上层引用链都断开，那么下面的WebappClassLoader也能被回收了
+
+​	但这并不意味着立即释放，虽然最终是可以回收的，但在回收检测发生之前，ThreadLocalMap中的 value（MyCounter）依旧存活，仍然间接引用着WebappClassLoader及其加载的所有类，就导致这段「悬挂时间」里依旧存在内存压力
+
+demo2引用链
+
+demo3public class LeakingServlet extends HttpServlet {
+
+    public final TransmittableThreadLocal&lt;MyCounter> COUNTER_THREAD_LOCAL = TransmittableThreadLocal.withInitial(MyCounter::new);
+
+    public static class MyCounter {
+        private int count = 0;
+
+        public void increment() {
+            count++;
         }
 
-        // ============= 前置状态判断 =================
-        if (state.equals(LifecycleState.NEW)) {
-            // 如果还是初始化状态，就先初始化
-            init();
-        } else if (state.equals(LifecycleState.FAILED)) {
-            // 若之前启动失败，先尝试停止，清理资源后重新启动
-            stop();
-        } else if (!state.equals(LifecycleState.INITIALIZED) &amp;&amp;
-                !state.equals(LifecycleState.STOPPED)) {
-            // 其余非法前置状态，直接异常
-            invalidTransition(Lifecycle.BEFORE_START_EVENT);
-        }
-        // ============== 到这表示前置状态处理完毕，可以真正start了 ===================
-
-        try {
-            // 设置状态为 STARTING_PREP，并发布 before_start 事件
-            setStateInternal(LifecycleState.STARTING_PREP, null, false);
-            // 调用子类实现的实际启动逻辑（模板方法模式）
-            startInternal();
-            // ============ 走到这，正常情况state就应该为STARTING了 =================
-
-            if (state.equals(LifecycleState.FAILED)) {
-                // 启动失败，执行stop
-                stop();
-            } else if (!state.equals(LifecycleState.STARTING)) {
-                // 非STARTING（正常不应该出现，避免子类实现不规范的一种fallback），直接抛异常
-                invalidTransition(Lifecycle.AFTER_START_EVENT);
-            } else {
-                // 正常会走到这，状态自动置为STARTED。并发布 after_start 事件
-                setStateInternal(LifecycleState.STARTED, null, false);
-            }
-        } catch (Throwable t) {
-            handleSubClassException(t, "lifecycleBase.startFail", toString());
+        public int getCount() {
+            return count;
         }
     }
 
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) {
+        MyCounter counter = COUNTER_THREAD_LOCAL.get();
+        counter.increment();
+        // doBusiness...
+    }
 }
 
-总结
-Lifecycle状态转换图
+此时COUNTER_THREAD_LOCAL还是非静态且被LeakingServlet对象持有，但ThreadLocal为第三方的TransmittableThreadLocal，其引用链图如下。核心分析其实和demo2一样，TransmittableThreadLocal对象还是能被回收，也同样具备因不能及时回收value而导致WebappClassLoader不能被回收的隐式风险
 
-状态机核心要点：
+demo3引用链
 
-启动组件必定要先init，也只会调用一次init
-start和stop状态可以循环相互转化（即STOPPED状态不是终态）
-NEW可直接到STOPPED状态（很少这么用）
-DESTROYED才是终态，不可逆转（FAILED都不是终态，它还可以stop() -&gt; startI()，虽然不一定成功）
-
-]]></content>
-      <categories>
-        <category>Tomcat</category>
-      </categories>
-  </entry>
-  <entry>
-    <title>Tomcat-热加载和相关Class的垃圾回收探讨</title>
-    <url>/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao/</url>
-    <content><![CDATA[
-​	本文深入分析了 WebappClassLoader 的热加载整体流程，并对热加载过程中遗留的垃圾回收问题进行了系统性拆解。重点涵盖了：垃圾的分类、核心引用关系的梳理、各类资源的清理策略。最后详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议
-
-
-
-
-热加载​	WebappLoader#backgroundProcess是负责检测和触发热加载的方法入口，其被standardEngine的backgroundThread线程周期性触发，被调用路径为：ContainerBackgroundProcessor#run -&gt; ContainerBackgroundProcessor#processChildren -&gt; StandardContext.backgroundProcess -&gt; Loader#backgroundProcess
-​	当web可触发context的资源重加载时，backgroundThread线程会销毁（stop）当前context内部的所有资源，并进行重启context（start），start过程中使用了新的WebappClassLoader加载项目相关的class资源，因此可以在不重启整个 Tomcat 进程的前提下，以实现应用级别的热部署与资源更新
-WebappLoader#backgroundProcesspublic void backgroundProcess() {
-        // reloadable由StandardContext.reloadable设置，默认为false，也就表示需要在context.xml里主动配置reloadable=true才开启热加载检测资格
-        if (reloadable &amp;&amp; modified()) { // Context里有class或jar改变了，需要进行热加载
-            try {
-                // 临时切换到Tomcat的commonLoader，避免使用即将被卸载的WebappClassLoader
-                // 确保reload过程中使用的是稳定的类加载器环境
-                Thread.currentThread().setContextClassLoader(WebappLoader.class.getClassLoader());
-                if (context != null) {
-                    context.reload();
-                }
-            } finally {
-                if (context != null &amp;&amp; context.getLoader() != null) {
-                    // 热加载完毕，将context里新的WebappClassLoader绑定到线程上下文中
-                    Thread.currentThread().setContextClassLoader(context.getLoader().getClassLoader());
-                }
-            }
-        }
-    }
-
-class资源变化监测WebappClassLoaderBase#modified() 负责监测当前 Web 应用中的 class 资源是否发生变更，用于触发 Context 重载。当以下任一变化发生时，Tomcat 会认为需要重新加载当前 Context：
-
-&#x2F;WEB-INF&#x2F;classes 目录下已加载的 class 文件被修改
-&#x2F;WEB-INF&#x2F;lib目录下的jar包有修改、新增和删除
-
-
-public boolean modified() {
-
-    // 1. 遍历所有已加载的 class 文件，判断是否有被修改
-    for (Entry&lt;String, ResourceEntry> entry : resourceEntries.entrySet()) {
-        long cachedLastModified = entry.getValue().lastModified;
-        long lastModified = resources.getClassLoaderResource(
-                entry.getKey()).getLastModified();
-        if (lastModified != cachedLastModified) {
-            // class 文件修改时间变化，说明 class 被更新，需要重载 Context
-            return true;
-        }
-    }
-
-    // 2. 遍历 /WEB-INF/lib 下的 jar 包，判断是否有变动
-    WebResource[] jars = resources.listResources("/WEB-INF/lib");
-
-    int jarCount = 0;
-    for (WebResource jar : jars) {
-        if (jar.getName().endsWith(".jar") &amp;&amp; jar.isFile() &amp;&amp; jar.canRead()) {
-            jarCount++;
-            Long recordedLastModified = jarModificationTimes.get(jar.getName());
-            if (recordedLastModified == null) {
-                // jar包没有记录上次修改时间，代表这个jar是新增的，也需要重载context
-                return true;
-            }
-            if (recordedLastModified.longValue() != jar.getLastModified()) {
-                // 时间变了，表示被修改过，也要重载context
-                return true;
-            }
-        }
-    }
-
-    // 3. 检查是否有 jar 包被删除（jar 数量变少）
-    if (jarCount &lt; jarModificationTimes.size()) {
-        return true;
-    }
-
-    // 4. 无任何资源变化，则不需要重载Context
-    return false;
-}
-
-context重加载Context 重加载的本质流程就是：先执行 stop()，再重新 start()。start流程可以看这里，stop则负责关闭和清理已有资源，避免内存泄露。我这里简要梳理 下stop() 过程中各核心组件的销毁逻辑：
-
-子容器 Servlet (StandardWrapper#stop)
-依次销毁所有已加载的 Servlet 实例，调用其 javax.servlet.Servlet#destroy() 方法，完成业务资源释放
-
-
-Filter组件销毁
-调用所有已注册的 javax.servlet.Filter#destroy() 方法，清理过滤器资源。
-
-
-Session 管理器 (StandardManager#stop)
-触发 Session 持久化（等待context重启后再加载进来），同时清理过期的 Session 实例
-
-
-Listener组件销毁
-执行所有注册的 javax.servlet.ServletContextListener#contextDestroyed() 方法，通知应用关闭，释放监听资源。
-
-
-类加载器资源清理 (WebappLoader#stop)
-销毁 WebappClassLoader，清理已加载的 class 缓存、jar 缓存、资源引用
-停止并回收与类加载器相关的线程，断开对外部资源的强引用，避免内存泄漏
-
-
-
-垃圾回收​	前面的都是铺垫，现在来探讨一个最重要的问题（当最终理解了这个问题后，任何java热加载工具如何垃圾回收探讨都不是难题）：
-
-​	Tomcat 触发 Context 热加载后，系统中会产生哪些需要回收的垃圾？这些垃圾又该如何被回收？（如果回收不彻底，多次热加载最终可能引发 OOM 问题）
-
-资源分类首先我们可以将需要回收的资源粗分为如下两大类
-堆区堆区由GC自动回收，记住一点，这个区内的对象能被回收的唯一方法是对象不可达（软引用和弱引用这些具有特定回收限制的实例不再考虑范围内）
-
-Context 内部的对象实例：比如Servlet、Filter、Session、Spring容器里的bean等等，这部分是最多的
-线程相关对象：Context 内部自行启动的 Thread和线程池
-Class 对象：由 WebappClassLoader 加载的所有 Class 实例
-WebappClassLoader 实例本身
-
-非堆区
-元空间 (Metaspace) 中的 klass 元数据：回收依赖JVM的class卸载机制
-
-回收探讨堆区垃圾回收的核心逻辑只有一点：对象是否可达（Reachable）。所以只要搞清楚对象的引用关系，就能推导出其回收条件。我们基于这个核心点，对上诉堆对内所有的对象进行追溯，看看到底它被哪些对象给持有
-Context 内部的对象实例​	这部分是最简单的，这些对象都是应用程序中显示创建并赋值的对象。在context#stop期间，触发了各种内部组件的stop后，再对字段赋值为null就是在清除引用。Spring 容器则会在 ApplicationContext#close() 里统一销毁 Bean 并清理所有容器内引用。
-线程相关对象​	Thread可作为GCRoot对象，所以对它的回收必须等Thread终结，否则任意一个存活的线程是不可能被回收的（其内部持有的contextClassLoader和其所有加载的class都不会被回收）
-Class 对象​	Class对象稍复杂，它不仅有显示的引用（应用程序中显示使用），还有隐式的使用
-
-
-
-引用链路
-描述
-
-
-
-A对象 → A.class
-所有基于 A.class 创建的对象，其对象头中都隐式持有指向 A.class 的指针。
-
-
-类加载器 → A.class
-加载 A.class 的类加载器持有一份强引用。
-
-
-其他显式引用
-例如缓存、反射、Class.forName() 结果等都可能让其他对象显示持有 A.class 引用。
-
-
-所以要回收Class对象，可以得出如下结论（以A.class为例）：
-
-A.class创建的A对象都不可达，那么A对象头里的A.class指针也不可达
-加载A.class的类加载器对象不可达
-显示持有A.class的其他对象也不可达
-
-WebappClassLoader 实例
-
-
-引用链路
-描述
-
-
-
-所有其加载的 Class → WebappClassLoader
-每个 Class 实例反向持有其加载器引用。
-
-
-线程的 contextClassLoader → WebappClassLoader
-活跃线程若未清理 contextClassLoader 也持有加载器引用。
-
-
-WebappClassLoader回收前提：
-
-所有由其加载的 Class 都已不可达
-没有任何活跃线程仍在使用该类加载器作为 contextClassLoader
-显示持有此类加载器的其他对象不可达
-
-总结
-class相关对象引用链
-
-所以垃圾能别回收的本质，是让持有A.class和WebappClassLoader对象的链路断掉，在这里我们只要做好如下清理条件，相关垃圾即可被回收
-
-context下创建的所有Thread需要终结
-context内部强引用链全部断开（置为null）
-
-tomcat释放资源​	在正式进入分析之前，先明确一点：子线程默认继承父线程的 contextClassLoader（Thread的构造方法）
-​	通过前面文章的分析，可知在Context内部创建的线程都会使用Context的WebappClassLoadLoader作为其contextClassLoader，所以，只要线程的 Thread.contextClassLoader 是当前 Context 对应的 WebappClassLoader，就可以判断它属于当前 Context 内部创建的线程。
-线程清理核心方法在WebappClassLoaderBase#clearReferencesThreads，调用链为：
+解决方案清除ThreadLocalMap$Entry核心方法在WebappClassLoaderBase#checkThreadLocalsForLeaks，调用链为：
 
 
 WebappLoader#stop
 WebappClassLoaderBase#stop
 WebappClassLoaderBase#clearReferences 
-WebappClassLoaderBase#clearReferencesThreads
+WebappClassLoaderBase#checkThreadLocalsForLeaks（需要clearReferencesThreadLocals&#x3D;true，默认也为true）
 
 
-逻辑总结：
-
-获取当前JVM所有线程：通过遍历根 ThreadGroup进行所有线程的枚举
-遍历并筛选出当前Context创建的线程：判断依据为Thread.contextClassLoader &#x3D;&#x3D; Context.WebappClassLoader
-根据是否是线程池创建的线程来分开处理
-线程池创建的Thread：使用线程池的shutdownNow来优雅的关闭线程
-非线程池线程：先发送中断信号，若无法中断则再直接调用Thread.stop方法来强制终结线程
-
-
-
-private void clearReferencesThreads() {
-    // 获取系统内所有活动线程
+private void checkThreadLocalsForLeaks() {
+    // 获取JVM的所有线程
     Thread[] threads = getThreads();
-    List&lt;Thread> threadsToStop = new ArrayList&lt;>();
 
-    for (Thread thread : threads) {
-        if (thread != null) {
-            ClassLoader ccl = thread.getContextClassLoader();
-            // 只处理 contextClassLoader 是当前 WebappClassLoader 的线程
-            if (ccl == this) {
-                // 跳过当前线程自身，防止自杀
-                if (thread == Thread.currentThread()) {
-                    continue;
-                }
-
-                final String threadName = thread.getName();
-
-                ThreadGroup tg = thread.getThreadGroup();
-                if (tg != null &amp;&amp; JVM_THREAD_GROUP_NAMES.contains(tg.getName())) {
-                    if (clearReferencesHttpClientKeepAliveThread &amp;&amp;
-                            threadName.equals("Keep-Alive-Timer")) {
-                        // Keep-Alive-Timer 特殊处理，仅替换其 contextClassLoader，避免泄露
-                        thread.setContextClassLoader(parent);
-                    }
-
-                    // Don't warn about remaining JVM controlled threads
-                    continue;
-                }
-
-                // // 已经死亡的线程，则不需要再清理了
-                if (!thread.isAlive()) {
-                    continue;
-                }
-
-                // TimerThread 可以被安全关闭
-                if (thread.getClass().getName().startsWith("java.util.Timer") &amp;&amp;
-                        clearReferencesStopTimerThreads) {
-                    clearReferencesStopTimerThread(thread);
-                    continue;
-                }
-                // 仅当配置允许强制停止线程时才处理（clearReferencesStopThreads默认为false）
-                if (!clearReferencesStopThreads) {
-                    continue;
-                }
-
-                // 尝试检测是否为 ThreadPoolExecutor 的 worker 线程，优先关闭线程池本身
-                boolean usingExecutor = false;
-                try {
-
-                    // 兼容不同 JDK 实现，寻找包装的 runnable 字段
-                    Object target = null;
-                    for (String fieldName : new String[] { "target", "runnable", "action" }) {
-                        try {
-                            Field targetField = thread.getClass().getDeclaredField(fieldName);
-                            targetField.setAccessible(true);
-                            target = targetField.get(thread);
-                            break;
-                        } catch (NoSuchFieldException nfe) {
-                            continue;
-                        }
-                    }
-
-                    // 判断是否为 ThreadPoolExecutor.Worker，如果是则使用线程池的shutdownNow方法来优雅关闭线程
-                    if (target != null &amp;&amp; target.getClass().getCanonicalName() != null &amp;&amp;
-                            target.getClass().getCanonicalName().equals(
-                                    "java.util.concurrent.ThreadPoolExecutor.Worker")) {
-                        Field executorField = target.getClass().getDeclaredField("this$0");
-                        executorField.setAccessible(true);
-                        Object executor = executorField.get(target);
-                        if (executor instanceof ThreadPoolExecutor) {
-                            ((ThreadPoolExecutor) executor).shutdownNow();
-                            usingExecutor = true;
-                        }
-                    }
-                } catch (NoSuchFieldException | IllegalAccessException | RuntimeException e) {
-                    log.warn(sm.getString("webappClassLoader.stopThreadFail",
-                            thread.getName(), getContextName()), e);
-                }
-
-                // 非线程池线程，直接尝试 interrupt 终止
-                if (!usingExecutor &amp;&amp; !thread.isInterrupted()) {
-                    thread.interrupt();
-                }
-
-                // 记录仍需等待确认终止的线程
-                threadsToStop.add(thread);
-            }
-        }
-    }
-
-    int count = 0;
-    // 对需要stop的线程都直接终结
-    for (Thread t : threadsToStop) {
-        while (t.isAlive() &amp;&amp; count &lt; 100) {
-            try {
-                Thread.sleep(20);
-            } catch (InterruptedException e) {
-                // Quit the while loop
-                break;
-            }
-            count++;
-        }
-        // 存活才终结
-        if (t.isAlive()) {
-            t.stop();
-        }
-    }
-}
-
-private Thread[] getThreads() {
-    // 获取当前线程所在的线程组
-    ThreadGroup tg = Thread.currentThread().getThreadGroup();
-    // 向上遍历，找到根线程组（整个 JVM 的顶级线程组）
     try {
-        while (tg.getParent() != null) {
-            tg = tg.getParent();
+        // 获取Thread中threadLocals与inheritableThreadLocals两个字段
+        Field threadLocalsField = Thread.class.getDeclaredField("threadLocals");
+        threadLocalsField.setAccessible(true);
+        Field inheritableThreadLocalsField = Thread.class.getDeclaredField("inheritableThreadLocals");
+        inheritableThreadLocalsField.setAccessible(true);
+        // ThreadLocalMap.table 数组字段（用于存储 Entry 的数组）
+        Class&lt;?> tlmClass = Class.forName("java.lang.ThreadLocal$ThreadLocalMap");
+        Field tableField = tlmClass.getDeclaredField("table");
+        tableField.setAccessible(true);
+        // ThreadLocalMap中删除过期Entry方法
+        Method expungeStaleEntriesMethod = tlmClass.getDeclaredMethod("expungeStaleEntries");
+        expungeStaleEntriesMethod.setAccessible(true);
+
+        for (Thread thread : threads) {
+            Object threadLocalMap;
+            if (thread != null) {
+
+                // 检查 threadLocals
+                threadLocalMap = threadLocalsField.get(thread);
+                if (null != threadLocalMap) {
+                    // 主动触发清理过期Entry（即key被回收的Entry）
+                    expungeStaleEntriesMethod.invoke(threadLocalMap);
+                    checkThreadLocalMapForLeaks(threadLocalMap, tableField);
+                }
+
+                // 检查 inheritableThreadLocals
+                threadLocalMap = inheritableThreadLocalsField.get(thread);
+                if (null != threadLocalMap) {
+                    expungeStaleEntriesMethod.invoke(threadLocalMap);
+                    checkThreadLocalMapForLeaks(threadLocalMap, tableField);
+                }
+            }
         }
-    } catch (SecurityException se) {
-
+    } catch (Throwable t) {
+        // 异常处理...
     }
-
-    int threadCountGuess = tg.activeCount() + 50;
-    Thread[] threads = new Thread[threadCountGuess];
-    // 枚举所有的线程
-    int threadCountActual = tg.enumerate(threads);
-    // enumerate 方法在数组空间不足时会默默丢弃多余的线程，
-    // 因此当实际数量等于猜测数量时，说明数组可能装不下，需要扩容重试
-    while (threadCountActual == threadCountGuess) {
-        threadCountGuess *= 2;
-        threads = new Thread[threadCountGuess];
-        // 继续枚举
-        threadCountActual = tg.enumerate(threads);
-    }
-
-    return threads;
 }
 
-总结​	通过上述对 Context 内线程资源的兜底清理（这一部分其实是热加载内存泄漏中最核心、最容易被忽略的风险点 —— 因为实际项目中，大量使用了自定义线程或线程池，且它们往往没能纳入 Spring.ApplicationContext 的生命周期管理），再加上在 Context#stop 阶段，对各个强引用对象统一置 null，主动断开引用链，基本可以保证 Context 在热加载时不会产生内存泄漏问题。
-最后需要特别强调一点：
-​	项目中使用线程池时，强烈建议将其纳入 Context 生命周期统一管理（例如通过 Spring 的 ThreadPoolExecutorFactoryBean 来创建线程池）。
-​	因为 Tomcat 在兜底清理时，如果无法识别线程归属，最终可能会直接调用 Thread.stop() 强行终止线程 —— 这种方式极其不安全，容易导致数据不一致等问题。让线程池受控于 Spring 容器，借助 shutdown() 或 shutdownNow() 做平滑关闭，是最稳妥、安全的方案。
+private void checkThreadLocalMapForLeaks(Object map,
+        Field internalTableField) throws IllegalAccessException,
+        NoSuchFieldException {
+    if (map != null) {
+        Object[] table = (Object[]) internalTableField.get(map);
+        if (table != null) {
+            for (Object obj : table) {
+                if (obj != null) {
+                    boolean keyLoadedByWebapp = false;
+                    boolean valueLoadedByWebapp = false;
+                    // 检查key（即为ThreadLocal对象或其子类）
+                    Object key = ((Reference&lt;?>) obj).get();
+                    // loadedByThisOrChild用于检测指定的对象（也支持集合）及其所有父类是否有当前WebappClassLoader所加载
+                    if (this.equals(key) || loadedByThisOrChild(key)) {
+                        keyLoadedByWebapp = true;
+                    }
+                    // 检查value（ThreadLocal里真正存放的对象）
+                    Field valueField = obj.getClass().getDeclaredField("value");
+                    valueField.setAccessible(true);
+                    Object value = valueField.get(obj);
+                    if (this.equals(value) || loadedByThisOrChild(value)) {
+                        valueLoadedByWebapp = true;
+                    }
+                    // key 或 value 被当前 WebappClassLoader 加载，说明有潜在泄漏
+                    if (keyLoadedByWebapp || valueLoadedByWebapp) {
+                        Object[] args = new Object[5];
+                        args[0] = getContextName();
+                        if (key != null) {
+                            args[1] = getPrettyClassName(key.getClass());
+                            try {
+                                args[2] = key.toString();
+                            } catch (Exception e) {
+                                // ...
+                            }
+                        }
+                        if (value != null) {
+                            args[3] = getPrettyClassName(value.getClass());
+                            try {
+                                args[4] = value.toString();
+                            } catch (Exception e) {
+                                // ...
+                            }
+                        }
+                        // =========== 仅打日志。value泄漏用error打印，key泄漏则用debug打印 ================
+                        if (valueLoadedByWebapp) {
+                            log.error(sm.getString(
+                                    "webappClassLoader.checkThreadLocalsForLeaks",
+                                    args));
+                        } else if (value == null) {
+                            if (log.isDebugEnabled()) {
+                                log.debug(sm.getString(
+                                        "webappClassLoader.checkThreadLocalsForLeaksNull",
+                                        args));
+                            }
+                        } else {
+                            if (log.isDebugEnabled()) {
+                                log.debug(sm.getString(
+                                        "webappClassLoader.checkThreadLocalsForLeaksNone",
+                                        args));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+总结其核心逻辑只有两个：
+
+通过反射调用所有线程里ThreadLocalMap#expungeStaleEntry，来主动清除需要被GC的Entry。解决案例中demo2和demo3的隐式隐患
+如果Entry里的key（ThreadLocal）和value的相关class由当前WebappClassLoader加载，也仅打日志
+
+为什么仅打日志呢？
+
+​	 因为ThreadLocal中存放的通常是业务线程正在使用的上下文信息（如用户信息、缓存等）。Tomcat 无法判断这些值是否仍然有效或在使用中，如果直接释放掉可能导致运行中的Web程序抛出相关的空指针，因此选择了保守处理，只警告不干预
+
+线程回收ThreadLocalLeakPreventionListener​	Tomcat 默认启用了 ThreadLocalLeakPreventionListener（已在 server.xml 中配置）。在触发热加载时，该Listener 会监听 Lifecycle.AFTER_STOP_EVENT 事件，并在收到该事件后调用所有 Worker 线程池的 contextStopping() 方法，从而优雅地中断并清理空闲线程，避免ThreadLocal导致的内存泄漏问题。
+​	可以先看看这篇线程池相关源码解析文章。ThreadPoolExecutor#contextStopping代码如下，核心就1件事：对空闲线程进行中断并退出（通过设置corePoolSize&#x3D;0来保证）
+public void contextStopping() {
+    // 非常重要：记录当前 Context 停止的时间，用于后续判断线程是否需要回收
+    this.lastContextStoppedTime.set(System.currentTimeMillis());
+
+    int savedCorePoolSize = this.getCorePoolSize();
+    TaskQueue taskQueue = getQueue() instanceof TaskQueue ? (TaskQueue) getQueue() : null;
+    if (taskQueue != null) {
+        // 临时设置任务队列剩余容量为0
+        // 但ThreadPoolExecutor#setCorePoolSize内部没发现哪里有检查queue.remainingCapacity() ==
+        // 0的逻辑，可能是为了兼容其他逻辑吧（offer和poll）？？？
+        taskQueue.setForcedRemainingCapacity(0);
+    }
+
+    // 将核心线程池设为0：内部会中断所有空闲线程并触发getTask()里的退出逻辑
+    this.setCorePoolSize(0);
+
+    // ======== 恢复线程池原始配置，避免影响http请求 ============
+
+    if (taskQueue != null) {
+        taskQueue.resetForcedRemainingCapacity();
+    }
+    this.setCorePoolSize(savedCorePoolSize);
+}
+
+TaskQueue​	单靠上述的 ThreadLocalLeakPreventionListener 并不足以关闭运行中的 worker 线程。为此，Tomcat 自定义了一个 TaskQueue 作为线程池的任务队列，并重写了几个关键方法，以精细控制 worker 线程的创建与回收策略。
+​	这里重点关注其重写的 poll 和 take 方法 —— 它们是线程池中 worker 线程获取任务的主要途径。Tomcat 在此做了一个巧妙的设计：仅对需要被回收的线程（即线程创建时间早于当前 Context 的上次 stop 时间）应用 fallback 策略
+
+take() 方法原本是阻塞式的，这里被 fallback 到poll()，即允许超时等待，从而避免永久阻塞
+poll()若超时返回 null，则直接 fallback 到抛出异常，从而促使线程正常终止
+
+public class TaskQueue extends LinkedBlockingQueue&lt;Runnable> {
+    // ================= 重写的offer方法，调整线程的创建策略 ====================
+
+    /**
+     * 目的：尽量优先创建线程，而不是把任务直接塞进队列
+     * 原因：Tomcat 设计希望在线程数未满时尽可能创建新线程，提高吞吐量。
+     */
+    @Override
+    public boolean offer(Runnable o) {
+        if (parent == null) {
+            return super.offer(o);
+        }
+        // 如果线程池已达到最大线程数，那只能乖乖入队列
+        if (parent.getPoolSize() == parent.getMaximumPoolSize()) {
+            return super.offer(o);
+        }
+        // 还有空闲线程（已提交任务数 &lt;= 当前线程数），也入队
+        if (parent.getSubmittedCount() &lt;= (parent.getPoolSize())) {
+            return super.offer(o);
+        }
+        // 线程数没达到最大限制，并且提交的任务数已多余当前线程数（请求压力大）。则返回 false 触发线程池直接创建新建线程
+        if (parent.getPoolSize() &lt; parent.getMaximumPoolSize()) {
+            return false;
+        }
+        // 默认入队
+        return super.offer(o);
+    }
+
+    // ================= 重写poll和take方法（仅对需要被终结的线程施加fallback策略，进而调整了线程的回收策略） =========================
+
+    @Override
+    public Runnable poll(long timeout, TimeUnit unit)
+            throws InterruptedException {
+        Runnable runnable = super.poll(timeout, unit);
+        if (runnable == null &amp;&amp; parent != null) {
+            // 内部会判断当前线程是否需要被终结，需要的话会抛出异常，最终终结当前线程
+            parent.stopCurrentThreadIfNeeded();
+        }
+        // 只要有任务，还是直接返回，不影响活跃线程
+        return runnable;
+    }
+
+    @Override
+    public Runnable take() throws InterruptedException {
+        if (parent != null &amp;&amp; parent.currentThreadShouldBeStopped()) {
+            // fallback为poll方法，即允许超时
+            return poll(parent.getKeepAliveTime(TimeUnit.MILLISECONDS),
+                    TimeUnit.MILLISECONDS);
+        }
+        // 正常线程还是阻塞等待
+        return super.take();
+    }
+}
+
+总结​	ThreadLocalLeakPreventionListener 负责主动回收空闲的 worker 线程，而 TaskQueue 则通过重写 poll 和 take 方法，利用线程池的任务获取机制，实现对线程回收的兜底策略。两者配合，仅在 线程空闲时 才进行处理，不影响活跃线程的正常工作。通过这种机制，Tomcat 能够在热加载后安全且优雅的清理掉旧的所有worker 线程，从而避免因ThreadLocal残留导致的内存泄漏。
+相关链接
+ThreadLocal弱引用原因
+线程池源码解析
+Tomcat内存泄漏原文
+
 ]]></content>
       <categories>
         <category>Tomcat</category>
       </categories>
       <tags>
         <tag>热加载</tag>
+        <tag>内存泄漏</tag>
         <tag>垃圾回收</tag>
       </tags>
   </entry>
@@ -10960,6 +10755,7 @@ ThreadLocal只被弱引用持有，gc后被回收了
 因为Entey已近持有了local对象的引用，我们没有设置引用类型，那这个引用就默认是个强引用。
 Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（threadLocal对象）和value
 
+
 ​	引用链如上面所示，这个引用链全是强引用，当这个线程还未结束时，他持有的强引用，包括递归下去的所有强引用都不会被垃圾回收器回收。
 ​	那么回到正常情况，ThreadLocalMap里Entey的key是弱引用，在本例中也就是local对象在这里是弱引用，当对象A回收时，由于local对象只剩下被弱引用key所引用，所以local对象也会被回收。
 2 重点来了，key为什么被设计为弱引用？？​	回归本质，ThreadLocalMap是用来存放对象的，在一次线程的执行栈中，存放数据后方便我们在任意的地方取得我们想要的值而不被其他线程干扰。ThreadLocalMap本身并没有为外界提供取出和存放数据的API，我们所能获得数据的方式只有通过ThreadLocal类提供的API来间接的从ThreadLocalMap取出数据，所以，当我们用不了key（ThreadLocal对象）的API也就无法从ThreadLocalMap里取出指定的数据。
@@ -10968,9 +10764,9 @@ Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（th
 3 总结​	综上，Entry的key被设计为弱引用就是为了让程序自动的对访问不到的数据进行回收提醒。所以，在访问不到的数据被回收之前，内存泄漏确实是存在的，但是我们不用担心，就算我们不调用remove，ThreadLocalMap在内部的set，get和扩容时都会清理掉泄漏的Entry，内存泄漏完全没必要过于担心
 所以，ThreadLocal的建议使用方法：
 
-设计为static的，被class对象给强引用，线程存活期间就不会被回收，也不用remove，完全不用担心内存泄漏
+设计为static的，被class对象给强引用，线程存活期间就不会被GC。可根据实际情况来决定是否调用remove
 
-非static的，放置在长对象（比如被spring管理的对象）的内部，也不会被回收
+非static的，放置在长对象（比如被spring管理的对象）的内部，也不会被GC。使用完后主动调用remove
 
 
 ​	个人也觉得没必要让创建的ThreadLocal对象生命周期过短，ThreadLocal被设计出来本身就是用来跨方法栈获取当前线程的数据或者无锁的获取线程安全的数据，空间交换了线程安全的上锁时间。只要让ThreadLocal具有线程的生命周期，就完全没必要使用remove方法，也完全不用担心内存泄漏的问题。
@@ -10981,6 +10777,584 @@ Thread -&gt; ThreadLocal.ThreadLocalMap -&gt; Entry[] -&gt; Enrty -&gt; key（th
       </categories>
       <tags>
         <tag>ThreadLocal</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Tomcat-整体架构和Lifecycle</title>
+    <url>/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/</url>
+    <content><![CDATA[
+​	基于Tomcat-8.5.x版本，简单分析了整体的架构和核心组件。并详细分析和总结了Lifecycle机制
+
+
+
+
+核心组件和架构Tomcat 的架构可以抽象为一棵树，核心组件结构如下：
+
+根节点是 Server，表示整个 Tomcat 实例（即一个 JVM 进程）
+Server 下包含一个或多个 Service，代表一组 Web 服务
+每个 Service 包含：
+一个或多个 Connector，负责监听不同协议&#x2F;端口的请求（如 HTTP、HTTPS）
+唯一的一个 Engine，与Service一对一的关系，用于处理由 Connector 接收到的请求
+
+
+Engine 下包含多个 Host，每个 Host 对应一个虚拟主机（通过域名区分）
+每个 Host管理多个 Context，每个 Context 对应一个 Web 应用（即一个 war）
+每个 Context 下包含多个 Wrapper，每个 Wrapper 对应一个具体的 Servlet
+
+
+Lifecycle​	Lifecycle 是 Tomcat 中最核心的接口之一。所有关键组件都实现了该接口，以便在生命周期事件（如init、start、stop等）到来时执行自身的职责，并将事件级联传递给子组件。因此，深入理解 Lifecycle 的作用和机制，是阅读和掌握 Tomcat 源码的基础。
+public interface Lifecycle {
+
+    // ======================== 生命周期事件常量 ========================
+
+    String BEFORE_INIT_EVENT = "before_init";
+    String AFTER_INIT_EVENT = "after_init";
+
+    String BEFORE_START_EVENT = "before_start";
+    String START_EVENT = "start";
+    String AFTER_START_EVENT = "after_start";
+
+    String BEFORE_STOP_EVENT = "before_stop";
+    String STOP_EVENT = "stop";
+    String AFTER_STOP_EVENT = "after_stop";
+
+    String BEFORE_DESTROY_EVENT = "before_destroy";
+    String AFTER_DESTROY_EVENT = "after_destroy";
+
+    /** 周期性事件（如后台定时任务触发） */
+    String PERIODIC_EVENT = "periodic";
+
+    /** 配置启动事件（内部扩展使用） */
+    String CONFIGURE_START_EVENT = "configure_start";
+    /** 配置停止事件（内部扩展使用） */
+    String CONFIGURE_STOP_EVENT = "configure_stop";
+
+    // ======================== 生命周期监听器相关方法 ========================
+
+    void addLifecycleListener(LifecycleListener listener);
+
+    LifecycleListener[] findLifecycleListeners();
+
+    void removeLifecycleListener(LifecycleListener listener);
+
+    // ======================== 生命周期控制方法 ========================
+
+    /**
+     * 初始化组件。组件只能初始化一次，且必须在启动前完成。
+     */
+    void init() throws LifecycleException;
+
+    /**
+     * 启动组件。如果未初始化，会隐式调用 init()
+     */
+    void start() throws LifecycleException;
+
+    /**
+     * 停止组件。可在调用 start() 后再次调用以恢复运行
+     */
+    void stop() throws LifecycleException;
+
+    /**
+     * 销毁组件，释放资源。此操作不可逆。
+     */
+    void destroy() throws LifecycleException;
+
+    LifecycleState getState();
+
+    String getStateName();
+
+    /**
+     * 标记接口：表示该组件只能使用一次（单次使用后即不可重启）
+     */
+    interface SingleUse {
+    }
+}
+
+LifecycleState​	组件的生命周期状态枚举。每个状态标记了当前组件是否处于“可用”状态（available），以及对应的生命周期事件名（lifecycleEvent）
+public enum LifecycleState {
+
+    // 初始状态，尚未进行任何初始化操作
+    NEW(false, null),
+
+    // ================= 初始化阶段 =================
+
+    // 初始化中，调用 init() 时进入此状态，发布 before_init 事件
+    INITIALIZING(false, Lifecycle.BEFORE_INIT_EVENT),
+
+    // 初始化完成，进入 INITIALIZED 状态，发布 after_init 事件
+    INITIALIZED(false, Lifecycle.AFTER_INIT_EVENT),
+
+    // ================= 启动阶段 =================
+
+    // 启动准备中，准备启动前进入该状态，发布 before_start 事件
+    STARTING_PREP(false, Lifecycle.BEFORE_START_EVENT),
+
+    // 正在启动，执行 startInternal() 时进入此状态，发布 start 事件
+    STARTING(true, Lifecycle.START_EVENT),
+
+    // 启动完成，组件已处于工作状态，发布 after_start 事件
+    STARTED(true, Lifecycle.AFTER_START_EVENT),
+
+    // ================= 停止阶段 =================
+
+    // 停止准备阶段，准备停止时进入该状态，发布 before_stop 事件
+    STOPPING_PREP(true, Lifecycle.BEFORE_STOP_EVENT),
+
+    // 正在停止，组件关闭过程中进入该状态，发布 stop 事件
+    STOPPING(false, Lifecycle.STOP_EVENT),
+
+    // 停止完成，组件已不可用，发布 after_stop 事件
+    STOPPED(false, Lifecycle.AFTER_STOP_EVENT),
+
+    // ================= 销毁阶段 =================
+
+    // 销毁准备阶段，发布 before_destroy 事件
+    DESTROYING(false, Lifecycle.BEFORE_DESTROY_EVENT),
+
+    // 销毁完成，组件进入不可恢复终态，发布 after_destroy 事件
+    DESTROYED(false, Lifecycle.AFTER_DESTROY_EVENT),
+
+    // ================= 异常状态 =================
+
+    // 异常失败状态，组件启动或运行中发生未处理异常，进入失败态。无生命周期事件发布
+    FAILED(false, null);
+
+    /**
+     * 当前状态是否为组件的“可用”状态，即是否可对外提供服务（如 STARTING、STARTED 等）
+     */
+    private final boolean available;
+
+    private final String lifecycleEvent;
+
+    LifecycleState(boolean available, String lifecycleEvent) {
+        this.available = available;
+        this.lifecycleEvent = lifecycleEvent;
+    }
+
+    public boolean isAvailable() {
+        return available;
+    }
+
+    public String getLifecycleEvent() {
+        return lifecycleEvent;
+    }
+}
+
+LifecycleBase​	LifecycleBase 是 Lifecycle 接口的基础实现类，提供了生命周期控制方法（如 init()、start()、stop()、destroy()）的通用模板逻辑。Tomcat 中绝大多数实现了 Lifecycle 接口的核心组件，都会继承该类，从而复用其统一的状态管理和事件分发机制。
+​	核心start方法分析如下，（其余的init，stop等方法差不太多，就不做详细的分析了）
+public abstract class LifecycleBase implements Lifecycle {
+    /**
+     * 启动组件。线程安全，具备幂等性。
+     * 
+     * 生命周期状态迁移如下：
+     * NEW -> INITIALIZED -> STARTING_PREP -> STARTING -> STARTED
+     * 如果启动失败，将进入 FAILED 状态。
+     */
+    public final synchronized void start() throws LifecycleException {
+
+        if (LifecycleState.STARTING_PREP.equals(state) || LifecycleState.STARTING.equals(state) ||
+                LifecycleState.STARTED.equals(state)) {
+            // 正在启动中或已启动，无视直接返回
+            return;
+        }
+
+        // ============= 前置状态判断 =================
+        if (state.equals(LifecycleState.NEW)) {
+            // 如果还是初始化状态，就先初始化
+            init();
+        } else if (state.equals(LifecycleState.FAILED)) {
+            // 若之前启动失败，先尝试停止，清理资源后重新启动
+            stop();
+        } else if (!state.equals(LifecycleState.INITIALIZED) &amp;&amp;
+                !state.equals(LifecycleState.STOPPED)) {
+            // 其余非法前置状态，直接异常
+            invalidTransition(Lifecycle.BEFORE_START_EVENT);
+        }
+        // ============== 到这表示前置状态处理完毕，可以真正start了 ===================
+
+        try {
+            // 设置状态为 STARTING_PREP，并发布 before_start 事件
+            setStateInternal(LifecycleState.STARTING_PREP, null, false);
+            // 调用子类实现的实际启动逻辑（模板方法模式）
+            startInternal();
+            // ============ 走到这，正常情况state就应该为STARTING了 =================
+
+            if (state.equals(LifecycleState.FAILED)) {
+                // 启动失败，执行stop
+                stop();
+            } else if (!state.equals(LifecycleState.STARTING)) {
+                // 非STARTING（正常不应该出现，避免子类实现不规范的一种fallback），直接抛异常
+                invalidTransition(Lifecycle.AFTER_START_EVENT);
+            } else {
+                // 正常会走到这，状态自动置为STARTED。并发布 after_start 事件
+                setStateInternal(LifecycleState.STARTED, null, false);
+            }
+        } catch (Throwable t) {
+            handleSubClassException(t, "lifecycleBase.startFail", toString());
+        }
+    }
+
+}
+
+总结
+Lifecycle状态转换图
+
+状态机核心要点：
+
+启动组件必定要先init，也只会调用一次init
+start和stop状态可以循环相互转化（即STOPPED状态不是终态）
+NEW可直接到STOPPED状态（很少这么用）
+DESTROYED才是终态，不可逆转（FAILED都不是终态，它还可以stop() -&gt; startI()，虽然不一定成功）
+
+]]></content>
+      <categories>
+        <category>Tomcat</category>
+      </categories>
+  </entry>
+  <entry>
+    <title>Tomcat-热加载和相关Class的垃圾回收探讨（一）</title>
+    <url>/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/</url>
+    <content><![CDATA[
+​	本文深入分析了 WebappClassLoader 的热加载整体流程，并对热加载过程中遗留的垃圾回收问题进行了系统性拆解。重点涵盖了：垃圾的分类、核心引用关系的梳理、各类资源的清理策略。最后详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议
+
+
+热加载​	WebappLoader#backgroundProcess是负责检测和触发热加载的方法入口，其被standardEngine的backgroundThread线程周期性触发，被调用路径为：ContainerBackgroundProcessor#run -&gt; ContainerBackgroundProcessor#processChildren -&gt; StandardContext.backgroundProcess -&gt; Loader#backgroundProcess
+​	当web可触发context的资源重加载时，backgroundThread线程会销毁（stop）当前context内部的所有资源，并进行重启context（start），start过程中使用了新的WebappClassLoader加载项目相关的class资源，因此可以在不重启整个 Tomcat 进程的前提下，以实现应用级别的热部署与资源更新
+WebappLoader#backgroundProcesspublic void backgroundProcess() {
+        // reloadable由StandardContext.reloadable设置，默认为false，也就表示需要在context.xml里主动配置reloadable=true才开启热加载检测资格
+        if (reloadable &amp;&amp; modified()) { // Context里有class或jar改变了，需要进行热加载
+            try {
+                // 临时切换到Tomcat的commonLoader，避免使用即将被卸载的WebappClassLoader
+                // 确保reload过程中使用的是稳定的类加载器环境
+                Thread.currentThread().setContextClassLoader(WebappLoader.class.getClassLoader());
+                if (context != null) {
+                    context.reload();
+                }
+            } finally {
+                if (context != null &amp;&amp; context.getLoader() != null) {
+                    // 热加载完毕，将context里新的WebappClassLoader绑定到线程上下文中
+                    Thread.currentThread().setContextClassLoader(context.getLoader().getClassLoader());
+                }
+            }
+        }
+    }
+
+class资源变化监测WebappClassLoaderBase#modified() 负责监测当前 Web 应用中的 class 资源是否发生变更，用于触发 Context 重载。当以下任一变化发生时，Tomcat 会认为需要重新加载当前 Context：
+
+&#x2F;WEB-INF&#x2F;classes 目录下已加载的 class 文件被修改
+&#x2F;WEB-INF&#x2F;lib目录下的jar包有修改、新增和删除
+
+
+public boolean modified() {
+
+    // 1. 遍历所有已加载的 class 文件，判断是否有被修改
+    for (Entry&lt;String, ResourceEntry> entry : resourceEntries.entrySet()) {
+        long cachedLastModified = entry.getValue().lastModified;
+        long lastModified = resources.getClassLoaderResource(
+                entry.getKey()).getLastModified();
+        if (lastModified != cachedLastModified) {
+            // class 文件修改时间变化，说明 class 被更新，需要重载 Context
+            return true;
+        }
+    }
+
+    // 2. 遍历 /WEB-INF/lib 下的 jar 包，判断是否有变动
+    WebResource[] jars = resources.listResources("/WEB-INF/lib");
+
+    int jarCount = 0;
+    for (WebResource jar : jars) {
+        if (jar.getName().endsWith(".jar") &amp;&amp; jar.isFile() &amp;&amp; jar.canRead()) {
+            jarCount++;
+            Long recordedLastModified = jarModificationTimes.get(jar.getName());
+            if (recordedLastModified == null) {
+                // jar包没有记录上次修改时间，代表这个jar是新增的，也需要重载context
+                return true;
+            }
+            if (recordedLastModified.longValue() != jar.getLastModified()) {
+                // 时间变了，表示被修改过，也要重载context
+                return true;
+            }
+        }
+    }
+
+    // 3. 检查是否有 jar 包被删除（jar 数量变少）
+    if (jarCount &lt; jarModificationTimes.size()) {
+        return true;
+    }
+
+    // 4. 无任何资源变化，则不需要重载Context
+    return false;
+}
+
+context重加载Context 重加载的本质流程就是：先执行 stop()，再重新 start()。start流程可以看这里，stop则负责关闭和清理已有资源，避免内存泄露。我这里简要梳理 下stop() 过程中各核心组件的销毁逻辑：
+
+子容器 Servlet (StandardWrapper#stop)
+依次销毁所有已加载的 Servlet 实例，调用其 javax.servlet.Servlet#destroy() 方法，完成业务资源释放
+
+
+Filter组件销毁
+调用所有已注册的 javax.servlet.Filter#destroy() 方法，清理过滤器资源。
+
+
+Session 管理器 (StandardManager#stop)
+触发 Session 持久化（等待context重启后再加载进来），同时清理过期的 Session 实例
+
+
+Listener组件销毁
+执行所有注册的 javax.servlet.ServletContextListener#contextDestroyed() 方法，通知应用关闭，释放监听资源。
+
+
+类加载器资源清理 (WebappLoader#stop)
+销毁 WebappClassLoader，清理已加载的 class 缓存、jar 缓存、资源引用
+停止并回收与类加载器相关的线程，断开对外部资源的强引用，避免内存泄漏
+
+
+
+垃圾回收​	前面的都是铺垫，现在来探讨一个最重要的问题（当最终理解了这个问题后，任何java热加载工具如何垃圾回收探讨都不是难题）：
+
+​	Tomcat 触发 Context 热加载后，系统中会产生哪些需要回收的垃圾？这些垃圾又该如何被回收？（如果回收不彻底，多次热加载最终可能引发 OOM 问题）
+
+资源分类首先我们可以将需要回收的资源粗分为如下两大类
+堆区堆区由GC自动回收，记住一点，这个区内的对象能被回收的唯一方法是对象不可达（软引用和弱引用这些具有特定回收限制的实例不再考虑范围内）
+
+Context 内部的对象实例：比如Servlet、Filter、Session、Spring容器里的bean等等，这部分是最多的
+线程相关对象：Context 内部自行启动的 Thread和线程池
+Class 对象：由 WebappClassLoader 加载的所有 Class 实例
+WebappClassLoader 实例本身
+
+非堆区
+元空间 (Metaspace) 中的 klass 元数据：回收依赖JVM的class卸载机制
+
+回收探讨堆区垃圾回收的核心逻辑只有一点：对象是否可达（Reachable）。所以只要搞清楚对象的引用关系，就能推导出其回收条件。我们基于这个核心点，对上诉堆对内所有的对象进行追溯，看看到底它被哪些对象给持有
+Context 内部的对象实例​	这部分是最简单的，这些对象都是应用程序中显示创建并赋值的对象。在context#stop期间，触发了各种内部组件的stop后，再对字段赋值为null就是在清除引用。Spring 容器则会在 ApplicationContext#close() 里统一销毁 Bean 并清理所有容器内引用。
+线程相关对象​	Thread可作为GCRoot对象，所以对它的回收必须等Thread终结，否则任意一个存活的线程是不可能被回收的（其内部持有的contextClassLoader和其所有加载的class都不会被回收）
+Class 对象​	Class对象稍复杂，它不仅有显示的引用（应用程序中显示使用），还有隐式的使用
+
+
+
+引用链路
+描述
+
+
+
+A对象 → A.class
+所有基于 A.class 创建的对象，其对象头中都隐式持有指向 A.class 的指针。
+
+
+类加载器 → A.class
+加载 A.class 的类加载器持有一份强引用。
+
+
+其他显式引用
+例如缓存、反射、Class.forName() 结果等都可能让其他对象显示持有 A.class 引用。
+
+
+所以要回收Class对象，可以得出如下结论（以A.class为例）：
+
+A.class创建的A对象都不可达，那么A对象头里的A.class指针也不可达
+加载A.class的类加载器对象不可达
+显示持有A.class的其他对象也不可达
+
+WebappClassLoader 实例
+
+
+引用链路
+描述
+
+
+
+所有其加载的 Class → WebappClassLoader
+每个 Class 实例反向持有其加载器引用。
+
+
+线程的 contextClassLoader → WebappClassLoader
+活跃线程若未清理 contextClassLoader 也持有加载器引用。
+
+
+WebappClassLoader回收前提：
+
+所有由其加载的 Class 都已不可达
+没有任何活跃线程仍在使用该类加载器作为 contextClassLoader
+显示持有此类加载器的其他对象不可达
+
+总结
+class相关对象引用链
+
+所以垃圾能别回收的本质，是让持有A.class和WebappClassLoader对象的链路断掉，在这里我们只要做好如下清理条件，相关垃圾即可被回收
+
+context下创建的所有Thread需要终结
+context内部强引用链全部断开（置为null）
+
+tomcat释放资源​	在正式进入分析之前，先明确一点：子线程默认继承父线程的 contextClassLoader（Thread的构造方法）
+​	通过前面文章的分析，可知在Context内部创建的线程都会使用Context的WebappClassLoadLoader作为其contextClassLoader，所以，只要线程的 Thread.contextClassLoader 是当前 Context 对应的 WebappClassLoader，就可以判断它属于当前 Context 内部创建的线程。
+线程清理核心方法在WebappClassLoaderBase#clearReferencesThreads，调用链为：
+
+
+WebappLoader#stop
+WebappClassLoaderBase#stop
+WebappClassLoaderBase#clearReferences 
+WebappClassLoaderBase#clearReferencesThreads
+
+
+逻辑总结：
+
+获取当前JVM所有线程：通过遍历根 ThreadGroup进行所有线程的枚举
+遍历并筛选出当前Context创建的线程：判断依据为Thread.contextClassLoader &#x3D;&#x3D; Context.WebappClassLoader
+根据是否是线程池创建的线程来分开处理
+线程池创建的Thread：使用线程池的shutdownNow来优雅的关闭线程
+非线程池线程：先发送中断信号，若无法中断则再直接调用Thread.stop方法来强制终结线程
+
+
+
+private void clearReferencesThreads() {
+    // 获取系统内所有活动线程
+    Thread[] threads = getThreads();
+    List&lt;Thread> threadsToStop = new ArrayList&lt;>();
+
+    for (Thread thread : threads) {
+        if (thread != null) {
+            ClassLoader ccl = thread.getContextClassLoader();
+            // 只处理 contextClassLoader 是当前 WebappClassLoader 的线程
+            if (ccl == this) {
+                // 跳过当前线程自身，防止自杀
+                if (thread == Thread.currentThread()) {
+                    continue;
+                }
+
+                final String threadName = thread.getName();
+
+                ThreadGroup tg = thread.getThreadGroup();
+                if (tg != null &amp;&amp; JVM_THREAD_GROUP_NAMES.contains(tg.getName())) {
+                    if (clearReferencesHttpClientKeepAliveThread &amp;&amp;
+                            threadName.equals("Keep-Alive-Timer")) {
+                        // Keep-Alive-Timer 特殊处理，仅替换其 contextClassLoader，避免泄露
+                        thread.setContextClassLoader(parent);
+                    }
+
+                    // Don't warn about remaining JVM controlled threads
+                    continue;
+                }
+
+                // // 已经死亡的线程，则不需要再清理了
+                if (!thread.isAlive()) {
+                    continue;
+                }
+
+                // TimerThread 可以被安全关闭
+                if (thread.getClass().getName().startsWith("java.util.Timer") &amp;&amp;
+                        clearReferencesStopTimerThreads) {
+                    clearReferencesStopTimerThread(thread);
+                    continue;
+                }
+                // 仅当配置允许强制停止线程时才处理（clearReferencesStopThreads默认为false）
+                if (!clearReferencesStopThreads) {
+                    continue;
+                }
+
+                // 尝试检测是否为 ThreadPoolExecutor 的 worker 线程，优先关闭线程池本身
+                boolean usingExecutor = false;
+                try {
+
+                    // 兼容不同 JDK 实现，寻找包装的 runnable 字段
+                    Object target = null;
+                    for (String fieldName : new String[] { "target", "runnable", "action" }) {
+                        try {
+                            Field targetField = thread.getClass().getDeclaredField(fieldName);
+                            targetField.setAccessible(true);
+                            target = targetField.get(thread);
+                            break;
+                        } catch (NoSuchFieldException nfe) {
+                            continue;
+                        }
+                    }
+
+                    // 判断是否为 ThreadPoolExecutor.Worker，如果是则使用线程池的shutdownNow方法来优雅关闭线程
+                    if (target != null &amp;&amp; target.getClass().getCanonicalName() != null &amp;&amp;
+                            target.getClass().getCanonicalName().equals(
+                                    "java.util.concurrent.ThreadPoolExecutor.Worker")) {
+                        Field executorField = target.getClass().getDeclaredField("this$0");
+                        executorField.setAccessible(true);
+                        Object executor = executorField.get(target);
+                        if (executor instanceof ThreadPoolExecutor) {
+                            ((ThreadPoolExecutor) executor).shutdownNow();
+                            usingExecutor = true;
+                        }
+                    }
+                } catch (NoSuchFieldException | IllegalAccessException | RuntimeException e) {
+                    log.warn(sm.getString("webappClassLoader.stopThreadFail",
+                            thread.getName(), getContextName()), e);
+                }
+
+                // 非线程池线程，直接尝试 interrupt 终止
+                if (!usingExecutor &amp;&amp; !thread.isInterrupted()) {
+                    thread.interrupt();
+                }
+
+                // 记录仍需等待确认终止的线程
+                threadsToStop.add(thread);
+            }
+        }
+    }
+
+    int count = 0;
+    // 对需要stop的线程都直接终结
+    for (Thread t : threadsToStop) {
+        while (t.isAlive() &amp;&amp; count &lt; 100) {
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                // Quit the while loop
+                break;
+            }
+            count++;
+        }
+        // 存活才终结
+        if (t.isAlive()) {
+            t.stop();
+        }
+    }
+}
+
+private Thread[] getThreads() {
+    // 获取当前线程所在的线程组
+    ThreadGroup tg = Thread.currentThread().getThreadGroup();
+    // 向上遍历，找到根线程组（整个 JVM 的顶级线程组）
+    try {
+        while (tg.getParent() != null) {
+            tg = tg.getParent();
+        }
+    } catch (SecurityException se) {
+
+    }
+
+    int threadCountGuess = tg.activeCount() + 50;
+    Thread[] threads = new Thread[threadCountGuess];
+    // 枚举所有的线程
+    int threadCountActual = tg.enumerate(threads);
+    // enumerate 方法在数组空间不足时会默默丢弃多余的线程，
+    // 因此当实际数量等于猜测数量时，说明数组可能装不下，需要扩容重试
+    while (threadCountActual == threadCountGuess) {
+        threadCountGuess *= 2;
+        threads = new Thread[threadCountGuess];
+        // 继续枚举
+        threadCountActual = tg.enumerate(threads);
+    }
+
+    return threads;
+}
+
+总结​	通过上述对 Context 内线程资源的兜底清理（这一部分其实是热加载内存泄漏中最核心、最容易被忽略的风险点 —— 因为实际项目中，大量使用了自定义线程或线程池，且它们往往没能纳入 Spring.ApplicationContext 的生命周期管理），再加上在 Context#stop 阶段，对各个强引用对象统一置 null，主动断开引用链，基本可以保证 Context 在热加载时不会产生内存泄漏问题。
+最后需要特别强调一点：
+​	项目中使用线程池时，强烈建议将其纳入 Context 生命周期统一管理（例如通过 Spring 的 ThreadPoolExecutorFactoryBean 来创建线程池）。
+​	因为 Tomcat 在兜底清理时，如果无法识别线程归属，最终可能会直接调用 Thread.stop() 强行终止线程 —— 这种方式极其不安全，容易导致数据不一致等问题。让线程池受控于 Spring 容器，借助 shutdown() 或 shutdownNow() 做平滑关闭，是最稳妥、安全的方案。
+]]></content>
+      <categories>
+        <category>Tomcat</category>
+      </categories>
+      <tags>
+        <tag>热加载</tag>
+        <tag>内存泄漏</tag>
+        <tag>垃圾回收</tag>
       </tags>
   </entry>
 </search>
