@@ -72,9 +72,9 @@
   </entry>
   
   <entry>
-    <title>Tomcat-热加载之ThreadLocal内存泄露篇（二）</title>
-    <link href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/"/>
-    <id>https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/</id>
+    <title>Tomcat-热加载之ThreadLocal内存泄漏篇（二）</title>
+    <link href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/"/>
+    <id>https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/</id>
     <published>2021-12-23T11:45:06.000Z</published>
     <updated>2021-12-28T13:56:17.000Z</updated>
     

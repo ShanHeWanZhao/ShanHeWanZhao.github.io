@@ -23,8 +23,8 @@
 
     <meta name="description" content="​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现无效的ThreadLocalMap.Entry清除、ThreadLocalLeakPreventionListener回收空闲worker线程和TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收这三种策略来优雅的解决ThreadLocal内存泄漏的问题">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Tomcat-热加载之ThreadLocal内存泄露篇（二）">
-<meta property="og:url" content="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/index.html">
+<meta property="og:title" content="Tomcat-热加载之ThreadLocal内存泄漏篇（二）">
+<meta property="og:url" content="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/index.html">
 <meta property="og:site_name" content="Reef&#39;s Blog">
 <meta property="og:description" content="​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现无效的ThreadLocalMap.Entry清除、ThreadLocalLeakPreventionListener回收空闲worker线程和TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收这三种策略来优雅的解决ThreadLocal内存泄漏的问题">
 <meta property="og:locale" content="zh_CN">
@@ -41,13 +41,13 @@
 <meta name="twitter:image" content="https://img.shanzhao.site/file/1750513318047_tomcat-threadlocal-memory-leaking-sample-2.png">
 
 
-<link rel="canonical" href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/">
+<link rel="canonical" href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/">
 
 
-<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/","path":"2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/","title":"Tomcat-热加载之ThreadLocal内存泄露篇（二）"}</script>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/","path":"2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/","title":"Tomcat-热加载之ThreadLocal内存泄漏篇（二）"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
-<title>Tomcat-热加载之ThreadLocal内存泄露篇（二） | Reef's Blog</title>
+<title>Tomcat-热加载之ThreadLocal内存泄漏篇（二） | Reef's Blog</title>
   
 
 
@@ -231,7 +231,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lu-pian-er/">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/favicon.png">
@@ -244,12 +244,12 @@
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="Tomcat-热加载之ThreadLocal内存泄露篇（二） | Reef's Blog">
+      <meta itemprop="name" content="Tomcat-热加载之ThreadLocal内存泄漏篇（二） | Reef's Blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          Tomcat-热加载之ThreadLocal内存泄露篇（二）
+          Tomcat-热加载之ThreadLocal内存泄漏篇（二）
         </h1>
 
         <div class="post-meta-container">
