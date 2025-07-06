@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	基于 Spring Boot 2.7.x，从整体架构角度出发，梳理并串联了 fatjar 模式下的关键组件：Archive、JarFile、JarEntry、Handler、JarURLConnection，重点分析它们在类加载过程中的职责与协作关系。全文不聚焦具体 jar 包结构解析细节，而是深入源码层面解析 fatjar 启动流程及 LaunchedURLClassLoader#loadC">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SpringBoot（一）— fatJar启动和LaunchedURLClassLoader加载class的原理">
+<meta property="og:url" content="https://blog.shanzhao.site/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	基于 Spring Boot 2.7.x，从整体架构角度出发，梳理并串联了 fatjar 模式下的关键组件：Archive、JarFile、JarEntry、Handler、JarURLConnection，重点分析它们在类加载过程中的职责与协作关系。全文不聚焦具体 jar 包结构解析细节，而是深入源码层面解析 fatjar 启动流程及 LaunchedURLClassLoader#loadC">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-02-15T13:16:27.000Z">
+<meta property="article:modified_time" content="2022-02-17T07:33:23.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="fatjar">
+<meta property="article:tag" content="LaunchedURLClassLoader">
+<meta property="article:tag" content="URLClassLoader">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/","path":"2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/","title":"SpringBoot（一）— fatJar启动和LaunchedURLClassLoader加载class的原理"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>SpringBoot（一）— fatJar启动和LaunchedURLClassLoader加载class的原理 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#fatjar%E7%BB%93%E6%9E%84"><span class="nav-number">1.</span> <span class="nav-text">fatjar结构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%87%E5%87%86jar%E9%83%A8%E5%88%86"><span class="nav-number">1.1.</span> <span class="nav-text">标准jar部分</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%89%B9%E6%9C%89%E7%9A%84%E6%8B%93%E5%B1%95"><span class="nav-number">1.2.</span> <span class="nav-text">特有的拓展</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6"><span class="nav-number">2.</span> <span class="nav-text">核心组件</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Archive"><span class="nav-number">2.1.</span> <span class="nav-text">Archive</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#JarFile"><span class="nav-number">2.2.</span> <span class="nav-text">JarFile</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#JarEntry"><span class="nav-number">2.3.</span> <span class="nav-text">JarEntry</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#URLStreamHandler"><span class="nav-number">2.4.</span> <span class="nav-text">URLStreamHandler</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#JarURLConnection"><span class="nav-number">2.5.</span> <span class="nav-text">JarURLConnection</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#fatjar%E5%90%AF%E5%8A%A8%E6%B5%81%E7%A8%8B"><span class="nav-number">3.</span> <span class="nav-text">fatjar启动流程</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ExecutableArchiveLauncher%E5%AE%9E%E4%BE%8B%E5%8C%96"><span class="nav-number">3.1.</span> <span class="nav-text">ExecutableArchiveLauncher实例化</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Launcher-launch"><span class="nav-number">3.2.</span> <span class="nav-text">Launcher#launch</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ExecutableArchiveLauncher-getClassPathArchivesIterator"><span class="nav-number">3.3.</span> <span class="nav-text">ExecutableArchiveLauncher#getClassPathArchivesIterator</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">3.4.</span> <span class="nav-text">总结</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%B5%8B%E8%AF%95%E7%94%A8%E4%BE%8B"><span class="nav-number">3.5.</span> <span class="nav-text">测试用例</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#LaunchedURLClassLoader"><span class="nav-number">4.</span> <span class="nav-text">LaunchedURLClassLoader</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%BA%90%E7%A0%81"><span class="nav-number">4.1.</span> <span class="nav-text">核心源码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#URLClassLoader"><span class="nav-number">4.2.</span> <span class="nav-text">URLClassLoader</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#URLClassPath"><span class="nav-number">4.2.1.</span> <span class="nav-text">URLClassPath</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%B5%8B%E8%AF%95%E7%94%A8%E4%BE%8B-1"><span class="nav-number">4.3.</span> <span class="nav-text">测试用例</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93-1"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">33</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">33</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="SpringBoot（一）— fatJar启动和LaunchedURLClassLoader加载class的原理 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          SpringBoot（一）— fatJar启动和LaunchedURLClassLoader加载class的原理
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-02-15 21:16:27" itemprop="dateCreated datePublished" datetime="2022-02-15T21:16:27+08:00">2022-02-15</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-02-17 15:33:23" itemprop="dateModified" datetime="2022-02-17T15:33:23+08:00">2022-02-17</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/SpringBoot/" itemprop="url" rel="index"><span itemprop="name">SpringBoot</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>19k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>34 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	基于 Spring Boot 2.7.x，从整体架构角度出发，梳理并串联了 fatjar 模式下的关键组件：<code>Archive</code>、<code>JarFile</code>、<code>JarEntry</code>、<code>Handler</code>、<code>JarURLConnection</code>，重点<strong>分析它们在类加载过程中的职责与协作关系</strong>。全文<strong>不聚焦具体 jar 包结构解析细节，而是深入源码层面解析 fatjar 启动流程及 <code>LaunchedURLClassLoader#loadClass</code> 实现机制</strong>，并辅以实际测试用例进行debug和验证。</p>
+<span id="more"></span>
+
+<h2 id="fatjar结构"><a href="#fatjar结构" class="headerlink" title="fatjar结构"></a>fatjar结构</h2><p>​	SpringBoot 使用 <code>spring-boot-maven-plugin</code> 插件可以将项目打包成一个可执行的 <strong>fatjar</strong>，其内部结构不仅符合标准的 jar 规范，还增加了 SpringBoot 特有的扩展结构，以支持其定制的类加载机制</p>
+<pre class="line-numbers language-bash"><code class="language-bash">├── BOOT-INF
+│   ├── classes/               <span class="token comment" spellcheck="true"># 你的 class 文件和 resource 资源</span>
+│   └── lib/                   <span class="token comment" spellcheck="true"># 所有依赖 jar 包</span>
+│       ├── spring-context-5.3.31.jar
+│       ├── spring-web-5.3.31.jar
+├── META-INF
+│   └── MANIFEST.MF            <span class="token comment" spellcheck="true"># 包含 Main-Class 配置（默认指向 JarLauncher）</span>
+├── org
+│   └── springframework
+│       └── boot
+│           └── loader         <span class="token comment" spellcheck="true"># SpringBoot 提供的加载器逻辑</span>
+│               ├── JarLauncher.class
+│               ├── LaunchedURLClassLoader.class
+│               ├── ExecutableArchiveLauncher.class
+│               ├── Launcher.class
+│               ├── MainMethodRunner.class
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>fatjar解压后如上，其中包含：</p>
+<ul>
+<li>当前项目编译后的 <code>.class</code> 文件和资源</li>
+<li>项目的所有依赖 jar 文件</li>
+<li>SpringBoot 提供的启动器和类加载器（位于 <code>org.springframework.boot.loader</code> 包下）</li>
+</ul>
+<h3 id="标准jar部分"><a href="#标准jar部分" class="headerlink" title="标准jar部分"></a>标准jar部分</h3><ol>
+<li><strong>&#x2F;META-INF&#x2F;MANIFEST.MF文件</strong>：jar的元信息文件（包含项目结构和启动类）。比如<strong>java -jar命令就是执行其中Main-Class的main方法</strong></li>
+<li><strong>SpringBoot Loader 相关类放在 jar 根路径</strong>：让LaunchedURLClassLoader相关依赖可以直接被AppClassLoader加载，无需特殊处理</li>
+</ol>
+<h3 id="特有的拓展"><a href="#特有的拓展" class="headerlink" title="特有的拓展"></a>特有的拓展</h3><ol>
+<li><strong>所有业务资源都被封装在 <code>/BOOT-INF/</code> 下而不直接在跟路径</strong>：这部分资源不是标准的JVM classpath路径，不能被AppClassLoader加载，只能由SpringBoot提供的LaunchedURLClassLoader加载</li>
+<li><strong>jar嵌套</strong>：标准jar不支持嵌套结构。SpringBoot拓展了一系列组件的功能来支持&#x2F;BOOT-INF&#x2F;lib&#x2F;下嵌套jar的解析</li>
+</ol>
+<h2 id="核心组件"><a href="#核心组件" class="headerlink" title="核心组件"></a>核心组件</h2><p>在正式进入源码前，先了解一些fatjar相关的核心组件和作用，对后续源码debug会有帮助。我这里主要关注fatjar启动方式，就不考虑exploded模式了</p>
+<h3 id="Archive"><a href="#Archive" class="headerlink" title="Archive"></a>Archive</h3><p>​	是SpringBoot Loader 模块中的一个抽象接口。<strong>可以表示 fatjar 本身，也可以表示 fatjar 内部的某个嵌套 jar（<code>BOOT-INF/lib/*.jar</code>），或特定目录（ <code>BOOT-INF/classes/</code>）</strong>，此时其实现为org.springframework.boot.loader.archive.JarFileArchive。两个核心方法如下：</p>
+<ol>
+<li><p><strong>Archive#getUrl：返回当前资源的URL，用于构造classpath</strong>。比如：</p>
+<blockquote>
+<p>jar:file:&#x2F;Users&#x2F;reef&#x2F;IdeaProjects&#x2F;soil&#x2F;target&#x2F;soil-1.0.0.jar!&#x2F;BOOT-INF&#x2F;classes!&#x2F;</p>
+<p>jar:file:&#x2F;Users&#x2F;reef&#x2F;IdeaProjects&#x2F;soil&#x2F;target&#x2F;soil-1.0.0.jar!&#x2F;BOOT-INF&#x2F;lib&#x2F;spring-core-5.3.31.jar!&#x2F;</p>
+</blockquote>
+</li>
+<li><p>Archive#getNestedArchives(EntryFilter filter)：遍历当前 Archive 内部结构，筛选出所有符合条件的子 Archive</p>
+<blockquote>
+<p>如<strong>SpringBoot中默认过滤出嵌套 jar（BOOT-INF&#x2F;lib&#x2F;*.jar文件）和指定目录（BOOT-INF&#x2F;classes&#x2F;）</strong></p>
+</blockquote>
+</li>
+</ol>
+<h3 id="JarFile"><a href="#JarFile" class="headerlink" title="JarFile"></a>JarFile</h3><p>​	JDK 提供的java.util.jar.JarFile 类表示一个标准的 jar 文件，其本质是一个 classpath 元素，<strong>内部通常只包含 <code>.class</code> 文件和资源文件，不支持嵌套 jar结构</strong>。</p>
+<p>​	为了支持 fatjar 的结构，SpringBoot 自定义了 <code>org.springframework.boot.loader.jar.JarFile</code> 类，它<strong>同样表示一个 jar 文件，但支持访问 fatjar 内部嵌套的 jar（例如 <code>BOOT-INF/lib/*.jar</code>），并提供对嵌套 jar 内容的解包与访问能力</strong>。核心方法如下：</p>
+<ol>
+<li><strong>JarFile#getInputStream(java.util.zip.ZipEntry)：获取指定 entry 的InputStream，可用于读取 <code>.class</code> 文件、配置文件、资源等内容</strong></li>
+<li>JarFile#getJarEntry(java.lang.String)：获取当前jar内部的指定资源对象（JarEntry）。支持查找 class 文件、配置文件、嵌套 jar 等</li>
+<li><strong>JarFile#getNestedJarFile(JarEntry)：将fatjar内部某个嵌套 jar转换为一个新的 <code>JarFile</code> 对象，实现对嵌套 jar 的透明访问</strong></li>
+</ol>
+<h3 id="JarEntry"><a href="#JarEntry" class="headerlink" title="JarEntry"></a>JarEntry</h3><p>​	jdk 提供的 <code>java.util.jar.JarEntry</code> 表示 <strong>jar 文件中的一个具体条目，可以是 <code>.class</code> 文件、配置文件、目录等</strong>。并<strong>支持通过 <code>JarFile#getInputStream(entry)</code> 读取其内容</strong></p>
+<p>​	但fatjar是一种嵌套的复杂结构，标准的 JarEntry无法支持对内部嵌套 jar 的进一步解析，所以SpringBoot对其拓展，定义了自己的<code>org.springframework.boot.loader.jar.JarEntry</code> 类，<strong>增加表示了fatjar 中嵌套的 jar 文件</strong>。其配合<code>JarFile#getNestedJarFile(JarEntry entry)</code> 方法，能够将某个嵌套 jar 条目转换为新的 <code>JarFile</code> 对象，实现对嵌套 jar 的透明访问</p>
+<h3 id="URLStreamHandler"><a href="#URLStreamHandler" class="headerlink" title="URLStreamHandler"></a>URLStreamHandler</h3><p>​	是 JDK 提供的抽象类，用于处理特定协议（如 <code>http</code>、<code>file</code>、<code>jar</code>）的 <code>URL</code>，并生成对应的 <code>URLConnection</code> 对象，以实现对资源的读取。</p>
+<p>​	对于 <code>jar</code> 协议，JDK 默认使用 <code>sun.net.www.protocol.jar.Handler</code> 创建标准的 <code>JarURLConnection</code>，用于读取普通 jar 文件中的资源。</p>
+<p>​	<strong>SpringBoot 自定义了 <code>org.springframework.boot.loader.jar.Handler</code>，用于替代 JDK 默认的 Handler。该 Handler 会创建支持嵌套 jar 的 <code>JarURLConnection</code>，以满足 fatjar 场景下的资源访问需求</strong></p>
+<p>​	SpringBoot通过<strong>设置如下系统属性，确保了当构造jar协议的URL时，会使用org.springframework.boot.loader.jar.Handler作为当前URL的URLStreamHandler</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// org.springframework.boot.loader.jar.JarFile#registerUrlProtocolHandler方法里</span>
+System<span class="token punctuation">.</span><span class="token function">setProperty</span><span class="token punctuation">(</span><span class="token string">"java.protocol.handler.pkgs"</span><span class="token punctuation">,</span> <span class="token string">"org.springframework.boot.loader"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span></span></code></pre>
+<h3 id="JarURLConnection"><a href="#JarURLConnection" class="headerlink" title="JarURLConnection"></a>JarURLConnection</h3><p>表示jar协议URL的连接对象，但标准的java.net.JarURLConnection不支持解析多层嵌套的资源，如</p>
+<blockquote>
+<p> jar:file:&#x2F;soil-1.0.0.jar!&#x2F;BOOT-INF&#x2F;lib&#x2F;demo.jar!&#x2F;site.shanzhao.Demo.class</p>
+</blockquote>
+<p>为此，SpringBoot 提供了替代实现 <code>org.springframework.boot.loader.jar.JarURLConnection</code>，可<strong>直接在不解压 fatjar 的情况下访问嵌套 jar 内部的 class 和配置资源</strong>。核心方法如下</p>
+<ol>
+<li>JarURLConnection#getJarEntry：将当前URL资源解析为JarEntry</li>
+<li>JarURLConnection#getInputStream：通过JarFile获取该资源对应的InputStream，以直接读取 <code>.class</code> 文件或配置资源</li>
+</ol>
+<h2 id="fatjar启动流程"><a href="#fatjar启动流程" class="headerlink" title="fatjar启动流程"></a>fatjar启动流程</h2><p>​	入口为JarLauncher#main方法，JarLauncher继承了ExecutableArchiveLauncher</p>
+<h3 id="ExecutableArchiveLauncher实例化"><a href="#ExecutableArchiveLauncher实例化" class="headerlink" title="ExecutableArchiveLauncher实例化"></a>ExecutableArchiveLauncher实例化</h3><p>主要做两件事：</p>
+<ol>
+<li>Launcher#createArchive：确定当前启动类是jar包还是目录启动，jar启动使用JarFileArchive，目录启动则使用ExplodedArchive</li>
+<li>加载classpath.idx文件：只有目录启动模式（exploded）才会使用&#x2F;BOOF-INF&#x2F;classpath.idx文件来加速classpath URL的构建</li>
+</ol>
+<h3 id="Launcher-launch"><a href="#Launcher-launch" class="headerlink" title="Launcher#launch"></a>Launcher#launch</h3><p>启动器的核心入口，主要完成以下三项工作：</p>
+<ol>
+<li><strong>fatjar启动才注册JarFile.registerUrlProtocolHandler</strong>（exploded为解压模式下启动，这种不存在嵌套jar）。让jar协议的URL使用SpringBoot提供的Handler，去创建支持解析嵌套jar内容的URLConnection</li>
+<li>解析classpath URL，并创建相关的LaunchedURLClassLoader</li>
+<li><strong>绑定LaunchedURLClassLoader到当前线程上下文，并反射启动Start-Class</strong></li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">launch</span><span class="token punctuation">(</span>String<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">isExploded</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// fatjar模式启动，注册一个 java.protocol.handler.pkgs=org.springframework.boot.loader 的系统属性</span>
+            <span class="token comment" spellcheck="true">// 以便让jar protocol的URL使用org.springframework.boot.loader.jar.Handler来创建URLConnection</span>
+            JarFile<span class="token punctuation">.</span><span class="token function">registerUrlProtocolHandler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 遍历并筛选 fatjar 内部的 BOOT-INF/lib 和 BOOT-INF/classes，构建 URL 列表并创建LaunchedURLClassLoader</span>
+        ClassLoader classLoader <span class="token operator">=</span> <span class="token function">createClassLoader</span><span class="token punctuation">(</span><span class="token function">getClassPathArchivesIterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        String jarMode <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span><span class="token string">"jarmode"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 获取Start-Class，也就是我们主程序的启动类</span>
+        String launchClass <span class="token operator">=</span> <span class="token punctuation">(</span>jarMode <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>jarMode<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">?</span> fatjar_MODE_LAUNCHER <span class="token operator">:</span> <span class="token function">getMainClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 绑定LaunchedURLClassLoader到当前thread（即main线程）里，以便在后续加载class时使用到。并启动项目的主启动类</span>
+        <span class="token function">launch</span><span class="token punctuation">(</span>args<span class="token punctuation">,</span> launchClass<span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ExecutableArchiveLauncher-getClassPathArchivesIterator"><a href="#ExecutableArchiveLauncher-getClassPathArchivesIterator" class="headerlink" title="ExecutableArchiveLauncher#getClassPathArchivesIterator"></a>ExecutableArchiveLauncher#getClassPathArchivesIterator</h3><p>是fatjar启动模式下构建classpath URL的关键代码，其定义的EntryFilter会构建出如下的Archive</p>
+<ol>
+<li>BOOT-INF&#x2F;lib&#x2F; 下所有jar分别各自对应一个Archive</li>
+<li>BOOT-INF&#x2F;classes 文件夹对应一个Archive</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java">    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> Iterator<span class="token operator">&lt;</span>Archive<span class="token operator">></span> <span class="token function">getClassPathArchivesIterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 以 BOOT-INF/ 开头</span>
+        Archive<span class="token punctuation">.</span>EntryFilter searchFilter <span class="token operator">=</span> <span class="token keyword">this</span><span class="token operator">:</span><span class="token operator">:</span>isSearchCandidate<span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 当存在 BOOT-INF/classpath.idx 文件时，跳过其中已列出的 jar 文件，不再走常规的扫描构建 Archive 路径。</span>
+        <span class="token comment" spellcheck="true">// 会在后续步骤里（ExecutableArchiveLauncher.createClassLoader方法）直接通过 BOOT-INF/classpath.idx 文件把这些jar转成URL加入classpath，从而提升启动效率。</span>
+        <span class="token comment" spellcheck="true">// 重点注意：只有在exploded模式下（解压了），才会使用BOOT-INF/classpath.idx。以java -jar启动使用的JarFileArchive是不会用到 BOOT-INF/classpath.idx 文件的</span>
+        Iterator<span class="token operator">&lt;</span>Archive<span class="token operator">></span> archives <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>archive<span class="token punctuation">.</span><span class="token function">getNestedArchives</span><span class="token punctuation">(</span>searchFilter<span class="token punctuation">,</span>
+                <span class="token punctuation">(</span>entry<span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> <span class="token function">isNestedArchive</span><span class="token punctuation">(</span>entry<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span><span class="token function">isEntryIndexed</span><span class="token punctuation">(</span>entry<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">isPostProcessingClassPathArchives</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            archives <span class="token operator">=</span> <span class="token function">applyClassPathArchivePostProcessing</span><span class="token punctuation">(</span>archives<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> archives<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>从 <code>JarLauncher#main</code> 启动到反射调用 <code>Start-Class</code> 的 <code>main</code> 方法，主要完成以下工作：</p>
+<blockquote>
+<p>​	解析 fatjar，将其中的依赖 jar 和项目 class 封装为 <code>jar</code> 协议的 URL，并用这些 URL 构造 <code>LaunchedURLClassLoader</code>；随后将该类加载器绑定到 main 线程的上下文，确保在应用启动过程中可以加载所有 class 和资源</p>
+</blockquote>
+<h3 id="测试用例"><a href="#测试用例" class="headerlink" title="测试用例"></a>测试用例</h3><p>可以跟着debug看看fatjar到底解析出了那些Archive，和这些Archive的URL格式</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">FatJarResolveArchiveDemo</span> <span class="token punctuation">{</span>
+
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span>String<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        String fatJarPath <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span><span class="token string">"user.home"</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"/IdeaProjects/soil/target/soil-1.0.0.jar"</span><span class="token punctuation">;</span>
+        JarFileArchive soilJar <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">JarFileArchive</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">File</span><span class="token punctuation">(</span>fatJarPath<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Archive<span class="token punctuation">.</span>EntryFilter searchFilter <span class="token operator">=</span> entry <span class="token operator">-</span><span class="token operator">></span> entry<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">startsWith</span><span class="token punctuation">(</span><span class="token string">"BOOT-INF/"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// fatjar启动下ExecutableArchiveLauncher.classPathIndex字段为null，ExecutableArchiveLauncher.isEntryIndexed就默认返回true了</span>
+        Iterator<span class="token operator">&lt;</span>Archive<span class="token operator">></span> archives <span class="token operator">=</span> soilJar<span class="token punctuation">.</span><span class="token function">getNestedArchives</span><span class="token punctuation">(</span>searchFilter<span class="token punctuation">,</span> NESTED_ARCHIVE_ENTRY_FILTER<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">while</span> <span class="token punctuation">(</span>archives<span class="token punctuation">.</span><span class="token function">hasNext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            System<span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>archives<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        soilJar<span class="token punctuation">.</span><span class="token function">close</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> Archive<span class="token punctuation">.</span>EntryFilter NESTED_ARCHIVE_ENTRY_FILTER <span class="token operator">=</span> <span class="token punctuation">(</span>entry<span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>entry<span class="token punctuation">.</span><span class="token function">isDirectory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> entry<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span><span class="token string">"BOOT-INF/classes/"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> entry<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">startsWith</span><span class="token punctuation">(</span><span class="token string">"BOOT-INF/lib/"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="LaunchedURLClassLoader"><a href="#LaunchedURLClassLoader" class="headerlink" title="LaunchedURLClassLoader"></a>LaunchedURLClassLoader</h2><p>这是SpringBoot项目的真正类加载器，主要关注其loadClass方法，顺着这个方法看看一个class文件是如何被找的</p>
+<p>definePackage在当前类完成，随后真正loadClass还是调用父类URLClassLoader#loadClass方法</p>
+<h3 id="核心源码"><a href="#核心源码" class="headerlink" title="核心源码"></a>核心源码</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> <span class="token function">loadClass</span><span class="token punctuation">(</span>String name<span class="token punctuation">,</span> <span class="token keyword">boolean</span> resolve<span class="token punctuation">)</span> <span class="token keyword">throws</span> ClassNotFoundException <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 先单独处理jarmode</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>name<span class="token punctuation">.</span><span class="token function">startsWith</span><span class="token punctuation">(</span><span class="token string">"org.springframework.boot.loader.jarmode."</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> result <span class="token operator">=</span> <span class="token function">loadClassInLaunchedClassLoader</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>resolve<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token function">resolveClass</span><span class="token punctuation">(</span>result<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ClassNotFoundException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>exploded<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// exploded解压模式，不是fatjar。可直接用传统的方式查找class</span>
+        <span class="token keyword">return</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">loadClass</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> resolve<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    Handler<span class="token punctuation">.</span><span class="token function">setUseFastConnectionExceptions</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 遍历所有可用的jar，并匹配到当前的name，最后定义为可用的Package</span>
+            <span class="token function">definePackageIfNecessary</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IllegalArgumentException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getPackage</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">AssertionError</span><span class="token punctuation">(</span><span class="token string">"Package "</span> <span class="token operator">+</span> name <span class="token operator">+</span> <span class="token string">" has already been defined but it could not be found"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 直接用父类URLClassLoader方法loadClass</span>
+        <span class="token keyword">return</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">loadClass</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> resolve<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+        Handler<span class="token punctuation">.</span><span class="token function">setUseFastConnectionExceptions</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">definePackageIfNecessary</span><span class="token punctuation">(</span>String className<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">int</span> lastDot <span class="token operator">=</span> className<span class="token punctuation">.</span><span class="token function">lastIndexOf</span><span class="token punctuation">(</span><span class="token string">'.'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>lastDot <span class="token operator">>=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 截掉class的simpleName,只留下包名</span>
+        String packageName <span class="token operator">=</span> className<span class="token punctuation">.</span><span class="token function">substring</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> lastDot<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getPackage</span><span class="token punctuation">(</span>packageName<span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 缓存中没查到，就define</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token function">definePackage</span><span class="token punctuation">(</span>className<span class="token punctuation">,</span> packageName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IllegalArgumentException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getPackage</span><span class="token punctuation">(</span>packageName<span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">AssertionError</span><span class="token punctuation">(</span>
+                            <span class="token string">"Package "</span> <span class="token operator">+</span> packageName <span class="token operator">+</span> <span class="token string">" has already been defined but it could not be found"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">definePackage</span><span class="token punctuation">(</span>String className<span class="token punctuation">,</span> String packageName<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        AccessController<span class="token punctuation">.</span><span class="token function">doPrivileged</span><span class="token punctuation">(</span><span class="token punctuation">(</span>PrivilegedExceptionAction<span class="token operator">&lt;</span>Object<span class="token operator">></span><span class="token punctuation">)</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 例：site/shanzhao/common/bean/</span>
+            String packageEntryName <span class="token operator">=</span> packageName<span class="token punctuation">.</span><span class="token function">replace</span><span class="token punctuation">(</span><span class="token string">'.'</span><span class="token punctuation">,</span> <span class="token string">'/'</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"/"</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 例：site/shanzhao/common/bean/Demo.class</span>
+            String classEntryName <span class="token operator">=</span> className<span class="token punctuation">.</span><span class="token function">replace</span><span class="token punctuation">(</span><span class="token string">'.'</span><span class="token punctuation">,</span> <span class="token string">'/'</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">".class"</span><span class="token punctuation">;</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>URL url <span class="token operator">:</span> <span class="token function">getURLs</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 遍历jar协议的URL（fatjar内的所有BOOT-INF/lib/*.jar和/BOOT-INF/classes/）</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 通过Handler创建JarURLConnection（返回的connection不会为空）</span>
+                    URLConnection connection <span class="token operator">=</span> url<span class="token punctuation">.</span><span class="token function">openConnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>connection <span class="token keyword">instanceof</span> <span class="token class-name">JarURLConnection</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// 如果不存在，内部会抛FileNotFoundException异常</span>
+                        JarFile jarFile <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>JarURLConnection<span class="token punctuation">)</span> connection<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getJarFile</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>jarFile<span class="token punctuation">.</span><span class="token function">getEntry</span><span class="token punctuation">(</span>classEntryName<span class="token punctuation">)</span> <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> jarFile<span class="token punctuation">.</span><span class="token function">getEntry</span><span class="token punctuation">(</span>packageEntryName<span class="token punctuation">)</span> <span class="token operator">!=</span> null
+                                <span class="token operator">&amp;&amp;</span> jarFile<span class="token punctuation">.</span><span class="token function">getManifest</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 找到了，定义这个Package并缓存</span>
+                            <span class="token function">definePackage</span><span class="token punctuation">(</span>packageName<span class="token punctuation">,</span> jarFile<span class="token punctuation">.</span><span class="token function">getManifest</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 当前的classpath URL没找到className，忽略异常</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">,</span> AccessController<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">java<span class="token punctuation">.</span>security<span class="token punctuation">.</span>PrivilegedActionException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// Ignore</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="URLClassLoader"><a href="#URLClassLoader" class="headerlink" title="URLClassLoader"></a>URLClassLoader</h3><p>​	其loadClass仍遵循双亲委派模型并优先查找缓存，这里聚焦其核心的 <code>findClass</code> 方法，分析如何通过 URL 加载资源并定义类。</p>
+<p><strong>findClass核心逻辑总结</strong>：</p>
+<ol>
+<li>通过内部的URLClassPath查找指定类名对应的资源，封装为 <code>Resource</code></li>
+<li>从Resource 中获InputStream，并转换为<code>ByteBuffer</code> 来读取 <code>.class</code> 字节，最终调用 <code>defineClass</code> 完成类的定义</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> <span class="token function">findClass</span><span class="token punctuation">(</span><span class="token keyword">final</span> String name<span class="token punctuation">)</span>
+        <span class="token keyword">throws</span> ClassNotFoundException <span class="token punctuation">{</span>
+    <span class="token keyword">final</span> Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> result<span class="token punctuation">;</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        result <span class="token operator">=</span> AccessController<span class="token punctuation">.</span><span class="token function">doPrivileged</span><span class="token punctuation">(</span>
+                <span class="token keyword">new</span> <span class="token class-name">PrivilegedExceptionAction</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">public</span> Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> ClassNotFoundException <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// 将类名转换为资源路径</span>
+                        String path <span class="token operator">=</span> name<span class="token punctuation">.</span><span class="token function">replace</span><span class="token punctuation">(</span><span class="token string">'.'</span><span class="token punctuation">,</span> <span class="token string">'/'</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">concat</span><span class="token punctuation">(</span><span class="token string">".class"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token comment" spellcheck="true">// 使用内部的URLClassPath加载资源</span>
+                        Resource res <span class="token operator">=</span> ucp<span class="token punctuation">.</span><span class="token function">getResource</span><span class="token punctuation">(</span>path<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>res <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                                <span class="token comment" spellcheck="true">// 定义class</span>
+                                <span class="token keyword">return</span> <span class="token function">defineClass</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> res<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ClassNotFoundException</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">ClassFormatError</span> e2<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                <span class="token keyword">if</span> <span class="token punctuation">(</span>res<span class="token punctuation">.</span><span class="token function">getDataError</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                    e2<span class="token punctuation">.</span><span class="token function">addSuppressed</span><span class="token punctuation">(</span>res<span class="token punctuation">.</span><span class="token function">getDataError</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                                <span class="token punctuation">}</span>
+                                <span class="token keyword">throw</span> e2<span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span>
+                        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                            <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span><span class="token punctuation">,</span> acc<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">java<span class="token punctuation">.</span>security<span class="token punctuation">.</span>PrivilegedActionException</span> pae<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">throw</span> <span class="token punctuation">(</span>ClassNotFoundException<span class="token punctuation">)</span> pae<span class="token punctuation">.</span><span class="token function">getException</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>result <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ClassNotFoundException</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> <span class="token function">defineClass</span><span class="token punctuation">(</span>String name<span class="token punctuation">,</span> Resource res<span class="token punctuation">)</span> <span class="token keyword">throws</span> IOException <span class="token punctuation">{</span>
+    <span class="token keyword">long</span> t0 <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">nanoTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">int</span> i <span class="token operator">=</span> name<span class="token punctuation">.</span><span class="token function">lastIndexOf</span><span class="token punctuation">(</span><span class="token string">'.'</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    URL url <span class="token operator">=</span> res<span class="token punctuation">.</span><span class="token function">getCodeSourceURL</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>i <span class="token operator">!=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        String pkgname <span class="token operator">=</span> name<span class="token punctuation">.</span><span class="token function">substring</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> i<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Manifest man <span class="token operator">=</span> res<span class="token punctuation">.</span><span class="token function">getManifest</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 校验资源的Package</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getAndVerifyPackage</span><span class="token punctuation">(</span>pkgname<span class="token punctuation">,</span> man<span class="token punctuation">,</span> url<span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>man <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token function">definePackage</span><span class="token punctuation">(</span>pkgname<span class="token punctuation">,</span> man<span class="token punctuation">,</span> url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                    <span class="token function">definePackage</span><span class="token punctuation">(</span>pkgname<span class="token punctuation">,</span> null<span class="token punctuation">,</span> null<span class="token punctuation">,</span> null<span class="token punctuation">,</span> null<span class="token punctuation">,</span> null<span class="token punctuation">,</span> null<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IllegalArgumentException</span> iae<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">getAndVerifyPackage</span><span class="token punctuation">(</span>pkgname<span class="token punctuation">,</span> man<span class="token punctuation">,</span> url<span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">AssertionError</span><span class="token punctuation">(</span><span class="token string">"Cannot find package "</span> <span class="token operator">+</span>
+                            pkgname<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 内部使用Resource#getInputStream，获取ByteBuffer，开始真正的数据读取和class定义</span>
+    java<span class="token punctuation">.</span>nio<span class="token punctuation">.</span>ByteBuffer bb <span class="token operator">=</span> res<span class="token punctuation">.</span><span class="token function">getByteBuffer</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>bb <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        CodeSigner<span class="token punctuation">[</span><span class="token punctuation">]</span> signers <span class="token operator">=</span> res<span class="token punctuation">.</span><span class="token function">getCodeSigners</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        CodeSource cs <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CodeSource</span><span class="token punctuation">(</span>url<span class="token punctuation">,</span> signers<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        PerfCounter<span class="token punctuation">.</span><span class="token function">getReadClassBytesTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">addElapsedTimeFrom</span><span class="token punctuation">(</span>t0<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token function">defineClass</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> bb<span class="token punctuation">,</span> cs<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> b <span class="token operator">=</span> res<span class="token punctuation">.</span><span class="token function">getBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        CodeSigner<span class="token punctuation">[</span><span class="token punctuation">]</span> signers <span class="token operator">=</span> res<span class="token punctuation">.</span><span class="token function">getCodeSigners</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        CodeSource cs <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CodeSource</span><span class="token punctuation">(</span>url<span class="token punctuation">,</span> signers<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        PerfCounter<span class="token punctuation">.</span><span class="token function">getReadClassBytesTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">addElapsedTimeFrom</span><span class="token punctuation">(</span>t0<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token function">defineClass</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> b<span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> b<span class="token punctuation">.</span>length<span class="token punctuation">,</span> cs<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="URLClassPath"><a href="#URLClassPath" class="headerlink" title="URLClassPath"></a>URLClassPath</h4><p>​	配合 <code>URLClassLoader</code> 使用，负责在所有 classpath URL 中<strong>懒加载并定位资源</strong>（如 <code>.class</code> 或配置文件）。其核心方法 <code>getResource</code> 的处理流程如下：</p>
+<ol>
+<li><strong>延迟创建并缓存</strong>每个 URL 对应的 <code>Loader</code></li>
+<li>Loader构造具体目标资源的 URL，并通过其协议的 <code>URLStreamHandler</code> 创建URLConnection</li>
+<li>若连接有效，返回封装好的 <code>Resource</code> 对象（包含 InputStream 等）</li>
+<li>若未命中资源，继续遍历下一个 <code>Loader</code></li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java">
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">URLClassPath</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// URLClassLoader里所有classpath下的URL</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> ArrayList<span class="token operator">&lt;</span>URL<span class="token operator">></span> path<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// // 尚未初始化的 URL 列表（懒加载机制）</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> ArrayDeque<span class="token operator">&lt;</span>URL<span class="token operator">></span> unopenedUrls<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// loader缓存，1个loader对应一个URL</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> ArrayList<span class="token operator">&lt;</span>Loader<span class="token operator">></span> loaders <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// loader和URL的关系缓存</span>
+    <span class="token comment" spellcheck="true">// key比如</span>
+    <span class="token comment" spellcheck="true">// jar://file:/Users/reef/IdeaProjects/soil/target/soil-1.0.0.jar!/BOOT-INF/lib/spring-context-5.3.31.jar!/</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> HashMap<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> Loader<span class="token operator">></span> lmap <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> Resource <span class="token function">getResource</span><span class="token punctuation">(</span>String name<span class="token punctuation">,</span> <span class="token keyword">boolean</span> check<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+        Loader loader<span class="token punctuation">;</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">int</span> i <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span> <span class="token punctuation">(</span>loader <span class="token operator">=</span> <span class="token function">getLoader</span><span class="token punctuation">(</span>i<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">!=</span> null<span class="token punctuation">;</span> i<span class="token operator">++</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            Resource res <span class="token operator">=</span> loader<span class="token punctuation">.</span><span class="token function">getResource</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> check<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>res <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> res<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">synchronized</span> Loader <span class="token function">getLoader</span><span class="token punctuation">(</span><span class="token keyword">int</span> index<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>closed<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 遍历完了loaders，尝试增加未open的URL</span>
+        <span class="token keyword">while</span> <span class="token punctuation">(</span>loaders<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> index <span class="token operator">+</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">final</span> URL url<span class="token punctuation">;</span>
+            <span class="token keyword">synchronized</span> <span class="token punctuation">(</span>unopenedUrls<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                url <span class="token operator">=</span> unopenedUrls<span class="token punctuation">.</span><span class="token function">pollFirst</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// url为null则表示所有URL都以open了</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>url <span class="token operator">==</span> null<span class="token punctuation">)</span>
+                    <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            String urlNoFragString <span class="token operator">=</span> URLUtil<span class="token punctuation">.</span><span class="token function">urlNoFragString</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>lmap<span class="token punctuation">.</span><span class="token function">containsKey</span><span class="token punctuation">(</span>urlNoFragString<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">continue</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            Loader loader<span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 创建URL的Loader</span>
+                loader <span class="token operator">=</span> <span class="token function">getLoader</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                URL<span class="token punctuation">[</span><span class="token punctuation">]</span> urls <span class="token operator">=</span> loader<span class="token punctuation">.</span><span class="token function">getClassPath</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>urls <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token function">push</span><span class="token punctuation">(</span>urls<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">continue</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">SecurityException</span> se<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>DEBUG<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    System<span class="token punctuation">.</span>err<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"Failed to access "</span> <span class="token operator">+</span> url <span class="token operator">+</span> <span class="token string">", "</span> <span class="token operator">+</span> se<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">continue</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// loader缓存</span>
+            loaders<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>loader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            lmap<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>urlNoFragString<span class="token punctuation">,</span> loader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> loaders<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>index<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> Loader <span class="token function">getLoader</span><span class="token punctuation">(</span><span class="token keyword">final</span> URL url<span class="token punctuation">)</span> <span class="token keyword">throws</span> IOException <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> AccessController<span class="token punctuation">.</span><span class="token function">doPrivileged</span><span class="token punctuation">(</span>
+                    <span class="token keyword">new</span> <span class="token class-name">PrivilegedExceptionAction</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">public</span> Loader <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> IOException <span class="token punctuation">{</span>
+                            String protocol <span class="token operator">=</span> url<span class="token punctuation">.</span><span class="token function">getProtocol</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            String file <span class="token operator">=</span> url<span class="token punctuation">.</span><span class="token function">getFile</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token keyword">if</span> <span class="token punctuation">(</span>file <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> file<span class="token punctuation">.</span><span class="token function">endsWith</span><span class="token punctuation">(</span><span class="token string">"/"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token string">"file"</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>protocol<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                    <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">FileLoader</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token string">"jar"</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>protocol<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span>
+                                        <span class="token function">isDefaultJarHandler</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span>
+                                        file<span class="token punctuation">.</span><span class="token function">endsWith</span><span class="token punctuation">(</span><span class="token string">"!/"</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                    <span class="token comment" spellcheck="true">// JarHandler为jdk默认的sun.net.www.protocol.jar.Handler才会进入</span>
+                                    URL nestedUrl <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">URL</span><span class="token punctuation">(</span>file<span class="token punctuation">.</span><span class="token function">substring</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">,</span> file<span class="token punctuation">.</span><span class="token function">length</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> <span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                                    <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">JarLoader</span><span class="token punctuation">(</span>nestedUrl<span class="token punctuation">,</span> jarHandler<span class="token punctuation">,</span> lmap<span class="token punctuation">,</span> acc<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                                    <span class="token comment" spellcheck="true">// SpringBoot fatjar会创建这个Loader</span>
+                                    <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">Loader</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                                <span class="token punctuation">}</span>
+                            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                                <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">JarLoader</span><span class="token punctuation">(</span>url<span class="token punctuation">,</span> jarHandler<span class="token punctuation">,</span> lmap<span class="token punctuation">,</span> acc<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span><span class="token punctuation">,</span> acc<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">PrivilegedActionException</span> pae<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token punctuation">(</span>IOException<span class="token punctuation">)</span> pae<span class="token punctuation">.</span><span class="token function">getException</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Loader</span> <span class="token keyword">implements</span> <span class="token class-name">Closeable</span> <span class="token punctuation">{</span>
+        Resource <span class="token function">getResource</span><span class="token punctuation">(</span><span class="token keyword">final</span> String name<span class="token punctuation">,</span> <span class="token keyword">boolean</span> check<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">final</span> URL url<span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 构造具体资源的URL，举例</span>
+                <span class="token comment" spellcheck="true">// base为 jar:file:/Users/reef/IdeaProjects/soil/target/soil-1.0.0.jar!/BOOT-INF/lib/hutool-core-5.8.25.jar!/</span>
+                <span class="token comment" spellcheck="true">// spec为 cn/hutool/core/thread/AsyncUtil.class</span>
+                url <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">URL</span><span class="token punctuation">(</span>base<span class="token punctuation">,</span> ParseUtil<span class="token punctuation">.</span><span class="token function">encodePath</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">MalformedURLException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">IllegalArgumentException</span><span class="token punctuation">(</span><span class="token string">"name"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">final</span> URLConnection uc<span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>check<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    URLClassPath<span class="token punctuation">.</span><span class="token function">check</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// 通过URL内部的Handler构造URLConnection</span>
+                uc <span class="token operator">=</span> url<span class="token punctuation">.</span><span class="token function">openConnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// SpringBoot的JarURLConnection如果不存在指定的资源，这里面会抛异常</span>
+                InputStream in <span class="token operator">=</span> uc<span class="token punctuation">.</span><span class="token function">getInputStream</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>uc <span class="token keyword">instanceof</span> <span class="token class-name">JarURLConnection</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">/*
+                     * Need to remember the jar file so it can be closed
+                     * in a hurry.
+                     */</span>
+                    JarURLConnection juc <span class="token operator">=</span> <span class="token punctuation">(</span>JarURLConnection<span class="token punctuation">)</span> uc<span class="token punctuation">;</span>
+
+                    <span class="token keyword">boolean</span> firstLoad <span class="token operator">=</span> jarfile <span class="token operator">==</span> null<span class="token punctuation">;</span>
+
+                    jarfile <span class="token operator">=</span> JarLoader<span class="token punctuation">.</span><span class="token function">checkJar</span><span class="token punctuation">(</span>juc<span class="token punctuation">.</span><span class="token function">getJarFile</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>firstLoad <span class="token operator">&amp;&amp;</span> JarLoadEvent<span class="token punctuation">.</span><span class="token function">isEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        Tooling<span class="token punctuation">.</span><span class="token function">notifyEvent</span><span class="token punctuation">(</span>JarLoadEvent<span class="token punctuation">.</span><span class="token function">jarLoadEvent</span><span class="token punctuation">(</span>url<span class="token punctuation">,</span> jarfile<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 找到了资源，构造对应的Resource</span>
+            <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">Resource</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">public</span> String <span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> name<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">public</span> URL <span class="token function">getURL</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> url<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">public</span> URL <span class="token function">getCodeSourceURL</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> base<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">public</span> InputStream <span class="token function">getInputStream</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> IOException <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> uc<span class="token punctuation">.</span><span class="token function">getInputStream</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">public</span> <span class="token keyword">int</span> <span class="token function">getContentLength</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> IOException <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> uc<span class="token punctuation">.</span><span class="token function">getContentLength</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="测试用例-1"><a href="#测试用例-1" class="headerlink" title="测试用例"></a>测试用例</h3><p>可以跟着这个用例debug一下，看看整体的LaunchedURLClassLoader的loadClass流程</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">LaunchedURLClassLoaderDemo</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">main</span><span class="token punctuation">(</span>String<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        String fatJarPath <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span><span class="token string">"user.home"</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"/IdeaProjects/soil/target/soil-1.0.0.jar"</span><span class="token punctuation">;</span>
+        File fatJar <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">File</span><span class="token punctuation">(</span> fatJarPath<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Assert<span class="token punctuation">.</span><span class="token function">isTrue</span><span class="token punctuation">(</span>fatJar<span class="token punctuation">.</span><span class="token function">exists</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">"Fat jar not found"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        JarFile jarFile <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">JarFile</span><span class="token punctuation">(</span>fatJar<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        JarFile nestedJar <span class="token operator">=</span> jarFile<span class="token punctuation">.</span><span class="token function">getNestedJarFile</span><span class="token punctuation">(</span>jarFile<span class="token punctuation">.</span><span class="token function">getJarEntry</span><span class="token punctuation">(</span><span class="token string">"BOOT-INF/lib/hutool-json-5.8.25.jar"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 内部会直接创建org.springframework.boot.loader.jar.handler，所以在这里可以先不注册java.protocol.handler.pkgs</span>
+        URL jsonUrl <span class="token operator">=</span> nestedJar<span class="token punctuation">.</span><span class="token function">getUrl</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// ======== 此时必须注册jar包处理器org.springframework.boot.loader.jar.handler，才能读取fatjar =========</span>
+        JarFile<span class="token punctuation">.</span><span class="token function">registerUrlProtocolHandler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// eg: jar:file:/Users/reef/IdeaProjects/soil/target/soil-1.0.0.jar!/BOOT-INF/lib/hutool-core-5.8.25.jar!/</span>
+        URL coreUrl <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">URL</span><span class="token punctuation">(</span><span class="token string">"jar:file:"</span> <span class="token operator">+</span> fatJarPath <span class="token operator">+</span> <span class="token string">"!/BOOT-INF/lib/hutool-core-5.8.25.jar!/"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 创建 LaunchedURLClassLoader</span>
+        ClassLoader appClassLoader <span class="token operator">=</span> LaunchedURLClassLoaderDemo<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">(</span>LaunchedURLClassLoader classLoader <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LaunchedURLClassLoader</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">URL</span><span class="token punctuation">[</span><span class="token punctuation">]</span><span class="token punctuation">{</span>jsonUrl<span class="token punctuation">,</span> coreUrl<span class="token punctuation">}</span><span class="token punctuation">,</span> appClassLoader<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            String coreJarClass <span class="token operator">=</span> <span class="token string">"cn.hutool.core.thread.AsyncUtil"</span><span class="token punctuation">;</span>
+            String jsonJarClass <span class="token operator">=</span> <span class="token string">"cn.hutool.json.JSONUtil"</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 确保当前运行环境的classpath没有指定的class</span>
+            Assertions<span class="token punctuation">.</span><span class="token function">assertThrows</span><span class="token punctuation">(</span>ClassNotFoundException<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> appClassLoader<span class="token punctuation">.</span><span class="token function">loadClass</span><span class="token punctuation">(</span>coreJarClass<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            Assertions<span class="token punctuation">.</span><span class="token function">assertThrows</span><span class="token punctuation">(</span>ClassNotFoundException<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> <span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> appClassLoader<span class="token punctuation">.</span><span class="token function">loadClass</span><span class="token punctuation">(</span>jsonJarClass<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 使用自定义的LaunchedURLClassLoader加载class</span>
+            <span class="token function">loadAndAssert</span><span class="token punctuation">(</span>classLoader<span class="token punctuation">,</span> coreJarClass<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token function">loadAndAssert</span><span class="token punctuation">(</span>classLoader<span class="token punctuation">,</span> jsonJarClass<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        jarFile<span class="token punctuation">.</span><span class="token function">close</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">loadAndAssert</span><span class="token punctuation">(</span>ClassLoader loader<span class="token punctuation">,</span> String className<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> clazz <span class="token operator">=</span> loader<span class="token punctuation">.</span><span class="token function">loadClass</span><span class="token punctuation">(</span>className<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Assertions<span class="token punctuation">.</span><span class="token function">assertNotNull</span><span class="token punctuation">(</span>clazz<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Assertions<span class="token punctuation">.</span><span class="token function">assertSame</span><span class="token punctuation">(</span>loader<span class="token punctuation">,</span> clazz<span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">"Class not loaded from expected classloader"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        System<span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">printf</span><span class="token punctuation">(</span><span class="token string">"Loaded class: %-40s → %s%n"</span><span class="token punctuation">,</span> className<span class="token punctuation">,</span> clazz<span class="token punctuation">.</span><span class="token function">getProtectionDomain</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getCodeSource</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getLocation</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="总结-1"><a href="#总结-1" class="headerlink" title="总结"></a>总结</h2><p>通过上诉启动流程和LaunchedURLClassLoader#loadClass源码的分析，现在可以对前面的核心组件进行串联一下</p>
+<ol>
+<li><p><strong>Archive组件仅在fatjar启动阶段使用</strong>，负责<strong>将fatjar内所有资源解析为jar协议的classpath URL</strong>，并用其构造LaunchedURLClassLoader，用于后续类加载的使用</p>
+</li>
+<li><p><strong>JarFile &#x2F; JarEntry &#x2F; URLStreamHandler &#x2F; JarURLConnection</strong>：用于类加载阶段，流程如下</p>
+<blockquote>
+<p>​	LaunchedURLClassLoader#loadClass  →  URLClassPath#getResource → URL#openConnection → <strong>URLStreamHandler 创建 JarURLConnection</strong> → <strong>解析和获取 JarFile 和 JarEntry</strong> → <strong>JarURLConnection#getInputStream</strong> -&gt; <strong>InputStream加载 .class 字节</strong> → defineClass</p>
+</blockquote>
+</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/fatjar/" rel="tag"># fatjar</a>
+              <a href="/tags/LaunchedURLClassLoader/" rel="tag"># LaunchedURLClassLoader</a>
+              <a href="/tags/URLClassLoader/" rel="tag"># URLClassLoader</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2022-01-09/tomcat-session-guan-li/" rel="prev" title="Tomcat-Session管理">
+                  <i class="fa fa-angle-left"></i> Tomcat-Session管理
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="next" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  Spring-事物NOT_SUPPORTED策略下多数据源切换的问题 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">352k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">10:40</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>
