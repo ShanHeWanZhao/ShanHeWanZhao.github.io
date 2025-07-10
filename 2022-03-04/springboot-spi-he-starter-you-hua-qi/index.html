@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	算是一篇SrpingBoot自动配置原理解析的前置文章。首先从源码角度回顾了早期的 spring.factories SPI 加载机制，接着分析了 Spring Boot 2.7.x 引入的基于注解粒度的 .imports 文件机制，展示了其在自动配置解耦方面的优势。并介绍了两个常被 starter 使用的辅助组件：  spring-boot-configuration-processor：生">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SpringBoot（二）— SPI和starter优化器原理">
+<meta property="og:url" content="https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	算是一篇SrpingBoot自动配置原理解析的前置文章。首先从源码角度回顾了早期的 spring.factories SPI 加载机制，接着分析了 Spring Boot 2.7.x 引入的基于注解粒度的 .imports 文件机制，展示了其在自动配置解耦方面的优势。并介绍了两个常被 starter 使用的辅助组件：  spring-boot-configuration-processor：生">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-03-04T12:40:03.000Z">
+<meta property="article:modified_time" content="2022-03-19T11:33:20.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="starter">
+<meta property="article:tag" content="SPI">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/","path":"2022-03-04/springboot-spi-he-starter-you-hua-qi/","title":"SpringBoot（二）— SPI和starter优化器原理"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>SpringBoot（二）— SPI和starter优化器原理 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#SPI%E6%9C%BA%E5%88%B6"><span class="nav-number">1.</span> <span class="nav-text">SPI机制</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#SpringFactoriesLoader"><span class="nav-number">1.1.</span> <span class="nav-text">SpringFactoriesLoader</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ImportCandidates"><span class="nav-number">1.2.</span> <span class="nav-text">ImportCandidates</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#starter%E4%BC%98%E5%8C%96%E5%99%A8"><span class="nav-number">2.</span> <span class="nav-text">starter优化器</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#spring-boot-configuration-processor"><span class="nav-number">2.1.</span> <span class="nav-text">spring-boot-configuration-processor</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%BC%95%E5%85%A5%E7%BB%84%E4%BB%B6"><span class="nav-number">2.1.1.</span> <span class="nav-text">引入组件</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%BB%8B%E7%BB%8D"><span class="nav-number">2.1.2.</span> <span class="nav-text">介绍</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#spring-boot-autoconfigure-processor"><span class="nav-number">2.2.</span> <span class="nav-text">spring-boot-autoconfigure-processor</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%BC%95%E5%85%A5%E7%BB%84%E4%BB%B6-1"><span class="nav-number">2.2.1.</span> <span class="nav-text">引入组件</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%BB%8B%E7%BB%8D-1"><span class="nav-number">2.2.2.</span> <span class="nav-text">介绍</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%9E%E7%8E%B0%E4%B8%80%E4%B8%AAstarter"><span class="nav-number">3.</span> <span class="nav-text">实现一个starter</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E7%B1%BB"><span class="nav-number">3.1.</span> <span class="nav-text">自动配置类</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BC%80%E5%85%B3%E9%85%8D%E7%BD%AE"><span class="nav-number">3.2.</span> <span class="nav-text">开关配置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%90%AF%E5%8A%A8%E6%97%B6%E9%97%B4%E7%9B%91%E5%90%AC%E5%99%A8"><span class="nav-number">3.3.</span> <span class="nav-text">启动时间监听器</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%B6%E9%97%B4%E8%AE%B0%E5%BD%95%E5%AE%9E%E4%BD%93%E7%B1%BB"><span class="nav-number">3.4.</span> <span class="nav-text">时间记录实体类</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6"><span class="nav-number">3.5.</span> <span class="nav-text">配置文件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#pom"><span class="nav-number">3.6.</span> <span class="nav-text">pom</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%B8%E5%85%B3%E9%93%BE%E6%8E%A5"><span class="nav-number">4.</span> <span class="nav-text">相关链接</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">34</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">35</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="SpringBoot（二）— SPI和starter优化器原理 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          SpringBoot（二）— SPI和starter优化器原理
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-03-04 20:40:03" itemprop="dateCreated datePublished" datetime="2022-03-04T20:40:03+08:00">2022-03-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-03-19 19:33:20" itemprop="dateModified" datetime="2022-03-19T19:33:20+08:00">2022-03-19</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/SpringBoot/" itemprop="url" rel="index"><span itemprop="name">SpringBoot</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>8.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	算是一篇SrpingBoot自动配置原理解析的前置文章。首先从源码角度回顾了早期的 <code>spring.factories</code> SPI 加载机制，接着分析了 Spring Boot 2.7.x 引入的基于注解粒度的 <code>.imports</code> 文件机制，展示了其在自动配置解耦方面的优势。并介绍了两个常被 starter 使用的辅助组件：</p>
+<ul>
+<li>spring-boot-configuration-processor：生成配置元数据，IDE使用</li>
+<li>spring-boot-autoconfigure-processor：加速自动配置加载</li>
+</ul>
+<p>​	最后，结合自定义 starter 的实践，附上了完整的测试用例，验证上述机制在实际开发中的可用性</p>
+<span id="more"></span>
+
+<h2 id="SPI机制"><a href="#SPI机制" class="headerlink" title="SPI机制"></a>SPI机制</h2><p>可先看看<a href="https://blog.shanzhao.site/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/#URLClassLoader">这篇文章</a>，了解下如何从ClassLoader的classpath读取到指定资源</p>
+<h3 id="SpringFactoriesLoader"><a href="#SpringFactoriesLoader" class="headerlink" title="SpringFactoriesLoader"></a>SpringFactoriesLoader</h3><p>​	SpringBoot 早期采用的 SPI 扩展机制实现，整体加载逻辑相对简单，负责<strong>从指定 <code>ClassLoader</code> 的所有 <code>classpath</code> 路径中加载并缓存<code>META-INF/spring.factories</code> 文件</strong></p>
+<p>​	这个文件本质上是一个 <code>Properties</code> 格式的配置文件，支持一个 key 对应多个 value，多个 value 之间使用英文逗号分隔</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">class</span> <span class="token class-name">SpringFactoriesLoader</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> String FACTORIES_RESOURCE_LOCATION <span class="token operator">=</span> <span class="token string">"META-INF/spring.factories"</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 加载并缓存指定ClassLoader下的所有META-INF/spring.factories里的配置
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">static</span> Map<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> List<span class="token operator">&lt;</span>String<span class="token operator">>></span> <span class="token function">loadSpringFactories</span><span class="token punctuation">(</span>ClassLoader classLoader<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 从缓存里取</span>
+        Map<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> List<span class="token operator">&lt;</span>String<span class="token operator">>></span> result <span class="token operator">=</span> cache<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>result <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        result <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 返回classpath下所有的META-INF/spring.factories文件URL形式</span>
+            Enumeration<span class="token operator">&lt;</span>URL<span class="token operator">></span> urls <span class="token operator">=</span> classLoader<span class="token punctuation">.</span><span class="token function">getResources</span><span class="token punctuation">(</span>FACTORIES_RESOURCE_LOCATION<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">while</span> <span class="token punctuation">(</span>urls<span class="token punctuation">.</span><span class="token function">hasMoreElements</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                URL url <span class="token operator">=</span> urls<span class="token punctuation">.</span><span class="token function">nextElement</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                UrlResource resource <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">UrlResource</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 读取为Properties</span>
+                Properties properties <span class="token operator">=</span> PropertiesLoaderUtils<span class="token punctuation">.</span><span class="token function">loadProperties</span><span class="token punctuation">(</span>resource<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">for</span> <span class="token punctuation">(</span>Map<span class="token punctuation">.</span>Entry<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token punctuation">,</span> <span class="token operator">?</span><span class="token operator">></span> entry <span class="token operator">:</span> properties<span class="token punctuation">.</span><span class="token function">entrySet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    String factoryTypeName <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>String<span class="token punctuation">)</span> entry<span class="token punctuation">.</span><span class="token function">getKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    String<span class="token punctuation">[</span><span class="token punctuation">]</span> factoryImplementationNames <span class="token operator">=</span> StringUtils
+                            <span class="token punctuation">.</span><span class="token function">commaDelimitedListToStringArray</span><span class="token punctuation">(</span><span class="token punctuation">(</span>String<span class="token punctuation">)</span> entry<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">for</span> <span class="token punctuation">(</span>String factoryImplementationName <span class="token operator">:</span> factoryImplementationNames<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        result<span class="token punctuation">.</span><span class="token function">computeIfAbsent</span><span class="token punctuation">(</span>factoryTypeName<span class="token punctuation">,</span> key <span class="token operator">-</span><span class="token operator">></span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+                                <span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>factoryImplementationName<span class="token punctuation">.</span><span class="token function">trim</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 去重后再转化为不可修改的List</span>
+            result<span class="token punctuation">.</span><span class="token function">replaceAll</span><span class="token punctuation">(</span><span class="token punctuation">(</span>factoryType<span class="token punctuation">,</span> implementations<span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> implementations<span class="token punctuation">.</span><span class="token function">stream</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">distinct</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                    <span class="token punctuation">.</span><span class="token function">collect</span><span class="token punctuation">(</span>Collectors<span class="token punctuation">.</span><span class="token function">collectingAndThen</span><span class="token punctuation">(</span>Collectors<span class="token punctuation">.</span><span class="token function">toList</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> Collections<span class="token operator">:</span><span class="token operator">:</span>unmodifiableList<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 缓存</span>
+            cache<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>classLoader<span class="token punctuation">,</span> result<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">IllegalArgumentException</span><span class="token punctuation">(</span>
+                    <span class="token string">"Unable to load factories from location ["</span> <span class="token operator">+</span> FACTORIES_RESOURCE_LOCATION <span class="token operator">+</span> <span class="token string">"]"</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="ImportCandidates"><a href="#ImportCandidates" class="headerlink" title="ImportCandidates"></a>ImportCandidates</h3><p>​	是SpringBoot 2.7.x版本引入的新的SPI，替代早期的 <code>META-INF/spring.factories</code> 里的部分配置。传统的 <code>spring.factories</code> 文件中将所有自动配置、监听器等内容集中在一个文件中，内容有些杂。为了更加精细化，Spring Boot 引入了基于注解粒度的 <code>.imports</code> 配置机制：<strong>每个注解对应一个独立的配置文件，配置文件名为META-INF&#x2F;spring&#x2F;注解全类名.imports</strong></p>
+<p>​	但SpringBoot现阶段也就@AutoConfiguration和@ManagementContextConfiguration这两个注解用了这个SPI</p>
+<p>​	以常用的@AutoConfiguration为例，其配置文件名如下，是专门替换META-INF&#x2F;spring.factories中org.springframework.boot.autoconfigure.EnableAutoConfiguration的配置</p>
+<blockquote>
+<p>META-INF&#x2F;spring&#x2F;org.springframework.boot.autoconfigure.AutoConfiguration.imports</p>
+</blockquote>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">class</span> <span class="token class-name">ImportCandidates</span> <span class="token keyword">implements</span> <span class="token class-name">Iterable</span><span class="token operator">&lt;</span>String<span class="token operator">></span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> String LOCATION <span class="token operator">=</span> <span class="token string">"META-INF/spring/%s.imports"</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 注释符号</span>
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> String COMMENT_START <span class="token operator">=</span> <span class="token string">"#"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>String<span class="token operator">></span> candidates<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 支持迭代</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> Iterator<span class="token operator">&lt;</span>String<span class="token operator">></span> <span class="token function">iterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>candidates<span class="token punctuation">.</span><span class="token function">iterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> ImportCandidates <span class="token function">load</span><span class="token punctuation">(</span>Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> annotation<span class="token punctuation">,</span> ClassLoader classLoader<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// annotation一般为注解全类名</span>
+        Assert<span class="token punctuation">.</span><span class="token function">notNull</span><span class="token punctuation">(</span>annotation<span class="token punctuation">,</span> <span class="token string">"'annotation' must not be null"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        ClassLoader classLoaderToUse <span class="token operator">=</span> <span class="token function">decideClassloader</span><span class="token punctuation">(</span>classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        String location <span class="token operator">=</span> String<span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span>LOCATION<span class="token punctuation">,</span> annotation<span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 从classLoader的classpath下查找指定文件URL</span>
+        Enumeration<span class="token operator">&lt;</span>URL<span class="token operator">></span> urls <span class="token operator">=</span> <span class="token function">findUrlsInClasspath</span><span class="token punctuation">(</span>classLoaderToUse<span class="token punctuation">,</span> location<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        List<span class="token operator">&lt;</span>String<span class="token operator">></span> importCandidates <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">while</span> <span class="token punctuation">(</span>urls<span class="token punctuation">.</span><span class="token function">hasMoreElements</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            URL url <span class="token operator">=</span> urls<span class="token punctuation">.</span><span class="token function">nextElement</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 解析文件（每行为一个class，并跳过注释）</span>
+            importCandidates<span class="token punctuation">.</span><span class="token function">addAll</span><span class="token punctuation">(</span><span class="token function">readCandidateConfigurations</span><span class="token punctuation">(</span>url<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">ImportCandidates</span><span class="token punctuation">(</span>importCandidates<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="starter优化器"><a href="#starter优化器" class="headerlink" title="starter优化器"></a>starter优化器</h2><h3 id="spring-boot-configuration-processor"><a href="#spring-boot-configuration-processor" class="headerlink" title="spring-boot-configuration-processor"></a>spring-boot-configuration-processor</h3><h4 id="引入组件"><a href="#引入组件" class="headerlink" title="引入组件"></a>引入组件</h4><pre class="line-numbers language-xml"><code class="language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">></span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">></span></span>spring-boot-configuration-processor<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>optional</span><span class="token punctuation">></span></span>true<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>optional</span><span class="token punctuation">></span></span> <span class="token comment" spellcheck="true">&lt;!-- 避免被传递依赖 --></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">></span></span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="介绍"><a href="#介绍" class="headerlink" title="介绍"></a>介绍</h4><p>​	这个组件对项目的<strong>运行时没有任何影响</strong>，它的作用如下：</p>
+<blockquote>
+<p>​	会在<strong>编译期</strong> 自动解析使用了 <code>@ConfigurationProperties</code> 等注解的配置类，将配置项的 <strong>属性名、类型、默认值、Javadoc 注释</strong> 等信息生成到<br> <code>META-INF/spring-configuration-metadata.json</code> 文件中</p>
+</blockquote>
+<p>​	这个文件主要供IDE使用（如IDEA），用于在编辑 <code>application.yml</code>时提供<strong>配置自动补全、类型校验和快速跳转到对应配置类</strong>，所以也没必要把这个依赖传递下去</p>
+<h3 id="spring-boot-autoconfigure-processor"><a href="#spring-boot-autoconfigure-processor" class="headerlink" title="spring-boot-autoconfigure-processor"></a>spring-boot-autoconfigure-processor</h3><h4 id="引入组件-1"><a href="#引入组件-1" class="headerlink" title="引入组件"></a>引入组件</h4><pre class="line-numbers language-xml"><code class="language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">></span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">></span></span>spring-boot-autoconfigure-processor<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>optional</span><span class="token punctuation">></span></span>true<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>optional</span><span class="token punctuation">></span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">></span></span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="介绍-1"><a href="#介绍-1" class="headerlink" title="介绍"></a>介绍</h4><p>​	一个作用在编译期，用于<strong>扫描自动配置类上的部分注解，将解析结果提前生成到<code>META-INF/spring-autoconfigure-metadata.properties</code>文件</strong></p>
+<p>​	 通过解析工具AutoConfigureAnnotationProcessor可知，支持的注解如下</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token annotation punctuation">@SupportedAnnotationTypes</span><span class="token punctuation">(</span><span class="token punctuation">{</span> <span class="token string">"org.springframework.boot.autoconfigure.condition.ConditionalOnClass"</span><span class="token punctuation">,</span>
+        <span class="token string">"org.springframework.boot.autoconfigure.condition.ConditionalOnBean"</span><span class="token punctuation">,</span>
+        <span class="token string">"org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate"</span><span class="token punctuation">,</span>
+        <span class="token string">"org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication"</span><span class="token punctuation">,</span>
+        <span class="token string">"org.springframework.boot.autoconfigure.AutoConfigureBefore"</span><span class="token punctuation">,</span>
+        <span class="token string">"org.springframework.boot.autoconfigure.AutoConfigureAfter"</span><span class="token punctuation">,</span>
+        <span class="token string">"org.springframework.boot.autoconfigure.AutoConfigureOrder"</span><span class="token punctuation">,</span>
+        <span class="token string">"org.springframework.boot.autoconfigure.AutoConfiguration"</span> <span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p><code>META-INF/spring-autoconfigure-metadata.properties</code>文件内部信息格式如下，<strong>每一行表示某个自动配置类的某个注解信息</strong>：</p>
+<blockquote>
+<p>配置类全类名.上述注解简单名&#x3D;注解值</p>
+<p>site.xxx.Demo.ConditionalOnClass&#x3D;org.springframework.boot.context.event.ApplicationReadyEvent</p>
+</blockquote>
+<p>​	<strong>该文件会在SpringBoot启动时被AutoConfigurationMetadataLoader加载，这种预解析的结果比反射或asm实时解析相关注解更快，以此来加速程序的启动。</strong></p>
+<h2 id="实现一个starter"><a href="#实现一个starter" class="headerlink" title="实现一个starter"></a>实现一个starter</h2><p>一个简单的starter，主要目的是在项目成功启动后打印成功信息和耗费时间的日志，且提供可配置的开关和时间格式。时间统计方式：ApplicationStartingEvent到ApplicationReadyEvent这段时间</p>
+<h3 id="自动配置类"><a href="#自动配置类" class="headerlink" title="自动配置类"></a>自动配置类</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token annotation punctuation">@AutoConfiguration</span>
+<span class="token annotation punctuation">@AutoConfigureAfter</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactoryAutoConfiguration"</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@EnableConfigurationProperties</span><span class="token punctuation">(</span>StartupLoggerProperties<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@ConditionalOnClass</span><span class="token punctuation">(</span>ApplicationReadyEvent<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@ConditionalOnProperty</span><span class="token punctuation">(</span>prefix <span class="token operator">=</span> <span class="token string">"startup.logger"</span><span class="token punctuation">,</span> name <span class="token operator">=</span> <span class="token string">"enabled"</span><span class="token punctuation">,</span> havingValue <span class="token operator">=</span> <span class="token string">"true"</span><span class="token punctuation">,</span> matchIfMissing <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">StartupLoggerAutoConfiguration</span> <span class="token punctuation">{</span>
+
+
+    <span class="token annotation punctuation">@Bean</span>
+    <span class="token keyword">public</span> ApplicationListener<span class="token operator">&lt;</span>ApplicationReadyEvent<span class="token operator">></span> <span class="token function">startupLoggerListener</span><span class="token punctuation">(</span>StartupLoggerProperties props<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> event <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+            <span class="token keyword">long</span> cost <span class="token operator">=</span> StartupCostTimeRecorder<span class="token punctuation">.</span><span class="token function">cost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            String timeStr <span class="token operator">=</span> props<span class="token punctuation">.</span><span class="token function">getTimeUnit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span><span class="token string">"s"</span><span class="token punctuation">)</span> <span class="token operator">?</span> <span class="token punctuation">(</span>cost <span class="token operator">/</span> <span class="token number">1000.0</span> <span class="token operator">+</span> <span class="token string">"s"</span><span class="token punctuation">)</span> <span class="token operator">:</span> cost <span class="token operator">+</span> <span class="token string">"ms"</span><span class="token punctuation">;</span>
+            String appName <span class="token operator">=</span> event<span class="token punctuation">.</span><span class="token function">getApplicationContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getEnvironment</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span><span class="token string">"spring.application.name"</span><span class="token punctuation">,</span> <span class="token string">"Application"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            Logger log <span class="token operator">=</span> LoggerFactory<span class="token punctuation">.</span><span class="token function">getLogger</span><span class="token punctuation">(</span><span class="token string">"StartupLogger"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"========================================================"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"========================================================"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"=======   {} startup successful, cost time：{}   ======="</span><span class="token punctuation">,</span> appName<span class="token punctuation">,</span> timeStr<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"========================================================"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            log<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"========================================================"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="开关配置"><a href="#开关配置" class="headerlink" title="开关配置"></a>开关配置</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token annotation punctuation">@ConfigurationProperties</span><span class="token punctuation">(</span><span class="token string">"startup.logger"</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">StartupLoggerProperties</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">/**
+     * 是否开启
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> enabled <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 时间格式：ms, s
+     */</span>
+    <span class="token keyword">private</span> String timeUnit <span class="token operator">=</span> <span class="token string">"ms"</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">isEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> enabled<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setEnabled</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> enabled<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>enabled <span class="token operator">=</span> enabled<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> String <span class="token function">getTimeUnit</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> timeUnit<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setTimeUnit</span><span class="token punctuation">(</span>String timeUnit<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>timeUnit <span class="token operator">=</span> timeUnit<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="启动时间监听器"><a href="#启动时间监听器" class="headerlink" title="启动时间监听器"></a>启动时间监听器</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">StartupStartListener</span> <span class="token keyword">implements</span> <span class="token class-name">ApplicationListener</span><span class="token operator">&lt;</span>ApplicationStartingEvent<span class="token operator">></span> <span class="token punctuation">{</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onApplicationEvent</span><span class="token punctuation">(</span>ApplicationStartingEvent event<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        StartupCostTimeRecorder<span class="token punctuation">.</span><span class="token function">recordStart</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="时间记录实体类"><a href="#时间记录实体类" class="headerlink" title="时间记录实体类"></a>时间记录实体类</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">StartupCostTimeRecorder</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> Long startTime <span class="token operator">=</span> null<span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">recordStart</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        startTime <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">long</span> <span class="token function">cost</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> startTime<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="配置文件"><a href="#配置文件" class="headerlink" title="配置文件"></a>配置文件</h3><ol>
+<li><p>META-INF&#x2F;spring.factories</p>
+<pre class="line-numbers language-properties"><code class="language-properties"><span class="token attr-name">org.springframework.context.ApplicationListener</span><span class="token punctuation">=</span><span class="token attr-value">\
+site.shanzhao.startup.logger.config.StartupStartListener</span>
+
+<span class="token comment" spellcheck="true"># 还是兼容下2.7.x版本以下的自动配置</span>
+<span class="token attr-name">org.springframework.boot.autoconfigure.EnableAutoConfiguration</span><span class="token punctuation">=</span><span class="token attr-value">\
+site.shanzhao.startup.logger.config.StartupLoggerAutoConfiguration</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+<li><p>META-INF&#x2F;spring&#x2F;org.springframework.boot.autoconfigure.AutoConfiguration.imports</p>
+<pre class="line-numbers language-java"><code class="language-java">site<span class="token punctuation">.</span>shanzhao<span class="token punctuation">.</span>startup<span class="token punctuation">.</span>logger<span class="token punctuation">.</span>config<span class="token punctuation">.</span>StartupLoggerAutoConfiguration
+<span aria-hidden="true" class="line-numbers-rows"><span></span></span></code></pre>
+</li>
+</ol>
+<h3 id="pom"><a href="#pom" class="headerlink" title="pom"></a>pom</h3><pre class="line-numbers language-xml"><code class="language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependencies</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">></span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">></span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">></span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">></span></span>spring-boot-starter<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">></span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">></span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">></span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">></span></span>spring-boot-configuration-processor<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">></span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>optional</span><span class="token punctuation">></span></span>true<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>optional</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>dependency</span><span class="token punctuation">></span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>groupId</span><span class="token punctuation">></span></span>org.springframework.boot<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>groupId</span><span class="token punctuation">></span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>artifactId</span><span class="token punctuation">></span></span>spring-boot-autoconfigure-processor<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>artifactId</span><span class="token punctuation">></span></span>
+        <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>optional</span><span class="token punctuation">></span></span>true<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>optional</span><span class="token punctuation">></span></span>
+    <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependency</span><span class="token punctuation">></span></span>
+
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>dependencies</span><span class="token punctuation">></span></span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="相关链接"><a href="#相关链接" class="headerlink" title="相关链接"></a>相关链接</h2><ul>
+<li><a href="https://blog.shanzhao.site/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/#URLClassLoader">从ClassLoader的classpath读取指定资源</a></li>
+<li><a target="_blank" rel="noopener external nofollow noreferrer" href="https://github.com/ShanHeWanZhao/soil/tree/master/spring-boot-startup-logger-starter">starter示例完整代码</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/starter/" rel="tag"># starter</a>
+              <a href="/tags/SPI/" rel="tag"># SPI</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" rel="prev" title="Spring-事物NOT_SUPPORTED策略下多数据源切换的问题">
+                  <i class="fa fa-angle-left"></i> Spring-事物NOT_SUPPORTED策略下多数据源切换的问题
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/" rel="next" title="CloudFlare-CDN缓存清除">
+                  CloudFlare-CDN缓存清除 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">361k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">10:57</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

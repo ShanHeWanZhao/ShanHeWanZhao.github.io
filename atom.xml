@@ -37,6 +37,32 @@
   </entry>
   
   <entry>
+    <title>SpringBoot（二）— SPI和starter优化器原理</title>
+    <link href="https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/"/>
+    <id>https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/</id>
+    <published>2022-03-04T12:40:03.000Z</published>
+    <updated>2022-03-19T11:33:20.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	算是一篇SrpingBoot自动配置原理解析的前置文章。首先从源码角度回顾了早期的 &lt;code&gt;spring.factories&lt;/code&gt; SPI 加载机制，接着分析了 Spring Boot 2.7.x 引入的基于注解粒度的 &lt;code&gt;.imports&lt;/code&gt; 文件机制，展示了其在自动配置解耦方面的优势。并介绍了两个常被 starter 使用的辅助组件：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;spring-boot-configuration-processor：生成配置元数据，IDE使用&lt;/li&gt;
+&lt;li&gt;spring-boot-autoconfigure-processor：加速自动配置加载&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;​	最后，结合自定义 starter 的实践，附上了完整的测试用例，验证上述机制在实际开发中的可用性&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="SpringBoot" scheme="https://blog.shanzhao.site/categories/SpringBoot/"/>
+    
+    
+    <category term="starter" scheme="https://blog.shanzhao.site/tags/starter/"/>
+    
+    <category term="SPI" scheme="https://blog.shanzhao.site/tags/SPI/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</title>
     <link href="https://blog.shanzhao.site/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/"/>
     <id>https://blog.shanzhao.site/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/</id>
@@ -112,9 +138,9 @@
     
     <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
     
-    <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
-    
     <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
+    
+    <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
     
   </entry>
   
@@ -136,9 +162,9 @@
     
     <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
     
-    <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
-    
     <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
+    
+    <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
     
   </entry>
   
@@ -400,30 +426,9 @@
     <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
     
     
-    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
-    
     <category term="AOP" scheme="https://blog.shanzhao.site/tags/AOP/"/>
     
-  </entry>
-  
-  <entry>
-    <title>Spring-AOP</title>
-    <link href="https://blog.shanzhao.site/2021-02-08/spring-aop/"/>
-    <id>https://blog.shanzhao.site/2021-02-08/spring-aop/</id>
-    <published>2021-02-08T13:16:27.000Z</published>
-    <updated>2021-02-08T13:16:27.000Z</updated>
-    
-    
-    <summary type="html">&lt;p&gt;​	从源码分析了Spring AOP的实现逻辑，以及利用arthas对代理class进行反编译以更加清晰的理解源码流程&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
-    
-    
     <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
-    
-    <category term="AOP" scheme="https://blog.shanzhao.site/tags/AOP/"/>
     
   </entry>
   
