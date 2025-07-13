@@ -37,6 +37,28 @@
   </entry>
   
   <entry>
+    <title>SpringBoot（三）— 自动配置源码解析</title>
+    <link href="https://blog.shanzhao.site/2022-03-26/springboot-zi-dong-pei-zhi-yuan-ma-jie-xi/"/>
+    <id>https://blog.shanzhao.site/2022-03-26/springboot-zi-dong-pei-zhi-yuan-ma-jie-xi/</id>
+    <published>2022-03-26T14:11:03.000Z</published>
+    <updated>2022-04-14T10:45:20.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	基于 Spring Boot 2.7.x 版本，深入剖析了 &lt;code&gt;@EnableAutoConfiguration&lt;/code&gt; 注解的实现原理，重点解析了其背后通过 &lt;code&gt;DeferredImportSelector&lt;/code&gt; 实现的自动配置机制。特别对 &lt;code&gt;@AutoConfigureBefore&lt;/code&gt; 与 &lt;code&gt;@AutoConfigureAfter&lt;/code&gt; 所涉及的 &lt;strong&gt;DFS 拓扑排序逻辑&lt;/strong&gt; 进行了详细的分析，揭示了自动配置类加载顺序的核心控制机制&lt;/p&gt;
+&lt;p&gt;​	最后，还分析了 2.7.0 版本新增的 &lt;code&gt;@AutoConfiguration&lt;/code&gt; 注解的&lt;strong&gt;特殊语义&lt;/strong&gt;，包括其与&lt;strong&gt;新的 &lt;code&gt;.imports&lt;/code&gt; SPI 文件的绑定&lt;/strong&gt;、&lt;strong&gt;默认排除扫描机制&lt;/strong&gt;（&lt;code&gt;AutoConfigurationExcludeFilter&lt;/code&gt;）。并给出了自己的使用建议&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="SpringBoot" scheme="https://blog.shanzhao.site/categories/SpringBoot/"/>
+    
+    
+    <category term="拓扑排序" scheme="https://blog.shanzhao.site/tags/%E6%8B%93%E6%89%91%E6%8E%92%E5%BA%8F/"/>
+    
+    <category term="自动配置" scheme="https://blog.shanzhao.site/tags/%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE/"/>
+    
+  </entry>
+  
+  <entry>
     <title>SpringBoot（二）— SPI和starter优化器原理</title>
     <link href="https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/"/>
     <id>https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/</id>
@@ -100,6 +122,8 @@
     
     <category term="URLClassLoader" scheme="https://blog.shanzhao.site/tags/URLClassLoader/"/>
     
+    <category term="类加载器" scheme="https://blog.shanzhao.site/tags/%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8/"/>
+    
   </entry>
   
   <entry>
@@ -138,9 +162,9 @@
     
     <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
     
-    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
-    
     <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
+    
+    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
     
   </entry>
   
@@ -162,9 +186,9 @@
     
     <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
     
-    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
-    
     <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
+    
+    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
     
   </entry>
   
@@ -407,28 +431,6 @@
     
     
     <category term="Transactional注解" scheme="https://blog.shanzhao.site/tags/Transactional%E6%B3%A8%E8%A7%A3/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Spring-AbstractAdvisingBeanPostProcessor</title>
-    <link href="https://blog.shanzhao.site/2021-02-17/spring-abstractadvisingbeanpostprocessor/"/>
-    <id>https://blog.shanzhao.site/2021-02-17/spring-abstractadvisingbeanpostprocessor/</id>
-    <published>2021-02-17T11:15:27.000Z</published>
-    <updated>2021-02-17T11:15:27.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	从源码分析了AbstractAdvisingBeanPostProcessor的作用，以及和直接将Advisor注入到容器中使用的区别&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
-    
-    
-    <category term="AOP" scheme="https://blog.shanzhao.site/tags/AOP/"/>
-    
-    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
     
   </entry>
   
