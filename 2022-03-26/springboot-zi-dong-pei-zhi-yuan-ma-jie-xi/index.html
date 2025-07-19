@@ -165,7 +165,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#EnableAutoConfiguration"><span class="nav-number">1.</span> <span class="nav-text">@EnableAutoConfiguration</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#DeferredImportSelector"><span class="nav-number">2.</span> <span class="nav-text">DeferredImportSelector</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#AutoConfigurationImportSelector"><span class="nav-number">2.1.</span> <span class="nav-text">AutoConfigurationImportSelector</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81"><span class="nav-number">2.1.1.</span> <span class="nav-text">核心代码</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AutoConfigurationImportSelector-AutoConfigurationGroup"><span class="nav-number">2.2.</span> <span class="nav-text">AutoConfigurationImportSelector.AutoConfigurationGroup</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81-1"><span class="nav-number">2.2.1.</span> <span class="nav-text">核心代码</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#AutoConfigurationSorter"><span class="nav-number">2.2.2.</span> <span class="nav-text">AutoConfigurationSorter</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%8E%92%E5%BA%8F%E5%8E%9F%E7%90%86"><span class="nav-number">2.2.2.1.</span> <span class="nav-text">排序原理</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81-2"><span class="nav-number">2.2.2.2.</span> <span class="nav-text">核心代码</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#AutoConfiguration"><span class="nav-number">3.</span> <span class="nav-text">@AutoConfiguration</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%89%B9%E6%AE%8A%E8%AF%AD%E4%B9%89"><span class="nav-number">3.1.</span> <span class="nav-text">特殊语义</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%96%B0%E7%9A%84SPI"><span class="nav-number">3.1.1.</span> <span class="nav-text">新的SPI</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#AutoConfigurationExcludeFilter"><span class="nav-number">3.1.2.</span> <span class="nav-text">AutoConfigurationExcludeFilter</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81-3"><span class="nav-number">3.1.2.1.</span> <span class="nav-text">核心代码</span></a></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">3.2.</span> <span class="nav-text">总结</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%B8%E5%85%B3%E9%93%BE%E6%8E%A5"><span class="nav-number">4.</span> <span class="nav-text">相关链接</span></a></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#EnableAutoConfiguration"><span class="nav-number">1.</span> <span class="nav-text">@EnableAutoConfiguration</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#DeferredImportSelector"><span class="nav-number">2.</span> <span class="nav-text">DeferredImportSelector</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#AutoConfigurationImportSelector"><span class="nav-number">2.1.</span> <span class="nav-text">AutoConfigurationImportSelector</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81"><span class="nav-number">2.1.1.</span> <span class="nav-text">核心代码</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AutoConfigurationGroup"><span class="nav-number">2.2.</span> <span class="nav-text">AutoConfigurationGroup</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81-1"><span class="nav-number">2.2.1.</span> <span class="nav-text">核心代码</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#AutoConfigurationSorter"><span class="nav-number">2.2.2.</span> <span class="nav-text">AutoConfigurationSorter</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%8E%92%E5%BA%8F%E5%8E%9F%E7%90%86"><span class="nav-number">2.2.2.1.</span> <span class="nav-text">排序原理</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81-2"><span class="nav-number">2.2.2.2.</span> <span class="nav-text">核心代码</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#AutoConfiguration"><span class="nav-number">3.</span> <span class="nav-text">@AutoConfiguration</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%89%B9%E6%AE%8A%E8%AF%AD%E4%B9%89"><span class="nav-number">3.1.</span> <span class="nav-text">特殊语义</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%96%B0%E7%9A%84SPI"><span class="nav-number">3.1.1.</span> <span class="nav-text">新的SPI</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#AutoConfigurationExcludeFilter"><span class="nav-number">3.1.2.</span> <span class="nav-text">AutoConfigurationExcludeFilter</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E4%BB%A3%E7%A0%81-3"><span class="nav-number">3.1.2.1.</span> <span class="nav-text">核心代码</span></a></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">3.2.</span> <span class="nav-text">总结</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%B8%E5%85%B3%E9%93%BE%E6%8E%A5"><span class="nav-number">4.</span> <span class="nav-text">相关链接</span></a></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -180,7 +180,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">35</span>
+          <span class="site-state-item-count">36</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
@@ -191,7 +191,7 @@
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">37</span>
+        <span class="site-state-item-count">39</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
@@ -371,7 +371,7 @@
 
 <span class="token punctuation">}</span>
 <span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h3 id="AutoConfigurationImportSelector-AutoConfigurationGroup"><a href="#AutoConfigurationImportSelector-AutoConfigurationGroup" class="headerlink" title="AutoConfigurationImportSelector.AutoConfigurationGroup"></a>AutoConfigurationImportSelector.AutoConfigurationGroup</h3><p>是自动配置类导入的最终调度执行者，由 <code>ConfigurationClassParser</code> 在配置类解析流程的最后阶段统一触发，调用链如下：：</p>
+<h3 id="AutoConfigurationGroup"><a href="#AutoConfigurationGroup" class="headerlink" title="AutoConfigurationGroup"></a>AutoConfigurationGroup</h3><p>是自动配置类导入的最终调度执行者，由 <code>ConfigurationClassParser</code> 在配置类解析流程的最后阶段统一触发，调用链如下：：</p>
 <blockquote>
 <ol>
 <li>ConfigurationClassParser#parse</li>
@@ -634,8 +634,8 @@
                 </a>
             </div>
             <div class="post-nav-item">
-                <a href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/" rel="next" title="CloudFlare-CDN缓存清除">
-                  CloudFlare-CDN缓存清除 <i class="fa fa-angle-right"></i>
+                <a href="/2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/" rel="next" title="SpringBoot（四） — Condition相关原理">
+                  SpringBoot（四） — Condition相关原理 <i class="fa fa-angle-right"></i>
                 </a>
             </div>
           </div>
@@ -671,14 +671,14 @@
       <i class="fa fa-chart-line"></i>
     </span>
       <span>站点总字数：</span>
-    <span title="站点总字数">373k</span>
+    <span title="站点总字数">400k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">11:18</span>
+    <span title="站点阅读时长">12:07</span>
   </span>
 </div>
 

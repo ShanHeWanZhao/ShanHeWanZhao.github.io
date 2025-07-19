@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	基于Spring Boot 2.7.x 版本，深入分析了OnBean、OnClass、OnProperty这三类常见Condition的源码实现，在此基础上，探讨了 @Conditional 注解的组合用法（与、或、非逻辑）的处理机制。 ​	同时，分析了Condition匹配结果的debug支持实现，以及 ConfigurationClassPostProcessor 中Condition判断">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SpringBoot（四） — Condition相关原理">
+<meta property="og:url" content="https://blog.shanzhao.site/2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	基于Spring Boot 2.7.x 版本，深入分析了OnBean、OnClass、OnProperty这三类常见Condition的源码实现，在此基础上，探讨了 @Conditional 注解的组合用法（与、或、非逻辑）的处理机制。 ​	同时，分析了Condition匹配结果的debug支持实现，以及 ConfigurationClassPostProcessor 中Condition判断">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://img.shanzhao.site/file/1752843742235_springboot-import-tracked-condition.png">
+<meta property="article:published_time" content="2022-04-21T12:40:03.000Z">
+<meta property="article:modified_time" content="2022-04-18T11:33:20.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="Condition">
+<meta property="article:tag" content="回溯">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://img.shanzhao.site/file/1752843742235_springboot-import-tracked-condition.png">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/","path":"2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/","title":"SpringBoot（四） — Condition相关原理"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>SpringBoot（四） — Condition相关原理 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Conditional%E6%B3%A8%E8%A7%A3"><span class="nav-number">1.</span> <span class="nav-text">Conditional注解</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#OnBeanCondition"><span class="nav-number">1.1.</span> <span class="nav-text">OnBeanCondition</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Spec"><span class="nav-number">1.1.1.</span> <span class="nav-text">Spec</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#MatchResult"><span class="nav-number">1.1.2.</span> <span class="nav-text">MatchResult</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#getMatchingBeans"><span class="nav-number">1.1.3.</span> <span class="nav-text">getMatchingBeans</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#getMatchOutcome"><span class="nav-number">1.1.4.</span> <span class="nav-text">getMatchOutcome</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#ConditionalOnBean"><span class="nav-number">1.1.4.1.</span> <span class="nav-text">@ConditionalOnBean</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#ConditionalOnSingleCandidate"><span class="nav-number">1.1.4.2.</span> <span class="nav-text">@ConditionalOnSingleCandidate</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#ConditionalOnMissingBean"><span class="nav-number">1.1.4.3.</span> <span class="nav-text">@ConditionalOnMissingBean</span></a></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#OnClassCondition"><span class="nav-number">1.2.</span> <span class="nav-text">OnClassCondition</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#ClassNameFilter"><span class="nav-number">1.2.1.</span> <span class="nav-text">ClassNameFilter</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#getMatchOutcome-1"><span class="nav-number">1.2.2.</span> <span class="nav-text">getMatchOutcome</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#ConditionalOnClass"><span class="nav-number">1.2.2.1.</span> <span class="nav-text">@ConditionalOnClass</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#ConditionalOnMissingClass"><span class="nav-number">1.2.2.2.</span> <span class="nav-text">@ConditionalOnMissingClass</span></a></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#OnPropertyCondition"><span class="nav-number">1.3.</span> <span class="nav-text">OnPropertyCondition</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Spec-1"><span class="nav-number">1.3.1.</span> <span class="nav-text">Spec</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#getMatchOutcome-2"><span class="nav-number">1.3.2.</span> <span class="nav-text">getMatchOutcome</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Conditional%E7%BB%84%E5%90%88"><span class="nav-number">2.</span> <span class="nav-text">Conditional组合</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#AbstractNestedCondition"><span class="nav-number">2.1.</span> <span class="nav-text">AbstractNestedCondition</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#AllNestedConditions"><span class="nav-number">2.1.1.</span> <span class="nav-text">AllNestedConditions</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#AnyNestedCondition"><span class="nav-number">2.1.2.</span> <span class="nav-text">AnyNestedCondition</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#NoneNestedConditions"><span class="nav-number">2.1.3.</span> <span class="nav-text">NoneNestedConditions</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Report%E5%92%8CListener"><span class="nav-number">3.</span> <span class="nav-text">Report和Listener</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ConditionEvaluationReport"><span class="nav-number">3.1.</span> <span class="nav-text">ConditionEvaluationReport</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConditionEvaluationReportLoggingListener"><span class="nav-number">3.2.</span> <span class="nav-text">ConditionEvaluationReportLoggingListener</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Condition%E8%A7%A6%E5%8F%91%E6%9C%BA%E5%88%B6"><span class="nav-number">4.</span> <span class="nav-text">Condition触发机制</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ConditionEvaluator"><span class="nav-number">4.1.</span> <span class="nav-text">ConditionEvaluator</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#TrackedConditionEvaluator"><span class="nav-number">4.2.</span> <span class="nav-text">TrackedConditionEvaluator</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%A7%A6%E5%8F%91%E5%9C%B0%E7%82%B9"><span class="nav-number">4.3.</span> <span class="nav-text">触发地点</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%B5%8B%E8%AF%95%E7%94%A8%E4%BE%8B"><span class="nav-number">5.</span> <span class="nav-text">测试用例</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Condition%E7%BB%84%E5%90%88-AnyNestedCondition"><span class="nav-number">5.1.</span> <span class="nav-text">Condition组合-AnyNestedCondition</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E9%85%8D%E7%BD%AE"><span class="nav-number">5.1.1.</span> <span class="nav-text">配置</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#TrackedConditionEvaluator%E6%B5%8B%E8%AF%95"><span class="nav-number">5.2.</span> <span class="nav-text">TrackedConditionEvaluator测试</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%84%9F%E6%83%B3"><span class="nav-number">6.</span> <span class="nav-text">感想</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%B8%E5%85%B3%E9%93%BE%E6%8E%A5"><span class="nav-number">7.</span> <span class="nav-text">相关链接</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">36</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">7</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">39</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="SpringBoot（四） — Condition相关原理 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          SpringBoot（四） — Condition相关原理
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-04-21 20:40:03" itemprop="dateCreated datePublished" datetime="2022-04-21T20:40:03+08:00">2022-04-21</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-04-18 19:33:20" itemprop="dateModified" datetime="2022-04-18T19:33:20+08:00">2022-04-18</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/SpringBoot/" itemprop="url" rel="index"><span itemprop="name">SpringBoot</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>27k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>49 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	基于Spring Boot 2.7.x 版本，深入分析了<strong>OnBean、OnClass、OnProperty这三类常见Condition的源码实现</strong>，在此基础上，探讨了 <code>@Conditional</code> 注解的<strong>组合用法</strong>（<strong>与、或、非</strong>逻辑）的处理机制。</p>
+<p>​	同时，分析了<strong>Condition匹配结果的debug支持</strong>实现，以及 <code>ConfigurationClassPostProcessor</code> 中<strong>Condition判断的触发流程</strong>，重点关注其<strong>通过 <code>importedBy</code> 链支持的 <code>TrackedConditionEvaluator</code> 回溯与剪枝优化策略</strong></p>
+<p>​	最后，提供了逻辑<strong>或</strong><code>@Conditional</code>组合与 <strong>importedBy路径 skip 判定的测试用例</strong>，以验证整体逻辑的正确性</p>
+<span id="more"></span>
+
+<h2 id="Conditional注解"><a href="#Conditional注解" class="headerlink" title="Conditional注解"></a>Conditional注解</h2><p>​	项目中<strong>常用的@ConditionalOnBean，@ConditionalOnClass，@ConditionalOnProperty等注解都有一个共同的元注解@Conditional</strong>，Spring通过这个<strong>元注解@Conditional中指定的<code>Condition</code>类来判断某个配置类或Bean 是否应该被加载</strong>。<code>Condition</code>接口定义如下</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token annotation punctuation">@FunctionalInterface</span>
+<span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">Condition</span> <span class="token punctuation">{</span>
+    <span class="token keyword">boolean</span> <span class="token function">matches</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotatedTypeMetadata metadata<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<p>​	其中参数作用如下：</p>
+<ul>
+<li><strong>ConditionContext</strong>：提供**<code>Condition</code>评估所需的上下文环境**。包括BeanFactory，BeanDefinitionRegistry和Environment等组件</li>
+<li><strong>AnnotatedTypeMetadata</strong>：当前@Conditional所标注的类或方法上的所有注解元信息</li>
+</ul>
+<p>我这里只分析了常用的bean，properties，和class相关的<code>Condition</code>。套路都一样，剩下的可自行分析</p>
+<h3 id="OnBeanCondition"><a href="#OnBeanCondition" class="headerlink" title="OnBeanCondition"></a>OnBeanCondition</h3><p>​	<strong>是@ConditionalOnBean、@ConditionalOnSingleCandidate、@ConditionalOnMissingBean</strong>专用的<code>Condition</code>实现类，核心作用是根据注解中指定的 <strong>type &#x2F; name &#x2F; annotation</strong> 等参数，判断<strong>当前容器中是否存在匹配的 Bean，并根据注解功能来解析结果</strong></p>
+<h4 id="Spec"><a href="#Spec" class="headerlink" title="Spec"></a>Spec</h4><p>​	是<strong>对上述三个注解的统一解析封装结构，用于抽象出注解中的条件信息</strong>，每一个配置类或方法上存在的相关注解，最终都会被解析为一个 <code>Spec</code> 实例，其具体参数如下</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Spec</span><span class="token operator">&lt;</span>A <span class="token keyword">extends</span> <span class="token class-name">Annotation</span><span class="token operator">></span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> ClassLoader classLoader<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Class<span class="token operator">&lt;</span><span class="token operator">?</span> <span class="token keyword">extends</span> <span class="token class-name">Annotation</span><span class="token operator">></span> annotationType<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Set<span class="token operator">&lt;</span>String<span class="token operator">></span> names<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Set<span class="token operator">&lt;</span>String<span class="token operator">></span> types<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Set<span class="token operator">&lt;</span>String<span class="token operator">></span> annotations<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Set<span class="token operator">&lt;</span>String<span class="token operator">></span> ignoredTypes<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Set<span class="token operator">&lt;</span>Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">>></span> parameterizedContainers<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> SearchStrategy strategy<span class="token punctuation">;</span>
+
+    <span class="token function">Spec</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotatedTypeMetadata metadata<span class="token punctuation">,</span> MergedAnnotations annotations<span class="token punctuation">,</span>
+            Class<span class="token operator">&lt;</span>A<span class="token operator">></span> annotationType<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        MultiValueMap<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> Object<span class="token operator">></span> attributes <span class="token operator">=</span> annotations<span class="token punctuation">.</span><span class="token function">stream</span><span class="token punctuation">(</span>annotationType<span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">filter</span><span class="token punctuation">(</span>MergedAnnotationPredicates<span class="token punctuation">.</span><span class="token function">unique</span><span class="token punctuation">(</span>MergedAnnotation<span class="token operator">:</span><span class="token operator">:</span>getMetaTypes<span class="token punctuation">)</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">collect</span><span class="token punctuation">(</span>MergedAnnotationCollectors<span class="token punctuation">.</span><span class="token function">toMultiValueMap</span><span class="token punctuation">(</span>Adapt<span class="token punctuation">.</span>CLASS_TO_STRING<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        MergedAnnotation<span class="token operator">&lt;</span>A<span class="token operator">></span> annotation <span class="token operator">=</span> annotations<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>annotationType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>classLoader <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>annotationType <span class="token operator">=</span> annotationType<span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// name属性解析，即beanName</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>names <span class="token operator">=</span> <span class="token function">extract</span><span class="token punctuation">(</span>attributes<span class="token punctuation">,</span> <span class="token string">"name"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// annotation属性，即bean上的注解</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>annotations <span class="token operator">=</span> <span class="token function">extract</span><span class="token punctuation">(</span>attributes<span class="token punctuation">,</span> <span class="token string">"annotation"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>ignoredTypes <span class="token operator">=</span> <span class="token function">extract</span><span class="token punctuation">(</span>attributes<span class="token punctuation">,</span> <span class="token string">"ignored"</span><span class="token punctuation">,</span> <span class="token string">"ignoredType"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>parameterizedContainers <span class="token operator">=</span> <span class="token function">resolveWhenPossible</span><span class="token punctuation">(</span><span class="token function">extract</span><span class="token punctuation">(</span>attributes<span class="token punctuation">,</span> <span class="token string">"parameterizedContainer"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>strategy <span class="token operator">=</span> annotation<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token string">"search"</span><span class="token punctuation">,</span> SearchStrategy<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">orElse</span><span class="token punctuation">(</span>null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// value和type解析，即bean class</span>
+        Set<span class="token operator">&lt;</span>String<span class="token operator">></span> types <span class="token operator">=</span> <span class="token function">extractTypes</span><span class="token punctuation">(</span>attributes<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        BeanTypeDeductionException deductionException <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 未配置value和type时，对@Bean方法使用其returnType作为types</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>types<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token keyword">this</span><span class="token punctuation">.</span>names<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                types <span class="token operator">=</span> <span class="token function">deducedBeanType</span><span class="token punctuation">(</span>context<span class="token punctuation">,</span> metadata<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">BeanTypeDeductionException</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                deductionException <span class="token operator">=</span> ex<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>types <span class="token operator">=</span> types<span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 校验types，names，annotations至少要有存在一个</span>
+        <span class="token function">validate</span><span class="token punctuation">(</span>deductionException<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="MatchResult"><a href="#MatchResult" class="headerlink" title="MatchResult"></a>MatchResult</h4><p>​	表示<strong>某个 <code>Spec</code> 在指定容器上下文中的匹配结果</strong>，不同类型的注解会根据自身定义对 <code>MatchResult</code> 的结果进行判断，来决定是否匹配成功</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">class</span> <span class="token class-name">MatchResult</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * annotation对应的bean集合（在容器里）
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Map<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> Collection<span class="token operator">&lt;</span>String<span class="token operator">>></span> matchedAnnotations <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 在容器里的beanName
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>String<span class="token operator">></span> matchedNames <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">/**
+     * type对应的bean集合（在容器里）
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Map<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> Collection<span class="token operator">&lt;</span>String<span class="token operator">>></span> matchedTypes <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * annotation对应的bean不在容器中
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>String<span class="token operator">></span> unmatchedAnnotations <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * beanName对应的bean不在容器中
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>String<span class="token operator">></span> unmatchedNames <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * type对应的bean不在容器中
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>String<span class="token operator">></span> unmatchedTypes <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Set<span class="token operator">&lt;</span>String<span class="token operator">></span> namesOfAllMatches <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="getMatchingBeans"><a href="#getMatchingBeans" class="headerlink" title="getMatchingBeans"></a>getMatchingBeans</h4><p>​	<strong>getMatchingBeans是根据 <code>Spec</code> 提供的条件，在容器里找出符合要求 Bean 的核心方法</strong>。可通过如下代码总结出OnBeanCondition支持的核心匹配能力包括：</p>
+<ul>
+<li>按<strong>type、beanName、annotation搜索对应的bean是否存在</strong></li>
+<li>支持<strong>搜索父容器（</strong>SpringCloud中存在）</li>
+<li>支持<strong>泛型</strong></li>
+<li>支持<strong>忽略指定type的bean</strong>（等价于搜索结果会remove掉这些ignoreType的bean）</li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token keyword">final</span> MatchResult <span class="token function">getMatchingBeans</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> Spec<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> spec<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    ClassLoader classLoader <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ConfigurableListableBeanFactory beanFactory <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 父容器搜索判断（比如SpringCloud环境下存在父容器）</span>
+    <span class="token keyword">boolean</span> considerHierarchy <span class="token operator">=</span> spec<span class="token punctuation">.</span><span class="token function">getStrategy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> SearchStrategy<span class="token punctuation">.</span>CURRENT<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 泛型判断支持（示例：@ConditionalOnMissingFilterBean）</span>
+    Set<span class="token operator">&lt;</span>Class<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">>></span> parameterizedContainers <span class="token operator">=</span> spec<span class="token punctuation">.</span><span class="token function">getParameterizedContainers</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>spec<span class="token punctuation">.</span><span class="token function">getStrategy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> SearchStrategy<span class="token punctuation">.</span>ANCESTORS<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        BeanFactory parent <span class="token operator">=</span> beanFactory<span class="token punctuation">.</span><span class="token function">getParentBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Assert<span class="token punctuation">.</span><span class="token function">isInstanceOf</span><span class="token punctuation">(</span>ConfigurableListableBeanFactory<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> parent<span class="token punctuation">,</span>
+                <span class="token string">"Unable to use SearchStrategy.ANCESTORS"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        beanFactory <span class="token operator">=</span> <span class="token punctuation">(</span>ConfigurableListableBeanFactory<span class="token punctuation">)</span> parent<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 匹配结果</span>
+    MatchResult result <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">MatchResult</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 获取需要被忽略的bean的beanName</span>
+    Set<span class="token operator">&lt;</span>String<span class="token operator">></span> beansIgnoredByType <span class="token operator">=</span> <span class="token function">getNamesOfBeansIgnoredByType</span><span class="token punctuation">(</span>classLoader<span class="token punctuation">,</span> beanFactory<span class="token punctuation">,</span> considerHierarchy<span class="token punctuation">,</span>
+            spec<span class="token punctuation">.</span><span class="token function">getIgnoredTypes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> parameterizedContainers<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// ----------------- 处理类型匹配部分 ------------------</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>String type <span class="token operator">:</span> spec<span class="token punctuation">.</span><span class="token function">getTypes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 获取类型对应的beanName</span>
+        Collection<span class="token operator">&lt;</span>String<span class="token operator">></span> typeMatches <span class="token operator">=</span> <span class="token function">getBeanNamesForType</span><span class="token punctuation">(</span>classLoader<span class="token punctuation">,</span> considerHierarchy<span class="token punctuation">,</span> beanFactory<span class="token punctuation">,</span> type<span class="token punctuation">,</span>
+                parameterizedContainers<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 移除被忽略的 Bean 以及scope的代理bean</span>
+        typeMatches<span class="token punctuation">.</span><span class="token function">removeIf</span><span class="token punctuation">(</span><span class="token punctuation">(</span>match<span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> beansIgnoredByType<span class="token punctuation">.</span><span class="token function">contains</span><span class="token punctuation">(</span>match<span class="token punctuation">)</span> <span class="token operator">||</span> ScopedProxyUtils<span class="token punctuation">.</span><span class="token function">isScopedTarget</span><span class="token punctuation">(</span>match<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>typeMatches<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// type过滤后没有对应的bean在容器中，记录为不匹配</span>
+            result<span class="token punctuation">.</span><span class="token function">recordUnmatchedType</span><span class="token punctuation">(</span>type<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            result<span class="token punctuation">.</span><span class="token function">recordMatchedType</span><span class="token punctuation">(</span>type<span class="token punctuation">,</span> typeMatches<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// ----------------- 处理注解匹配部分 ------------------</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>String annotation <span class="token operator">:</span> spec<span class="token punctuation">.</span><span class="token function">getAnnotations</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 获取被指定注解标记的beanName</span>
+        Set<span class="token operator">&lt;</span>String<span class="token operator">></span> annotationMatches <span class="token operator">=</span> <span class="token function">getBeanNamesForAnnotation</span><span class="token punctuation">(</span>classLoader<span class="token punctuation">,</span> beanFactory<span class="token punctuation">,</span> annotation<span class="token punctuation">,</span>
+                considerHierarchy<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 移除掉被忽略的 bean</span>
+        annotationMatches<span class="token punctuation">.</span><span class="token function">removeAll</span><span class="token punctuation">(</span>beansIgnoredByType<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>annotationMatches<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><span class="token comment" spellcheck="true">// annotation过滤后没有对应的bean在容器中，记录为不匹配</span>
+            result<span class="token punctuation">.</span><span class="token function">recordUnmatchedAnnotation</span><span class="token punctuation">(</span>annotation<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            result<span class="token punctuation">.</span><span class="token function">recordMatchedAnnotation</span><span class="token punctuation">(</span>annotation<span class="token punctuation">,</span> annotationMatches<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// ----------------- 处理按beanName匹配部分 ------------------</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>String beanName <span class="token operator">:</span> spec<span class="token punctuation">.</span><span class="token function">getNames</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>beansIgnoredByType<span class="token punctuation">.</span><span class="token function">contains</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token function">containsBean</span><span class="token punctuation">(</span>beanFactory<span class="token punctuation">,</span> beanName<span class="token punctuation">,</span> considerHierarchy<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 没被忽略，切在容器中存在这个beanName。匹配命中</span>
+            result<span class="token punctuation">.</span><span class="token function">recordMatchedName</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 匹配失败</span>
+            result<span class="token punctuation">.</span><span class="token function">recordUnmatchedName</span><span class="token punctuation">(</span>beanName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="getMatchOutcome"><a href="#getMatchOutcome" class="headerlink" title="getMatchOutcome"></a>getMatchOutcome</h4><p>​	getMatchOutcome会拿 <code>Spec</code> 的匹配结果，结合具体是哪种 <code>@ConditionalOn*</code> 注解，来决定条件是否满足。我这里对getMatchOutcome方法按注解拆分一下，不影响其逻辑</p>
+<h5 id="ConditionalOnBean"><a href="#ConditionalOnBean" class="headerlink" title="@ConditionalOnBean"></a>@ConditionalOnBean</h5><p>​	要求<strong>所有指定的参数都必须存在对应的bean（即全匹配）</strong>。如果有任意一个参数没有对应的bean存在于指定容器中，则不匹配，返回noMatch</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> ConditionOutcome <span class="token function">getMatchOutcome</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotatedTypeMetadata metadata<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    ConditionMessage matchMessage <span class="token operator">=</span> ConditionMessage<span class="token punctuation">.</span><span class="token function">empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    MergedAnnotations annotations <span class="token operator">=</span> metadata<span class="token punctuation">.</span><span class="token function">getAnnotations</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>annotations<span class="token punctuation">.</span><span class="token function">isPresent</span><span class="token punctuation">(</span>ConditionalOnBean<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        Spec<span class="token operator">&lt;</span>ConditionalOnBean<span class="token operator">></span> spec <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Spec</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>context<span class="token punctuation">,</span> metadata<span class="token punctuation">,</span> annotations<span class="token punctuation">,</span> ConditionalOnBean<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 进行匹配</span>
+        MatchResult matchResult <span class="token operator">=</span> <span class="token function">getMatchingBeans</span><span class="token punctuation">(</span>context<span class="token punctuation">,</span> spec<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>matchResult<span class="token punctuation">.</span><span class="token function">isAllMatched</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 任意一个条件没匹配到bean，则返回noMatch</span>
+            String reason <span class="token operator">=</span> <span class="token function">createOnBeanNoMatchReason</span><span class="token punctuation">(</span>matchResult<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">because</span><span class="token punctuation">(</span>reason<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        matchMessage <span class="token operator">=</span> spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"bean"</span><span class="token punctuation">,</span> <span class="token string">"beans"</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> matchResult<span class="token punctuation">.</span><span class="token function">getNamesOfAllMatches</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// matched</span>
+    <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">match</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="ConditionalOnSingleCandidate"><a href="#ConditionalOnSingleCandidate" class="headerlink" title="@ConditionalOnSingleCandidate"></a>@ConditionalOnSingleCandidate</h5><p>​	校验<strong>指定参数对应的bean在容器中只存在一个bean或一个primary bean</strong>，所以@ConditionalOnSingleCandidate的参数也是单个的，仅支持type匹配</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> ConditionOutcome <span class="token function">getMatchOutcome</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotatedTypeMetadata metadata<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    ConditionMessage matchMessage <span class="token operator">=</span> ConditionMessage<span class="token punctuation">.</span><span class="token function">empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    MergedAnnotations annotations <span class="token operator">=</span> metadata<span class="token punctuation">.</span><span class="token function">getAnnotations</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>metadata<span class="token punctuation">.</span><span class="token function">isAnnotated</span><span class="token punctuation">(</span>ConditionalOnSingleCandidate<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        Spec<span class="token operator">&lt;</span>ConditionalOnSingleCandidate<span class="token operator">></span> spec <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SingleCandidateSpec</span><span class="token punctuation">(</span>context<span class="token punctuation">,</span> metadata<span class="token punctuation">,</span> annotations<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        MatchResult matchResult <span class="token operator">=</span> <span class="token function">getMatchingBeans</span><span class="token punctuation">(</span>context<span class="token punctuation">,</span> spec<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>matchResult<span class="token punctuation">.</span><span class="token function">isAllMatched</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">didNotFind</span><span class="token punctuation">(</span><span class="token string">"any beans"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">atAll</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        Set<span class="token operator">&lt;</span>String<span class="token operator">></span> allBeans <span class="token operator">=</span> matchResult<span class="token punctuation">.</span><span class="token function">getNamesOfAllMatches</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>allBeans<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 只匹配到一个bean，则matched</span>
+            matchMessage <span class="token operator">=</span> spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"a single bean"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> allBeans<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 多个bean，再校验是否只有一个primary bean</span>
+            List<span class="token operator">&lt;</span>String<span class="token operator">></span> primaryBeans <span class="token operator">=</span> <span class="token function">getPrimaryBeans</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getBeanFactory</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> allBeans<span class="token punctuation">,</span>
+                    spec<span class="token punctuation">.</span><span class="token function">getStrategy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> SearchStrategy<span class="token punctuation">.</span>ALL<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>primaryBeans<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> ConditionOutcome
+                        <span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">didNotFind</span><span class="token punctuation">(</span><span class="token string">"a primary bean from beans"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> allBeans<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>primaryBeans<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">></span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> ConditionOutcome
+                        <span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"multiple primary beans"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> primaryBeans<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            matchMessage <span class="token operator">=</span> spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span>
+                    <span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"a single primary bean '"</span> <span class="token operator">+</span> primaryBeans<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"' from beans"</span><span class="token punctuation">)</span>
+                    <span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> allBeans<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// matched</span>
+    <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">match</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="ConditionalOnMissingBean"><a href="#ConditionalOnMissingBean" class="headerlink" title="@ConditionalOnMissingBean"></a>@ConditionalOnMissingBean</h5><p>和@ConditionalOnBean完全相反，<strong>所有参数都不能存在对应的bean在指定容器里（全不匹配）才matched</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> ConditionOutcome <span class="token function">getMatchOutcome</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotatedTypeMetadata metadata<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    ConditionMessage matchMessage <span class="token operator">=</span> ConditionMessage<span class="token punctuation">.</span><span class="token function">empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    MergedAnnotations annotations <span class="token operator">=</span> metadata<span class="token punctuation">.</span><span class="token function">getAnnotations</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// -------------- @ConditionalOnMissingBean 注解处理 --------------</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>metadata<span class="token punctuation">.</span><span class="token function">isAnnotated</span><span class="token punctuation">(</span>ConditionalOnMissingBean<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        Spec<span class="token operator">&lt;</span>ConditionalOnMissingBean<span class="token operator">></span> spec <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Spec</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>context<span class="token punctuation">,</span> metadata<span class="token punctuation">,</span> annotations<span class="token punctuation">,</span>
+                ConditionalOnMissingBean<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        MatchResult matchResult <span class="token operator">=</span> <span class="token function">getMatchingBeans</span><span class="token punctuation">(</span>context<span class="token punctuation">,</span> spec<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>matchResult<span class="token punctuation">.</span><span class="token function">isAnyMatched</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 任意一个条件匹配到了bean，apply注解逻辑返回noMatch</span>
+            String reason <span class="token operator">=</span> <span class="token function">createOnMissingBeanNoMatchReason</span><span class="token punctuation">(</span>matchResult<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">because</span><span class="token punctuation">(</span>reason<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        matchMessage <span class="token operator">=</span> spec<span class="token punctuation">.</span><span class="token function">message</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">didNotFind</span><span class="token punctuation">(</span><span class="token string">"any beans"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">atAll</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// matched</span>
+    <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">match</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="OnClassCondition"><a href="#OnClassCondition" class="headerlink" title="OnClassCondition"></a>OnClassCondition</h3><p>​	<strong>被@ConditionalOnClass和@ConditionalOnMissingClass使用，用来判断指定的class是否存在于指定ClassLoader的classpath里</strong></p>
+<h4 id="ClassNameFilter"><a href="#ClassNameFilter" class="headerlink" title="ClassNameFilter"></a>ClassNameFilter</h4><p>两个Filter，<strong>PRESENT</strong>和<strong>MISSING</strong>，内部<strong>通过Class#forName方法</strong>判断指定的class能否被指定的ClassLoader加载（即在其classpath下）</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token keyword">enum</span> ClassNameFilter <span class="token punctuation">{</span>
+
+    PRESENT <span class="token punctuation">{</span>
+
+        <span class="token annotation punctuation">@Override</span>
+        <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">matches</span><span class="token punctuation">(</span>String className<span class="token punctuation">,</span> ClassLoader classLoader<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token function">isPresent</span><span class="token punctuation">(</span>className<span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span><span class="token punctuation">,</span>
+
+    MISSING <span class="token punctuation">{</span>
+
+        <span class="token annotation punctuation">@Override</span>
+        <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">matches</span><span class="token punctuation">(</span>String className<span class="token punctuation">,</span> ClassLoader classLoader<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token operator">!</span><span class="token function">isPresent</span><span class="token punctuation">(</span>className<span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">abstract</span> <span class="token keyword">boolean</span> <span class="token function">matches</span><span class="token punctuation">(</span>String className<span class="token punctuation">,</span> ClassLoader classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">static</span> <span class="token keyword">boolean</span> <span class="token function">isPresent</span><span class="token punctuation">(</span>String className<span class="token punctuation">,</span> ClassLoader classLoader<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>classLoader <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            classLoader <span class="token operator">=</span> ClassUtils<span class="token punctuation">.</span><span class="token function">getDefaultClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 使用Class.forName检测class是否存在。</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>classLoader <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                Class<span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span>className<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                Class<span class="token punctuation">.</span><span class="token function">forName</span><span class="token punctuation">(</span>className<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 不存的在会抛ClassNotFoundException，被异常捕获返回false</span>
+            <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="getMatchOutcome-1"><a href="#getMatchOutcome-1" class="headerlink" title="getMatchOutcome"></a>getMatchOutcome</h4><h5 id="ConditionalOnClass"><a href="#ConditionalOnClass" class="headerlink" title="@ConditionalOnClass"></a>@ConditionalOnClass</h5><p>利用ClassNameFilter.MISSING校验<strong>指定的class都必须存在</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> ConditionOutcome <span class="token function">getMatchOutcome</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotatedTypeMetadata metadata<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    ClassLoader classLoader <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ConditionMessage matchMessage <span class="token operator">=</span> ConditionMessage<span class="token punctuation">.</span><span class="token function">empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 解析@ConditionalOnClass的value和name</span>
+    List<span class="token operator">&lt;</span>String<span class="token operator">></span> onClasses <span class="token operator">=</span> <span class="token function">getCandidates</span><span class="token punctuation">(</span>metadata<span class="token punctuation">,</span> ConditionalOnClass<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>onClasses <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// ClassNameFilter.MISSING过滤器得到的结果表示 在指定ClassLoader下不存在对应的class</span>
+        List<span class="token operator">&lt;</span>String<span class="token operator">></span> missing <span class="token operator">=</span> <span class="token function">filter</span><span class="token punctuation">(</span>onClasses<span class="token punctuation">,</span> ClassNameFilter<span class="token punctuation">.</span>MISSING<span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>missing<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 任意一个class不存在，不满足@ConditionalOnClass逻辑，返回noMatch</span>
+            <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>ConditionMessage<span class="token punctuation">.</span><span class="token function">forCondition</span><span class="token punctuation">(</span>ConditionalOnClass<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+                    <span class="token punctuation">.</span><span class="token function">didNotFind</span><span class="token punctuation">(</span><span class="token string">"required class"</span><span class="token punctuation">,</span> <span class="token string">"required classes"</span><span class="token punctuation">)</span>
+                    <span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> missing<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        matchMessage <span class="token operator">=</span> matchMessage<span class="token punctuation">.</span><span class="token function">andCondition</span><span class="token punctuation">(</span>ConditionalOnClass<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"required class"</span><span class="token punctuation">,</span> <span class="token string">"required classes"</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> <span class="token function">filter</span><span class="token punctuation">(</span>onClasses<span class="token punctuation">,</span> ClassNameFilter<span class="token punctuation">.</span>PRESENT<span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">match</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="ConditionalOnMissingClass"><a href="#ConditionalOnMissingClass" class="headerlink" title="@ConditionalOnMissingClass"></a>@ConditionalOnMissingClass</h5><p>利用ClassNameFilter.PRESENT校验<strong>指定的class都不能存在</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> ConditionOutcome <span class="token function">getMatchOutcome</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotatedTypeMetadata metadata<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    ClassLoader classLoader <span class="token operator">=</span> context<span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    ConditionMessage matchMessage <span class="token operator">=</span> ConditionMessage<span class="token punctuation">.</span><span class="token function">empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 解析@ConditionalOnMissingClass的value和name</span>
+    List<span class="token operator">&lt;</span>String<span class="token operator">></span> onMissingClasses <span class="token operator">=</span> <span class="token function">getCandidates</span><span class="token punctuation">(</span>metadata<span class="token punctuation">,</span> ConditionalOnMissingClass<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>onMissingClasses <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// ClassNameFilter.PRESENT过滤器得到的结果表示 在指定ClassLoader下存在对应的class</span>
+        List<span class="token operator">&lt;</span>String<span class="token operator">></span> present <span class="token operator">=</span> <span class="token function">filter</span><span class="token punctuation">(</span>onMissingClasses<span class="token punctuation">,</span> ClassNameFilter<span class="token punctuation">.</span>PRESENT<span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>present<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 任意一个class存在，不满足@ConditionalOnMissingClass逻辑，返回noMatch</span>
+            <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>ConditionMessage<span class="token punctuation">.</span><span class="token function">forCondition</span><span class="token punctuation">(</span>ConditionalOnMissingClass<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+                    <span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"unwanted class"</span><span class="token punctuation">,</span> <span class="token string">"unwanted classes"</span><span class="token punctuation">)</span>
+                    <span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> present<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        matchMessage <span class="token operator">=</span> matchMessage<span class="token punctuation">.</span><span class="token function">andCondition</span><span class="token punctuation">(</span>ConditionalOnMissingClass<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">didNotFind</span><span class="token punctuation">(</span><span class="token string">"unwanted class"</span><span class="token punctuation">,</span> <span class="token string">"unwanted classes"</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> <span class="token function">filter</span><span class="token punctuation">(</span>onMissingClasses<span class="token punctuation">,</span> ClassNameFilter<span class="token punctuation">.</span>MISSING<span class="token punctuation">,</span> classLoader<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">match</span><span class="token punctuation">(</span>matchMessage<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="OnPropertyCondition"><a href="#OnPropertyCondition" class="headerlink" title="OnPropertyCondition"></a>OnPropertyCondition</h3><p>被@ConditionalOnProperty使用，可根据指定的属性判断是否存在对应的value在Spring的Environment中</p>
+<h4 id="Spec-1"><a href="#Spec-1" class="headerlink" title="Spec"></a>Spec</h4><p>是对@ConditionalOnProperty注解的统一解析封装结构，并通过内部的collectProperties方法进行配置匹配</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">Spec</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> String prefix<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> String havingValue<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> String<span class="token punctuation">[</span><span class="token punctuation">]</span> names<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token keyword">boolean</span> matchIfMissing<span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">collectProperties</span><span class="token punctuation">(</span>PropertyResolver resolver<span class="token punctuation">,</span> List<span class="token operator">&lt;</span>String<span class="token operator">></span> missing<span class="token punctuation">,</span> List<span class="token operator">&lt;</span>String<span class="token operator">></span> nonMatching<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>String name <span class="token operator">:</span> <span class="token keyword">this</span><span class="token punctuation">.</span>names<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 对每个属性添加prefix</span>
+            String key <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>prefix <span class="token operator">+</span> name<span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>resolver<span class="token punctuation">.</span><span class="token function">containsProperty</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 有这个属性，根据value是否匹配校验</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">isMatch</span><span class="token punctuation">(</span>resolver<span class="token punctuation">.</span><span class="token function">getProperty</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>havingValue<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    nonMatching<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 没这个属性，则根据matchIfMissing来判断</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token keyword">this</span><span class="token punctuation">.</span>matchIfMissing<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    missing<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>name<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> <span class="token function">isMatch</span><span class="token punctuation">(</span>String value<span class="token punctuation">,</span> String requiredValue<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>StringUtils<span class="token punctuation">.</span><span class="token function">hasLength</span><span class="token punctuation">(</span>requiredValue<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> requiredValue<span class="token punctuation">.</span><span class="token function">equalsIgnoreCase</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// havingValue未配值时</span>
+        <span class="token keyword">return</span> <span class="token operator">!</span><span class="token string">"false"</span><span class="token punctuation">.</span><span class="token function">equalsIgnoreCase</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="getMatchOutcome-2"><a href="#getMatchOutcome-2" class="headerlink" title="getMatchOutcome"></a>getMatchOutcome</h4><p>只关注内部核心determineOutcome方法，并根据其对配置匹配结果的处理，可总结出如下规则（<strong>满足任意规则都会返回noMatch</strong>）：</p>
+<ul>
+<li><strong>不存在对应配置key时</strong>：<strong>matchIfMissing&#x3D;false</strong></li>
+<li><strong>存在对应配置key时</strong>：<strong>其value和havingValue不匹配</strong></li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java">
+<span class="token keyword">private</span> ConditionOutcome <span class="token function">determineOutcome</span><span class="token punctuation">(</span>AnnotationAttributes annotationAttributes<span class="token punctuation">,</span> PropertyResolver resolver<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    Spec spec <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Spec</span><span class="token punctuation">(</span>annotationAttributes<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    List<span class="token operator">&lt;</span>String<span class="token operator">></span> missingProperties <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    List<span class="token operator">&lt;</span>String<span class="token operator">></span> nonMatchingProperties <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    spec<span class="token punctuation">.</span><span class="token function">collectProperties</span><span class="token punctuation">(</span>resolver<span class="token punctuation">,</span> missingProperties<span class="token punctuation">,</span> nonMatchingProperties<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>missingProperties<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><span class="token comment" spellcheck="true">// 没对应的属性，且matchIfMissing=false。返回noMatch</span>
+        <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>ConditionMessage<span class="token punctuation">.</span><span class="token function">forCondition</span><span class="token punctuation">(</span>ConditionalOnProperty<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> spec<span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">didNotFind</span><span class="token punctuation">(</span><span class="token string">"property"</span><span class="token punctuation">,</span> <span class="token string">"properties"</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> missingProperties<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>nonMatchingProperties<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 有对应的属性，但其value不匹配。也返回noMatch</span>
+        <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>ConditionMessage<span class="token punctuation">.</span><span class="token function">forCondition</span><span class="token punctuation">(</span>ConditionalOnProperty<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> spec<span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"different value in property"</span><span class="token punctuation">,</span> <span class="token string">"different value in properties"</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>Style<span class="token punctuation">.</span>QUOTE<span class="token punctuation">,</span> nonMatchingProperties<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">return</span> ConditionOutcome
+            <span class="token punctuation">.</span><span class="token function">match</span><span class="token punctuation">(</span>ConditionMessage<span class="token punctuation">.</span><span class="token function">forCondition</span><span class="token punctuation">(</span>ConditionalOnProperty<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> spec<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">because</span><span class="token punctuation">(</span><span class="token string">"matched"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="Conditional组合"><a href="#Conditional组合" class="headerlink" title="Conditional组合"></a>Conditional组合</h2><p>​	前面介绍的条件注解默认是与逻辑：多个 <code>@Conditional</code> 注解应用在同一个配置类或方法上时，只有全部满足，才会注册对应的 Bean</p>
+<p>​	但在某些场景下，我们可能需要<strong>更复杂的组合判断逻辑（任意满足 -&gt; 或，全部不满足 -&gt; 非）</strong>。SpringBoot 为此提供了一个通用的组合条件抽象工具：<code>AbstractNestedCondition</code>，并基于它提供了三种常用组合实现</p>
+<h3 id="AbstractNestedCondition"><a href="#AbstractNestedCondition" class="headerlink" title="AbstractNestedCondition"></a>AbstractNestedCondition</h3><p>这是一个抽象类，SpringBoot 用它来实现条件组合的能力。它的核心逻辑为：</p>
+<ul>
+<li>查找该当前<code>Condition</code>类中所有的<strong>内部类</strong></li>
+<li>对内部类上定义的 <code>Condition</code> 逐个执行 <code>matches</code> 匹配</li>
+<li>收集<strong>每个内部类整体的匹配结果</strong>（<strong>内部类上多个 <code>Condition</code> 是与逻辑</strong>）</li>
+<li>最终<strong>调用模板方法 <code>getFinalMatchOutcome()</code>，由子类决定这些匹配结果是否通过（实现“与”、“或”、“非”逻辑）</strong></li>
+</ul>
+<p>​	需要注意的是在收集某个内部类的ConditionOutcome结果时调用了getUltimateOutcome这个方法，其<strong>会对内部类所有的ConditionOutcome做与逻辑判断并返回成一个ConditionOutcome</strong>。因此要想实现更细粒度的组合，应<strong>将每个Conditional注解拆分到不同的内部类中</strong></p>
+<pre class="line-numbers language-java"><code class="language-java">
+<span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">AbstractNestedCondition</span> <span class="token keyword">extends</span> <span class="token class-name">SpringBootCondition</span> <span class="token keyword">implements</span> <span class="token class-name">ConfigurationCondition</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> ConfigurationPhase configurationPhase<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> ConfigurationPhase <span class="token function">getConfigurationPhase</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">.</span>configurationPhase<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> ConditionOutcome <span class="token function">getMatchOutcome</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotatedTypeMetadata metadata<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        String className <span class="token operator">=</span> <span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 构造内部条件集合（每个内部类及其 @Condition）</span>
+        MemberConditions memberConditions <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">MemberConditions</span><span class="token punctuation">(</span>context<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>configurationPhase<span class="token punctuation">,</span> className<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 获取所有内部条件的匹配结果</span>
+        MemberMatchOutcomes memberOutcomes <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">MemberMatchOutcomes</span><span class="token punctuation">(</span>memberConditions<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 委托给子类决定最终结果（与、或、非逻辑）</span>
+        <span class="token keyword">return</span> <span class="token function">getFinalMatchOutcome</span><span class="token punctuation">(</span>memberOutcomes<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 留给子类实现的逻辑，参数为内部所有 Condition 的匹配结果集合。
+     */</span>
+    <span class="token keyword">protected</span> <span class="token keyword">abstract</span> ConditionOutcome <span class="token function">getFinalMatchOutcome</span><span class="token punctuation">(</span>MemberMatchOutcomes memberOutcomes<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">protected</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">MemberMatchOutcomes</span> <span class="token punctuation">{</span>
+
+        <span class="token comment" spellcheck="true">// 全部结果</span>
+        <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>ConditionOutcome<span class="token operator">></span> all<span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 匹配成功的</span>
+        <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>ConditionOutcome<span class="token operator">></span> matches<span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 匹配失败的</span>
+        <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>ConditionOutcome<span class="token operator">></span> nonMatches<span class="token punctuation">;</span>
+
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">MemberConditions</span> <span class="token punctuation">{</span>
+
+        <span class="token keyword">private</span> <span class="token keyword">final</span> ConditionContext context<span class="token punctuation">;</span>
+
+        <span class="token keyword">private</span> <span class="token keyword">final</span> MetadataReaderFactory readerFactory<span class="token punctuation">;</span>
+
+        <span class="token keyword">private</span> <span class="token keyword">final</span> Map<span class="token operator">&lt;</span>AnnotationMetadata<span class="token punctuation">,</span> List<span class="token operator">&lt;</span>Condition<span class="token operator">>></span> memberConditions<span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// key：内部类的注解元数据；value：其上声明的所有 Condition 实例</span>
+        <span class="token function">MemberConditions</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> ConfigurationPhase phase<span class="token punctuation">,</span> String className<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>context <span class="token operator">=</span> context<span class="token punctuation">;</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>readerFactory <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">SimpleMetadataReaderFactory</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getResourceLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 获取这个className所有的内部类</span>
+            String<span class="token punctuation">[</span><span class="token punctuation">]</span> members <span class="token operator">=</span> <span class="token function">getMetadata</span><span class="token punctuation">(</span>className<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getMemberClassNames</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 实例化内部类上的所有Condition</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>memberConditions <span class="token operator">=</span> <span class="token function">getMemberConditions</span><span class="token punctuation">(</span>members<span class="token punctuation">,</span> phase<span class="token punctuation">,</span> className<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 进行Condition的匹配并返回结果</span>
+        List<span class="token operator">&lt;</span>ConditionOutcome<span class="token operator">></span> <span class="token function">getMatchOutcomes</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            List<span class="token operator">&lt;</span>ConditionOutcome<span class="token operator">></span> outcomes <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 处理每个内部类对应的所有Condition</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>memberConditions<span class="token punctuation">.</span><span class="token function">forEach</span><span class="token punctuation">(</span><span class="token punctuation">(</span>metadata<span class="token punctuation">,</span> conditions<span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> outcomes
+                    <span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">MemberOutcomes</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>context<span class="token punctuation">,</span> metadata<span class="token punctuation">,</span> conditions<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getUltimateOutcome</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> Collections<span class="token punctuation">.</span><span class="token function">unmodifiableList</span><span class="token punctuation">(</span>outcomes<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">MemberOutcomes</span> <span class="token punctuation">{</span>
+
+        <span class="token keyword">private</span> <span class="token keyword">final</span> ConditionContext context<span class="token punctuation">;</span>
+
+        <span class="token keyword">private</span> <span class="token keyword">final</span> AnnotationMetadata metadata<span class="token punctuation">;</span>
+
+        <span class="token keyword">private</span> <span class="token keyword">final</span> List<span class="token operator">&lt;</span>ConditionOutcome<span class="token operator">></span> outcomes<span class="token punctuation">;</span>
+
+        <span class="token function">MemberOutcomes</span><span class="token punctuation">(</span>ConditionContext context<span class="token punctuation">,</span> AnnotationMetadata metadata<span class="token punctuation">,</span> List<span class="token operator">&lt;</span>Condition<span class="token operator">></span> conditions<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>context <span class="token operator">=</span> context<span class="token punctuation">;</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>metadata <span class="token operator">=</span> metadata<span class="token punctuation">;</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>outcomes <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>conditions<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>Condition condition <span class="token operator">:</span> conditions<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">this</span><span class="token punctuation">.</span>outcomes<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span><span class="token function">getConditionOutcome</span><span class="token punctuation">(</span>metadata<span class="token punctuation">,</span> condition<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">private</span> ConditionOutcome <span class="token function">getConditionOutcome</span><span class="token punctuation">(</span>AnnotationMetadata metadata<span class="token punctuation">,</span> Condition condition<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>condition <span class="token keyword">instanceof</span> <span class="token class-name">SpringBootCondition</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>SpringBootCondition<span class="token punctuation">)</span> condition<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getMatchOutcome</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>context<span class="token punctuation">,</span> metadata<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">ConditionOutcome</span><span class="token punctuation">(</span>condition<span class="token punctuation">.</span><span class="token function">matches</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>context<span class="token punctuation">,</span> metadata<span class="token punctuation">)</span><span class="token punctuation">,</span> ConditionMessage<span class="token punctuation">.</span><span class="token function">empty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">/**
+         * 将某个内部类中所有 Condition 的匹配结果整合为一个最终结果：
+         * - 全部匹配才算 match
+         * - 否则 noMatch
+         */</span>
+        ConditionOutcome <span class="token function">getUltimateOutcome</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            ConditionMessage<span class="token punctuation">.</span>Builder message <span class="token operator">=</span> ConditionMessage
+                    <span class="token punctuation">.</span><span class="token function">forCondition</span><span class="token punctuation">(</span><span class="token string">"NestedCondition on "</span> <span class="token operator">+</span> ClassUtils<span class="token punctuation">.</span><span class="token function">getShortName</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>metadata<span class="token punctuation">.</span><span class="token function">getClassName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>outcomes<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                ConditionOutcome outcome <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>outcomes<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">ConditionOutcome</span><span class="token punctuation">(</span>outcome<span class="token punctuation">.</span><span class="token function">isMatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> message<span class="token punctuation">.</span><span class="token function">because</span><span class="token punctuation">(</span>outcome<span class="token punctuation">.</span><span class="token function">getMessage</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            List<span class="token operator">&lt;</span>ConditionOutcome<span class="token operator">></span> match <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            List<span class="token operator">&lt;</span>ConditionOutcome<span class="token operator">></span> nonMatch <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>ConditionOutcome outcome <span class="token operator">:</span> <span class="token keyword">this</span><span class="token punctuation">.</span>outcomes<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token punctuation">(</span>outcome<span class="token punctuation">.</span><span class="token function">isMatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">?</span> match <span class="token operator">:</span> nonMatch<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>outcome<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>nonMatch<span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">match</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"matching nested conditions"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>match<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> ConditionOutcome<span class="token punctuation">.</span><span class="token function">noMatch</span><span class="token punctuation">(</span>message<span class="token punctuation">.</span><span class="token function">found</span><span class="token punctuation">(</span><span class="token string">"non-matching nested conditions"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">items</span><span class="token punctuation">(</span>nonMatch<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="AllNestedConditions"><a href="#AllNestedConditions" class="headerlink" title="AllNestedConditions"></a>AllNestedConditions</h4><p>​	内部逻辑很简单就不展示源码了，就是个与逻辑，全部的内部类match才算match。它的逻辑其实和这个Conditional注解一起用在某个配置类上一样，都是与逻辑。</p>
+<p>​	但SpringBoot还是提供了这个类，试想一下，现在有个极其复杂的与逻辑Conditional注解组合要用在多个配置类上，我们就可以用AllNestedConditions来组合这些Conditional注解，<strong>将公共的功能抽出来作为一个共享的逻辑模块，就是一种模块化的思想，不论是还是功能熟悉还是后期维护，都更加的方便</strong></p>
+<h4 id="AnyNestedCondition"><a href="#AnyNestedCondition" class="headerlink" title="AnyNestedCondition"></a>AnyNestedCondition</h4><p>​	只要<strong>任意一个内部类</strong>的条件匹配，就返回 <code>match</code>，实现的是或逻辑。是<strong>最常用的一个Condition组合工具</strong></p>
+<p>​	正如前面提到的，内部类的ConditionOutcome计算是与逻辑，所以在使用AnyNestedCondition时，<strong>建议每个内部类只写一个 <code>@Conditional</code> 注解</strong></p>
+<h4 id="NoneNestedConditions"><a href="#NoneNestedConditions" class="headerlink" title="NoneNestedConditions"></a>NoneNestedConditions</h4><p>​	只有<strong>所有内部类</strong>的条件都<strong>不匹配</strong>时，才返回 <code>match</code>，相当于<strong>非逻辑</strong></p>
+<h2 id="Report和Listener"><a href="#Report和Listener" class="headerlink" title="Report和Listener"></a>Report和Listener</h2><p>​	在SpringBoot中可以通过如下配置，开启<code>Condition</code>的匹配详情日志。其对于排查<code>Condition</code>未生效的问题非常有帮助，是调试 SpringBoot 自动装配机制的重要手段。其原理主要依赖于<strong>ConditionEvaluationReport（ConditionOutcome缓存）和ConditionEvaluationReportLoggingListener（ConditionOutcome日志打印）</strong></p>
+<pre class="line-numbers language-yaml"><code class="language-yaml"><span class="token key atrule">logging</span><span class="token punctuation">:</span>
+  <span class="token key atrule">level</span><span class="token punctuation">:</span>
+    <span class="token key atrule">org.springframework.boot.autoconfigure.logging</span><span class="token punctuation">:</span> debug
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<h3 id="ConditionEvaluationReport"><a href="#ConditionEvaluationReport" class="headerlink" title="ConditionEvaluationReport"></a>ConditionEvaluationReport</h3><p>在 Spring Boot 中，所有的 <code>Condition</code> 实现类都继承自抽象类 <code>SpringBootCondition</code>。其中：</p>
+<ul>
+<li><strong>各个子类通过实现 <code>getMatchOutcome()</code> 模板方法，完成具体的匹配逻辑判断</strong>，并生成标准化的 <code>ConditionOutcome</code>（用于描述匹配结果及原因）</li>
+<li><code>SpringBootCondition</code> 会将这些 <code>ConditionOutcome</code> <strong>缓存到ConditionEvaluationReport</strong>这个单例bean中</li>
+</ul>
+<p>​	这个 <code>ConditionEvaluationReport</code> 用于汇总记录所有条件的匹配结果。SpringBoot 的日志监听器（<code>ConditionEvaluationReportLoggingListener</code>）正是基于这个 bean，在日志级别为 <code>debug</code> 时，输出详细的自动配置条件匹配情况</p>
+<h3 id="ConditionEvaluationReportLoggingListener"><a href="#ConditionEvaluationReportLoggingListener" class="headerlink" title="ConditionEvaluationReportLoggingListener"></a>ConditionEvaluationReportLoggingListener</h3><p>​	这是一个配置在 spring.factories 里的 ApplicationContextInitializer，启动时会往容器里注册一个 ConditionEvaluationReportListener，专门<strong>监听 ContextRefreshedEvent 和 ApplicationFailedEvent 事件</strong></p>
+<p>​	一旦这两个事件有一个触发，它就会根据配置的 <strong>logLevelForReport（默认是 DEBUG）把所有<code>Condition</code>匹配情况打印出来</strong>。打印的数据来自 ConditionEvaluationReport 这个 Bean 里缓存的内容，也就是每个配置类的@Conditional 条件到底有没有命中的原因</p>
+<h2 id="Condition触发机制"><a href="#Condition触发机制" class="headerlink" title="Condition触发机制"></a>Condition触发机制</h2><h3 id="ConditionEvaluator"><a href="#ConditionEvaluator" class="headerlink" title="ConditionEvaluator"></a>ConditionEvaluator</h3><p>​	<code>ConditionEvaluator</code> 是匹配某个配置类或 <code>@Bean</code> 方法上 <code>Condition</code> 条件注解的核心入口。它依据传入的 <code>ConfigurationPhase</code> 参数来判断当前所处的处理阶段（ <strong>解析配置类</strong> 或 <strong>注册 Bean</strong> 阶段）</p>
+<p>其核心方法shouldSkip逻辑如下：</p>
+<ul>
+<li><strong>实例化并排序</strong>该元素上声明的所有 <code>Condition</code> 类</li>
+<li><strong>匹配当前phase或不存在phase</strong> 的 <code>Condition</code><ul>
+<li>匹配过程中，<strong>只要有一个 <code>Condition</code> 不满足</strong>，即返回 <code>true</code> 表示需要跳过，该元素将不会被进一步处理（不再解析配置或注册Bean）</li>
+</ul>
+</li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">class</span> <span class="token class-name">ConditionEvaluator</span> <span class="token punctuation">{</span>
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">shouldSkip</span><span class="token punctuation">(</span><span class="token annotation punctuation">@Nullable</span> AnnotatedTypeMetadata metadata<span class="token punctuation">,</span> <span class="token annotation punctuation">@Nullable</span> ConfigurationPhase phase<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 没有@Conditional注解，则表示不需要skip</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>metadata <span class="token operator">==</span> null <span class="token operator">||</span> <span class="token operator">!</span>metadata<span class="token punctuation">.</span><span class="token function">isAnnotated</span><span class="token punctuation">(</span>Conditional<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">.</span><span class="token function">getName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 解析phase，决定当前配置类是在哪个阶段应用的Condition（解析阶段 or 注册bean阶段）</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>phase <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>metadata <span class="token keyword">instanceof</span> <span class="token class-name">AnnotationMetadata</span> <span class="token operator">&amp;&amp;</span>
+                    ConfigurationClassUtils<span class="token punctuation">.</span><span class="token function">isConfigurationCandidate</span><span class="token punctuation">(</span><span class="token punctuation">(</span>AnnotationMetadata<span class="token punctuation">)</span> metadata<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> <span class="token function">shouldSkip</span><span class="token punctuation">(</span>metadata<span class="token punctuation">,</span> ConfigurationPhase<span class="token punctuation">.</span>PARSE_CONFIGURATION<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> <span class="token function">shouldSkip</span><span class="token punctuation">(</span>metadata<span class="token punctuation">,</span> ConfigurationPhase<span class="token punctuation">.</span>REGISTER_BEAN<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        List<span class="token operator">&lt;</span>Condition<span class="token operator">></span> conditions <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>String<span class="token punctuation">[</span><span class="token punctuation">]</span> conditionClasses <span class="token operator">:</span> <span class="token function">getConditionClasses</span><span class="token punctuation">(</span>metadata<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>String conditionClass <span class="token operator">:</span> conditionClasses<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 实例化Condition</span>
+                Condition condition <span class="token operator">=</span> <span class="token function">getCondition</span><span class="token punctuation">(</span>conditionClass<span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">.</span>context<span class="token punctuation">.</span><span class="token function">getClassLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                conditions<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>condition<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token comment" spellcheck="true">// 根据@Order排序Condition</span>
+        AnnotationAwareOrderComparator<span class="token punctuation">.</span><span class="token function">sort</span><span class="token punctuation">(</span>conditions<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>Condition condition <span class="token operator">:</span> conditions<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 判断 Condition 的作用阶段</span>
+            ConfigurationPhase requiredPhase <span class="token operator">=</span> null<span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>condition <span class="token keyword">instanceof</span> <span class="token class-name">ConfigurationCondition</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                requiredPhase <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>ConfigurationCondition<span class="token punctuation">)</span> condition<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getConfigurationPhase</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 不存在phase（即不论什么作用阶段，都需要进行匹配）或phase等于指定的阶段才进行匹配</span>
+            <span class="token comment" spellcheck="true">// 但凡任意一个Condition匹配失败，则返回true，表示需要skip</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>requiredPhase <span class="token operator">==</span> null <span class="token operator">||</span> requiredPhase <span class="token operator">==</span> phase<span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>condition<span class="token punctuation">.</span><span class="token function">matches</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span>context<span class="token punctuation">,</span> metadata<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="TrackedConditionEvaluator"><a href="#TrackedConditionEvaluator" class="headerlink" title="TrackedConditionEvaluator"></a>TrackedConditionEvaluator</h3><p>​	这是 Spring 在<strong>注册配置类 Bean 之前</strong>，用于评估 <code>@Conditional</code> 是否匹配的辅助工具。与普通 ConditionEvaluator 不同，它特殊的支持了<strong>根据导入当前配置类的其他配置类（即 importedBy）的<code>Condition</code>匹配情况，来共同决定当前类是否应跳过注册（skip）</strong></p>
+<p>​	其核心方法shouldSkip是一个基于 <strong>记忆搜索优化 + 剪枝的回溯算法</strong>（我们将参数configClass想象为当前节点，其importedBy想象为子节点，形成一棵由导入关系构成的树形结构），其核心逻辑为：</p>
+<ul>
+<li><strong>某个节点其任意一个importedBy不需要skip时，转而直接判断当前节点配置类的<code>Condition</code>决定其是否skip（break进行剪枝，不再判断其它importedBy的skip情况）</strong></li>
+<li><strong>某个节点所有importedBy都skip时，则不再判断当前节点的<code>Condition</code>，直接确认skip</strong></li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">private</span> <span class="token keyword">class</span> <span class="token class-name">TrackedConditionEvaluator</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Map<span class="token operator">&lt;</span>ConfigurationClass<span class="token punctuation">,</span> Boolean<span class="token operator">></span> skipped <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashMap</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">shouldSkip</span><span class="token punctuation">(</span>ConfigurationClass configClass<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        Boolean skip <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>skipped<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>configClass<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>skip <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 若该配置类是通过 @Import 导入的，优先判断导入它的配置类是否应被skip</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>configClass<span class="token punctuation">.</span><span class="token function">isImported</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">boolean</span> allSkipped <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                <span class="token keyword">for</span> <span class="token punctuation">(</span>ConfigurationClass importedBy <span class="token operator">:</span> configClass<span class="token punctuation">.</span><span class="token function">getImportedBy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 回溯</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token function">shouldSkip</span><span class="token punctuation">(</span>importedBy<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// 但凡有一个导入者不需要skip，转而判断自身并剪枝</span>
+                        allSkipped <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                        <span class="token keyword">break</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>allSkipped<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 所有导入者都被跳过，则让当前配置类直接skip</span>
+                    skip <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>skip <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 判断自己的Condition，决定是否需要skip</span>
+                skip <span class="token operator">=</span> conditionEvaluator<span class="token punctuation">.</span><span class="token function">shouldSkip</span><span class="token punctuation">(</span>configClass<span class="token punctuation">.</span><span class="token function">getMetadata</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> ConfigurationPhase<span class="token punctuation">.</span>REGISTER_BEAN<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// 缓存优化</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>skipped<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>configClass<span class="token punctuation">,</span> skip<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> skip<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="触发地点"><a href="#触发地点" class="headerlink" title="触发地点"></a>触发地点</h3><p>前置文章：<a href="https://blog.shanzhao.site/2021-05-13/spring-configurationclasspostprocessor/">ConfigurationClassPostProcessor解析配置类</a></p>
+<ul>
+<li><p>ConditionEvaluator触发</p>
+<ol>
+<li><p>ConfigurationClassParser#processConfigurationClass</p>
+<blockquote>
+<p> ​	所有配置类解析的起点，此处触发 <code>ConfigurationPhase.PARSE_CONFIGURATION</code> 阶段的 <code>Condition</code> 判断</p>
+</blockquote>
+</li>
+<li><p>ConfigurationClassParser#doProcessConfigurationClass：</p>
+<blockquote>
+<p> ​	解析配置类上的 <code>@ComponentScan</code> 注解时触发。该注解所扫描的组件将直接注册为 Bean，此阶段对应 <code>ConfigurationPhase.REGISTER_BEAN</code></p>
+</blockquote>
+</li>
+<li><p>ConfigurationClassBeanDefinitionReader#loadBeanDefinitionsForBeanMethod</p>
+<blockquote>
+<p>​	在注册配置类中的 <code>@Bean</code> 方法时触发。每个 <code>BeanMethod</code> 都根据其方法上的 <code>Condition</code>进行匹配，为 <code>ConfigurationPhase.REGISTER_BEAN</code> 阶段</p>
+</blockquote>
+</li>
+</ol>
+<p>	</p>
+</li>
+<li><p>TrackedConditionEvaluator触发</p>
+<ol>
+<li><p>ConfigurationClassBeanDefinitionReader#loadBeanDefinitionsForConfigurationClass</p>
+<blockquote>
+<p>​	在注册配置类内部所有 Bean（包括 <code>@Bean</code> 方法、通过 <code>@Import</code> 引入的 <code>ImportBeanDefinitionRegistrar</code>、以及 <code>@ImportResource</code> 导入的 XML Bean）前，会调用 <code>TrackedConditionEvaluator</code> 判断该配置类是否整体满足 <code>Condition</code>，从而决定是否跳过整个类的 Bean 注册流程。</p>
+</blockquote>
+</li>
+</ol>
+</li>
+</ul>
+<h2 id="测试用例"><a href="#测试用例" class="headerlink" title="测试用例"></a>测试用例</h2><h3 id="Condition组合-AnyNestedCondition"><a href="#Condition组合-AnyNestedCondition" class="headerlink" title="Condition组合-AnyNestedCondition"></a>Condition组合-AnyNestedCondition</h3><p>​	这是一个<strong>组合<code>Condition</code>（或逻辑）</strong>的测试用例，只要condition.or.enable&#x3D;true或condition.or.use&#x3D;yes任意条件满足，则可注册C对象到容器中</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token annotation punctuation">@Configuration</span><span class="token punctuation">(</span>proxyBeanMethods <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">NestedOrConditionDemo</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">OrCondition</span> <span class="token keyword">extends</span> <span class="token class-name">AnyNestedCondition</span> <span class="token punctuation">{</span>
+
+        <span class="token keyword">public</span> <span class="token function">OrCondition</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">super</span><span class="token punctuation">(</span>ConfigurationPhase<span class="token punctuation">.</span>REGISTER_BEAN<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token annotation punctuation">@ConditionalOnProperty</span><span class="token punctuation">(</span>value <span class="token operator">=</span> <span class="token string">"condition.or.enable"</span><span class="token punctuation">,</span> havingValue <span class="token operator">=</span> <span class="token string">"true"</span><span class="token punctuation">)</span>
+        <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">PropertyOrEnable</span><span class="token punctuation">{</span><span class="token punctuation">}</span>
+
+        <span class="token annotation punctuation">@ConditionalOnProperty</span><span class="token punctuation">(</span>value <span class="token operator">=</span> <span class="token string">"condition.or.use"</span><span class="token punctuation">,</span> havingValue <span class="token operator">=</span> <span class="token string">"yes"</span><span class="token punctuation">)</span>
+        <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">PropertyOrUse</span><span class="token punctuation">{</span><span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">C</span><span class="token punctuation">{</span>
+        <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span>
+            System<span class="token punctuation">.</span>out<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span><span class="token string">"NestedOrConditionDemo$C initialized"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Bean</span><span class="token punctuation">(</span>initMethod <span class="token operator">=</span> <span class="token string">"init"</span><span class="token punctuation">)</span>
+    <span class="token annotation punctuation">@Conditional</span><span class="token punctuation">(</span>OrCondition<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> C <span class="token function">buildC</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">C</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h4><pre class="line-numbers language-yaml"><code class="language-yaml"><span class="token key atrule">condition</span><span class="token punctuation">:</span>
+  <span class="token key atrule">or</span><span class="token punctuation">:</span>
+    <span class="token key atrule">enable</span><span class="token punctuation">:</span> <span class="token string">"false"</span>
+    <span class="token key atrule">use</span><span class="token punctuation">:</span> <span class="token string">"yes"</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="TrackedConditionEvaluator测试"><a href="#TrackedConditionEvaluator测试" class="headerlink" title="TrackedConditionEvaluator测试"></a>TrackedConditionEvaluator测试</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token annotation punctuation">@Configuration</span><span class="token punctuation">(</span>proxyBeanMethods <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@Import</span><span class="token punctuation">(</span>D<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ImportTrackedConditionDemo</span> <span class="token punctuation">{</span>
+
+<span class="token punctuation">}</span>
+<span class="token annotation punctuation">@ConditionalOnMissingBean</span><span class="token punctuation">(</span>A<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token keyword">class</span> <span class="token class-name">A</span><span class="token punctuation">{</span><span class="token punctuation">}</span>
+
+<span class="token annotation punctuation">@Import</span><span class="token punctuation">(</span>A<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@ConditionalOnMissingBean</span><span class="token punctuation">(</span>B<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token keyword">class</span> <span class="token class-name">B</span><span class="token punctuation">{</span><span class="token punctuation">}</span>
+
+<span class="token annotation punctuation">@Import</span><span class="token punctuation">(</span>B<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@ConditionalOnBean</span><span class="token punctuation">(</span>C<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token keyword">class</span> <span class="token class-name">C</span><span class="token punctuation">{</span><span class="token punctuation">}</span>
+
+<span class="token annotation punctuation">@Import</span><span class="token punctuation">(</span>value <span class="token operator">=</span> <span class="token punctuation">{</span>C<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> A<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token annotation punctuation">@ConditionalOnMissingBean</span><span class="token punctuation">(</span>D<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+<span class="token keyword">class</span> <span class="token class-name">D</span><span class="token punctuation">{</span><span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>​	这个测试用例用来验证 <code>TrackedConditionEvaluator#shouldSkip</code> 的执行逻辑，能<strong>完整模拟它的skip机制，并覆盖到 记忆搜索、剪枝等优化逻辑</strong>。A对象的整个importBy链路图如下，其整体流程可以总结为：</p>
+<ul>
+<li>C 的 <code>Condition</code> 不满足（@ConditionalOnBean 没匹配上），直接标记为 skip</li>
+<li><strong>B 是被唯一一个C  @Import 的，发现 C 被 skip 后，B 自己也不再判断 <code>Condition</code>，直接也 skip</strong></li>
+<li>然后判断 A，因为 A -&gt; B 这条链断了，就继续看 A -&gt; D<ul>
+<li>由于D的结果已被缓存为不被skip，所以A转而判断自身的<code>Condition</code>，最终得到不需要skip的结果</li>
+</ul>
+</li>
+</ul>
+<p>打开condition debug，也能从日志看出：</p>
+<ul>
+<li>A 和 D 都走了 <code>Condition</code> 匹配逻辑</li>
+<li>C 被判定不匹配</li>
+<li>B 根本没触发 <code>Condition</code> 判断</li>
+</ul>
+<pre class="line-numbers language-log"><code class="language-log">A matched:
+   - @ConditionalOnMissingBean (types: site.shanzhao.soil.spring.config.A; SearchStrategy: all) did not find any beans (OnBeanCondition)
+D matched:
+   - @ConditionalOnMissingBean (types: site.shanzhao.soil.spring.config.D; SearchStrategy: all) did not find any beans (OnBeanCondition)
+      
+C Did not match:
+   - @ConditionalOnBean (types: site.shanzhao.soil.spring.config.C; SearchStrategy: all) did not find any beans of type site.shanzhao.soil.spring.config.C (OnBeanCondition)
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p><img src="https://img.shanzhao.site/file/1752843742235_springboot-import-tracked-condition.png" alt="springboot-import-tracked-condition.png"></p>
+<h2 id="感想"><a href="#感想" class="headerlink" title="感想"></a>感想</h2><p>​	本来只是打算简单写写几个常见的 <code>@Conditional</code> 注解实现，结果一深入源码，才发现背后藏着这么多细节。不知不觉间内容越写越多，也越写越上头</p>
+<p>​	让我感慨的是，这不过是 Spring 中一个小小的功能点，却被设计得这么精巧。像灵活的条件组合机制，几乎能支持任何类型的 Condition 实现；又比如通过模板方法模式抽象出的 <code>ConditionOutcome</code>，不仅解耦了逻辑判断，还天然支持调试信息输出；再比如 <code>importedBy</code> 链路配合 <code>TrackedConditionEvaluator</code> 做到的递归判断与算法优化，每个功能看起来简单，但组合在一起就是工程化的思路体现</p>
+<p>​	写到最后，不得不感叹一句：<strong>麻雀虽小，五脏俱全</strong>。只能说越看越觉得厉害，代码之路任重而道远啊</p>
+<h2 id="相关链接"><a href="#相关链接" class="headerlink" title="相关链接"></a>相关链接</h2><ul>
+<li><a href="https://blog.shanzhao.site/2021-05-13/spring-configurationclasspostprocessor/">ConfigurationClassPostProcessor解析配置类</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Condition/" rel="tag"># Condition</a>
+              <a href="/tags/%E5%9B%9E%E6%BA%AF/" rel="tag"># 回溯</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2022-03-26/springboot-zi-dong-pei-zhi-yuan-ma-jie-xi/" rel="prev" title="SpringBoot（三）— 自动配置源码解析">
+                  <i class="fa fa-angle-left"></i> SpringBoot（三）— 自动配置源码解析
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/" rel="next" title="CloudFlare-CDN缓存清除">
+                  CloudFlare-CDN缓存清除 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">400k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">12:07</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

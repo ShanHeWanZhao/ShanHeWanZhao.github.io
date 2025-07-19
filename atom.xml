@@ -37,6 +37,29 @@
   </entry>
   
   <entry>
+    <title>SpringBoot（四） — Condition相关原理</title>
+    <link href="https://blog.shanzhao.site/2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/"/>
+    <id>https://blog.shanzhao.site/2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/</id>
+    <published>2022-04-21T12:40:03.000Z</published>
+    <updated>2022-04-18T11:33:20.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	基于Spring Boot 2.7.x 版本，深入分析了&lt;strong&gt;OnBean、OnClass、OnProperty这三类常见Condition的源码实现&lt;/strong&gt;，在此基础上，探讨了 &lt;code&gt;@Conditional&lt;/code&gt; 注解的&lt;strong&gt;组合用法&lt;/strong&gt;（&lt;strong&gt;与、或、非&lt;/strong&gt;逻辑）的处理机制。&lt;/p&gt;
+&lt;p&gt;​	同时，分析了&lt;strong&gt;Condition匹配结果的debug支持&lt;/strong&gt;实现，以及 &lt;code&gt;ConfigurationClassPostProcessor&lt;/code&gt; 中&lt;strong&gt;Condition判断的触发流程&lt;/strong&gt;，重点关注其&lt;strong&gt;通过 &lt;code&gt;importedBy&lt;/code&gt; 链支持的 &lt;code&gt;TrackedConditionEvaluator&lt;/code&gt; 回溯与剪枝优化策略&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;​	最后，提供了逻辑&lt;strong&gt;或&lt;/strong&gt;&lt;code&gt;@Conditional&lt;/code&gt;组合与 &lt;strong&gt;importedBy路径 skip 判定的测试用例&lt;/strong&gt;，以验证整体逻辑的正确性&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="SpringBoot" scheme="https://blog.shanzhao.site/categories/SpringBoot/"/>
+    
+    
+    <category term="Condition" scheme="https://blog.shanzhao.site/tags/Condition/"/>
+    
+    <category term="回溯" scheme="https://blog.shanzhao.site/tags/%E5%9B%9E%E6%BA%AF/"/>
+    
+  </entry>
+  
+  <entry>
     <title>SpringBoot（三）— 自动配置源码解析</title>
     <link href="https://blog.shanzhao.site/2022-03-26/springboot-zi-dong-pei-zhi-yuan-ma-jie-xi/"/>
     <id>https://blog.shanzhao.site/2022-03-26/springboot-zi-dong-pei-zhi-yuan-ma-jie-xi/</id>
@@ -411,26 +434,6 @@
     <category term="Async注解" scheme="https://blog.shanzhao.site/tags/Async%E6%B3%A8%E8%A7%A3/"/>
     
     <category term="Scheduled注解" scheme="https://blog.shanzhao.site/tags/Scheduled%E6%B3%A8%E8%A7%A3/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Spring-Transactional</title>
-    <link href="https://blog.shanzhao.site/2021-02-23/spring-transactional/"/>
-    <id>https://blog.shanzhao.site/2021-02-23/spring-transactional/</id>
-    <published>2021-02-23T13:08:46.000Z</published>
-    <updated>2021-02-23T13:08:46.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	从&lt;strong&gt;源码分析了@Transactional的解析和切面使用流程&lt;/strong&gt;。Spring事物如此复杂是因为不同的PROPAGATION有不同的策略，特别是在嵌套的流程中，所以&lt;strong&gt;重点分析了PlatformTransactionManager的事物获取流程，深入了解了PROPAGATION的实现&lt;/strong&gt;&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
-    
-    
-    <category term="Transactional注解" scheme="https://blog.shanzhao.site/tags/Transactional%E6%B3%A8%E8%A7%A3/"/>
     
   </entry>
   

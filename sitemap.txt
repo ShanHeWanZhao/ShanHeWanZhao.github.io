@@ -6,6 +6,7 @@ https://blog.shanzhao.site/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/
 https://blog.shanzhao.site/categories/index.html
 https://blog.shanzhao.site/about/index.html
 https://blog.shanzhao.site/tags/index.html
+https://blog.shanzhao.site/2022-04-21/springboot-conditional-zhu-jie-xiang-guan-yuan-li/
 https://blog.shanzhao.site/2022-03-26/springboot-zi-dong-pei-zhi-yuan-ma-jie-xi/
 https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/
 https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/
@@ -53,11 +54,11 @@ https://blog.shanzhao.site/tags/AQS%E5%AE%9E%E7%8E%B0%E7%B1%BB/
 https://blog.shanzhao.site/tags/BeanPostProcessor/
 https://blog.shanzhao.site/tags/AOP/
 https://blog.shanzhao.site/tags/spring%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98/
-https://blog.shanzhao.site/tags/BeanDefinitionRegistryPostProcessor/
-https://blog.shanzhao.site/tags/Configuration%E6%B3%A8%E8%A7%A3/
 https://blog.shanzhao.site/tags/Transactional%E6%B3%A8%E8%A7%A3/
 https://blog.shanzhao.site/tags/Async%E6%B3%A8%E8%A7%A3/
 https://blog.shanzhao.site/tags/Scheduled%E6%B3%A8%E8%A7%A3/
+https://blog.shanzhao.site/tags/BeanDefinitionRegistryPostProcessor/
+https://blog.shanzhao.site/tags/Configuration%E6%B3%A8%E8%A7%A3/
 https://blog.shanzhao.site/tags/starter/
 https://blog.shanzhao.site/tags/SPI/
 https://blog.shanzhao.site/tags/fatjar/
@@ -66,6 +67,8 @@ https://blog.shanzhao.site/tags/URLClassLoader/
 https://blog.shanzhao.site/tags/%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8/
 https://blog.shanzhao.site/tags/%E6%8B%93%E6%89%91%E6%8E%92%E5%BA%8F/
 https://blog.shanzhao.site/tags/%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE/
+https://blog.shanzhao.site/tags/Condition/
+https://blog.shanzhao.site/tags/%E5%9B%9E%E6%BA%AF/
 https://blog.shanzhao.site/tags/Container/
 https://blog.shanzhao.site/tags/Acceptor/
 https://blog.shanzhao.site/tags/Poller/
