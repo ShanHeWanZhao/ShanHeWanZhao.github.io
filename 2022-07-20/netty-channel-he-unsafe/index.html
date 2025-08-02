@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	基于 Netty 4.1.34，从 Channel 的整体架构入手，分析了 Channel 与 Unsafe 的配合机制，以及底层对应的 NIO 实现类。在分析过程中也穿插了对关键方法的说明，最后总结了 Netty Channel 相比原生 JDK Channel 在使用体验和扩展性上的优势。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Netty（一） — Channel和Unsafe">
+<meta property="og:url" content="https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	基于 Netty 4.1.34，从 Channel 的整体架构入手，分析了 Channel 与 Unsafe 的配合机制，以及底层对应的 NIO 实现类。在分析过程中也穿插了对关键方法的说明，最后总结了 Netty Channel 相比原生 JDK Channel 在使用体验和扩展性上的优势。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-07-20T11:33:03.000Z">
+<meta property="article:modified_time" content="2022-07-25T11:58:09.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="NIO">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/","path":"2022-07-20/netty-channel-he-unsafe/","title":"Netty（一） — Channel和Unsafe"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Netty（一） — Channel和Unsafe | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#NIO%E5%9F%BA%E7%A1%80"><span class="nav-number">1.</span> <span class="nav-text">NIO基础</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Channel"><span class="nav-number">2.</span> <span class="nav-text">Channel</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%8E%A5%E5%8F%A3"><span class="nav-number">2.1.</span> <span class="nav-text">核心接口</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AbstractChannel"><span class="nav-number">2.2.</span> <span class="nav-text">AbstractChannel</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#AbstractNioChannel"><span class="nav-number">2.2.1.</span> <span class="nav-text">AbstractNioChannel</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#NioSocketChannel"><span class="nav-number">2.2.1.1.</span> <span class="nav-text">NioSocketChannel</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#NioServerSocketChannel"><span class="nav-number">2.2.1.2.</span> <span class="nav-text">NioServerSocketChannel</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Unsafe"><span class="nav-number">3.</span> <span class="nav-text">Unsafe</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#NioByteUnsafe"><span class="nav-number">3.1.</span> <span class="nav-text">NioByteUnsafe</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#NioMessageUnsafe"><span class="nav-number">3.2.</span> <span class="nav-text">NioMessageUnsafe</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">38</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">8</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Netty（一） — Channel和Unsafe | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Netty（一） — Channel和Unsafe
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-07-20 19:33:03" itemprop="dateCreated datePublished" datetime="2022-07-20T19:33:03+08:00">2022-07-20</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-07-25 19:58:09" itemprop="dateModified" datetime="2022-07-25T19:58:09+08:00">2022-07-25</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Netty/" itemprop="url" rel="index"><span itemprop="name">Netty</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>8.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	基于 Netty 4.1.34，从 Channel 的整体架构入手，分析了 Channel 与 Unsafe 的配合机制，以及底层对应的 NIO 实现类。在分析过程中也穿插了对关键方法的说明，最后总结了 Netty Channel 相比原生 JDK Channel 在使用体验和扩展性上的优势。</p>
+<span id="more"></span>
+
+<h2 id="NIO基础"><a href="#NIO基础" class="headerlink" title="NIO基础"></a>NIO基础</h2><table>
+<thead>
+<tr>
+<th align="center">Origin</th>
+<th align="center">Channel</th>
+<th align="center">OP_ACCEPT</th>
+<th align="center">OP_CONNECT</th>
+<th align="center">OP_WRITE</th>
+<th align="center">OP_READ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">client</td>
+<td align="center">SocketChannel</td>
+<td align="center"></td>
+<td align="center">Y</td>
+<td align="center">Y</td>
+<td align="center">Y</td>
+</tr>
+<tr>
+<td align="center">server</td>
+<td align="center">ServerSocketChannel</td>
+<td align="center">Y</td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+</tr>
+<tr>
+<td align="center">server</td>
+<td align="center">SocketChannel</td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center">Y</td>
+<td align="center">Y</td>
+</tr>
+</tbody></table>
+<ul>
+<li><p><code>OP_ACCEPT</code>：当收到一<strong>个客户端的连接请求时，该操作就绪</strong>。这是<code>ServerSocketChannel</code>上唯一有效的操作。</p>
+</li>
+<li><p><code>OP_CONNECT</code>：只有客户端<code>SocketChannel</code>会注册该操作，<strong>当客户端调用<code>SocketChannel.connect()</code>时，该操作会就绪</strong></p>
+</li>
+<li><p><code>OP_READ</code>：该操作对客户端和服务端的<code>SocketChannel</code>都有效，当<strong>OS的读缓冲区中有数据可读时，该操作就绪</strong></p>
+</li>
+<li><p><code>OP_WRITE</code>：该操作对客户端和服务端的<code>SocketChannel</code>都有效，当<strong>OS的写缓冲区中有空闲的空间时(大部分时候都有)，该操作就绪</strong></p>
+<blockquote>
+<p> ​	OP_WRITE  事件相对特殊，一般情况，不应该注册<code>OP_WRITE事件</code>，<code>OP_WRITE</code>的就绪条件为<strong>操作系统内核缓冲区有空闲空间</strong>(<code>OP_WRITE事件</code>是在<code>Socket</code>发送缓冲区中的可用字节数大于或等于其低水位标记<code>SO_SNDLOWAT</code>时发生)，而写缓冲区绝大部分事件都是有空闲空间的，所以当你注册写事件后，写操作一直就是就绪的，这样会导致<code>Selector</code>处理线程会占用整个CPU的资源。所以<strong>OP_WRITE的使用方式是当你确实有数据写入时再注册<code>OP_WRITE事件</code>，并且在写完以后马上取消注册</strong></p>
+</blockquote>
+</li>
+</ul>
+<h2 id="Channel"><a href="#Channel" class="headerlink" title="Channel"></a>Channel</h2><p>​	<code>io.netty.channel.Channel</code> 是 Netty 中抽象出来的顶层网络连接接口，表示<strong>一个客户端连接</strong>或<strong>一个服务端监听通道</strong>（ServerSocket）。<strong>Netty 中所有的连接类型（ <code>NioSocketChannel</code>、<code>NioServerSocketChannel</code>等）都会实现该接口</strong>。</p>
+<p>​	Channel提供了访问其<strong>生命周期状态</strong>、<strong>绑定地址</strong>、<strong>所属线程模型</strong>（<code>EventLoop</code>）、<strong>事件处理链</strong>（<code>ChannelPipeline</code>）等通用能力。</p>
+<p>​	并且其还<strong>实现了ChannelOutboundInvoker，表示它具有出站事件驱动能力</strong>。例如 <code>bind()</code>、<code>connect()</code>、<code>write()</code>、<code>flush()</code> 等方法，实际调用时会从 <code>pipeline</code> 的尾部（<code>TailContext</code>）开始，逐步向前传递，最终由 <code>HeadContext</code> 使用 <code>Channel.Unsafe</code> 完成真正的底层 IO 操作。</p>
+<h3 id="核心接口"><a href="#核心接口" class="headerlink" title="核心接口"></a>核心接口</h3><pre class="line-numbers language-java"><code class="language-java">
+<span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">Channel</span> <span class="token keyword">extends</span> <span class="token class-name">AttributeMap</span><span class="token punctuation">,</span> ChannelOutboundInvoker<span class="token punctuation">,</span> Comparable<span class="token operator">&lt;</span>Channel<span class="token operator">></span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 当前channel的唯一id</span>
+    ChannelId <span class="token function">id</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 返回分配给 当前Channel 的 EventLoop（事件循环线程）</span>
+    EventLoop <span class="token function">eventLoop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 父channel，即创建当前Channel的Channel</span>
+    <span class="token comment" spellcheck="true">// 对于客户端连接（如 NioSocketChannel），其 parent 通常是 NioServerSocketChannel（服务端监听连接）</span>
+    <span class="token comment" spellcheck="true">// 而顶层的Channel则为null（NioServerSocketChannel）</span>
+    Channel <span class="token function">parent</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// Channel 的配置信息，包含连接参数（如 TCP_NODELAY、SO_KEEPALIVE 等）</span>
+    ChannelConfig <span class="token function">config</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">boolean</span> <span class="token function">isOpen</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 对于NIO来说，即是否把jdk的Channel注册到Selector上</span>
+    <span class="token keyword">boolean</span> <span class="token function">isRegistered</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 对于ServerSocketChannel，表示绑定了地址和端口。</span>
+    <span class="token comment" spellcheck="true">// 对于SocketChannel，代表已经连接了服务端</span>
+    <span class="token keyword">boolean</span> <span class="token function">isActive</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// bind的本地SokcetAddress</span>
+    SocketAddress <span class="token function">localAddress</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 返回远程的 SocketAddress。</span>
+    <span class="token comment" spellcheck="true">// 对于server端来说，没有远端地址，返回null</span>
+    SocketAddress <span class="token function">remoteAddress</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 一个固定的 ChannelFuture，用于监听当前 Channel 的close事件</span>
+    <span class="token comment" spellcheck="true">// 一旦 Channel close了，该 Future 会完成（成功），可注册监听器处理资源释放等逻辑。</span>
+    ChannelFuture <span class="token function">closeFuture</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 真的的IO操作接口</span>
+    Unsafe <span class="token function">unsafe</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 分配给 当前Channel 的 ChannelPipeline</span>
+    ChannelPipeline <span class="token function">pipeline</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="AbstractChannel"><a href="#AbstractChannel" class="headerlink" title="AbstractChannel"></a>AbstractChannel</h3><p>​	是所有 Netty Channel实现类的公共基类，像 <code>NioSocketChannel</code>、<code>EpollSocketChannel</code>、<code>KQueueSocketChannel</code> 都是基于它扩展的。主要负责<strong>抽象出所有 Channel 通用的字段和功能，避免重复代码，也是 <code>ChannelOutboundInvoker</code> 接口的默认实现（转发给Pipeline处理）</strong>。其构造方法和常见公共字段如下：</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token function">AbstractChannel</span><span class="token punctuation">(</span>Channel parent<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">this</span><span class="token punctuation">.</span>parent <span class="token operator">=</span> parent<span class="token punctuation">;</span>
+    id <span class="token operator">=</span> <span class="token function">newId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 创建Unsafe</span>
+    unsafe <span class="token operator">=</span> <span class="token function">newUnsafe</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 创建DefaultChannelPipeline</span>
+    pipeline <span class="token operator">=</span> <span class="token function">newChannelPipeline</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">private</span> <span class="token keyword">final</span> Channel parent<span class="token punctuation">;</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> ChannelId id<span class="token punctuation">;</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> Unsafe unsafe<span class="token punctuation">;</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> DefaultChannelPipeline pipeline<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 内部无回调的 IO 操作</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> VoidChannelPromise unsafeVoidPromise <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">VoidChannelPromise</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 监听 Channel 关闭状态的 future</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> CloseFuture closeFuture <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CloseFuture</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">private</span> <span class="token keyword">volatile</span> SocketAddress localAddress<span class="token punctuation">;</span>
+<span class="token keyword">private</span> <span class="token keyword">volatile</span> SocketAddress remoteAddress<span class="token punctuation">;</span>
+<span class="token keyword">private</span> <span class="token keyword">volatile</span> EventLoop eventLoop<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 是否已注册到 Selector</span>
+<span class="token keyword">private</span> <span class="token keyword">volatile</span> <span class="token keyword">boolean</span> registered<span class="token punctuation">;</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="AbstractNioChannel"><a href="#AbstractNioChannel" class="headerlink" title="AbstractNioChannel"></a>AbstractNioChannel</h4><p>​	这是所有基于 <strong>Java NIO</strong> 的 Netty Channel 的抽象基类，像 <code>NioSocketChannel</code>、<code>NioServerSocketChannel</code> 都基于它实现。<strong>配置Channel非阻塞、注册Selector、添加感兴趣的事件</strong>等都在里面完成的。其主要字段和方法如下</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">AbstractNioChannel</span> <span class="token keyword">extends</span> <span class="token class-name">AbstractChannel</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// java原生的channel：SocketChannel和ServerSocketChannel</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> SelectableChannel ch<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 感兴趣的事件，Server是OP_ACCEPT,SocketChannel是OP_READ</span>
+    <span class="token keyword">protected</span> <span class="token keyword">final</span> <span class="token keyword">int</span> readInterestOp<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// jdk的channel注册到selector上返回的SelectionKey，用于后续的事件控制</span>
+    <span class="token keyword">volatile</span> SelectionKey selectionKey<span class="token punctuation">;</span>
+    <span class="token keyword">boolean</span> readPending<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// connect 操作的 promise，即connect的结果回调</span>
+    <span class="token keyword">private</span> ChannelPromise connectPromise<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// connect操作的超时定时器</span>
+    <span class="token keyword">private</span> ScheduledFuture<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">></span> connectTimeoutFuture<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> SocketAddress requestedRemoteAddress<span class="token punctuation">;</span>
+
+    <span class="token keyword">protected</span> <span class="token function">AbstractNioChannel</span><span class="token punctuation">(</span>Channel parent<span class="token punctuation">,</span> SelectableChannel ch<span class="token punctuation">,</span> <span class="token keyword">int</span> readInterestOp<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">super</span><span class="token punctuation">(</span>parent<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>ch <span class="token operator">=</span> ch<span class="token punctuation">;</span>
+        <span class="token keyword">this</span><span class="token punctuation">.</span>readInterestOp <span class="token operator">=</span> readInterestOp<span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 在这里设置为非阻塞模式</span>
+            ch<span class="token punctuation">.</span><span class="token function">configureBlocking</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// ... 省略异常</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 仅注册到Selector上，不监听任何事件
+     */</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">doRegister</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        <span class="token keyword">boolean</span> selected <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token punctuation">;</span><span class="token punctuation">;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 将java原生的ServerSocketChannel注册到selector上</span>
+                <span class="token comment" spellcheck="true">// 初始没有感兴趣的事件，后续通过 doBeginRead 等方法设置</span>
+                selectionKey <span class="token operator">=</span> <span class="token function">javaChannel</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">register</span><span class="token punctuation">(</span><span class="token function">eventLoop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">unwrappedSelector</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">CancelledKeyException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>selected<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 第一次注册抛出异常，删除当前的selectionKey，继续注册</span>
+                    <span class="token comment" spellcheck="true">// Force the Selector to select now as the "canceled" SelectionKey may still be</span>
+                    <span class="token comment" spellcheck="true">// cached and not removed because no Select.select(..) operation was called yet.</span>
+                    <span class="token function">eventLoop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">selectNow</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    selected <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// We forced a select operation on the selector before but the SelectionKey is</span>
+                    <span class="token comment" spellcheck="true">// still cached</span>
+                    <span class="token comment" spellcheck="true">// for whatever reason. JDK bug ?</span>
+                    <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/*
+     * 真正操作Channel.read() 或 ChannelHandlerContext.read()时才注册注册事件
+     * SocketChannel为OP_READ，ServerSocketChannel为OP_ACCEPT
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">doBeginRead</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        <span class="token keyword">final</span> SelectionKey selectionKey <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span>selectionKey<span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>selectionKey<span class="token punctuation">.</span><span class="token function">isValid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// Channel 已失效，忽略</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        readPending <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">final</span> <span class="token keyword">int</span> interestOps <span class="token operator">=</span> selectionKey<span class="token punctuation">.</span><span class="token function">interestOps</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>interestOps <span class="token operator">&amp;</span> readInterestOp<span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 如果当前未监听感兴趣的事件，则添加（避免重复设置）</span>
+            selectionKey<span class="token punctuation">.</span><span class="token function">interestOps</span><span class="token punctuation">(</span>interestOps <span class="token operator">|</span> readInterestOp<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="NioSocketChannel"><a href="#NioSocketChannel" class="headerlink" title="NioSocketChannel"></a>NioSocketChannel</h5><p>​	是 Netty 中基于 NIO 实现的 TCP 客户端连接类，最终负责与远程建立连接并进行读写通信。它继承自 <code>AbstractNioByteChannel</code>，本质上是对 JDK 的 <code>SocketChannel</code> 的一层封装。</p>
+<p>该类主要<strong>通过实现 <code>doReadBytes</code>、<code>doWriteBytes</code> 和 <code>doWriteFileRegion</code> 这三个模板方法，完成与底层 <code>java.nio.channels.SocketChannel</code> 的数据交互，使用 Netty 的 <code>ByteBuf</code> 进行读取和写入</strong>：</p>
+<ul>
+<li><code>doReadBytes(ByteBuf)</code>：<strong>从 JDK Channel 中读取数据填充到 ByteBuf</strong></li>
+<li><code>doWriteBytes(ByteBuf)</code>：<strong>从 ByteBuf 中取出数据写入到底层 Channel</strong></li>
+<li><code>doWriteFileRegion(FileRegion)</code>：支持将文件直接写入到 SocketChannel，提高传输效率（zero-copy）。</li>
+</ul>
+<p>此外，它还负责实现bind和connect操作、Channel的close、本地和远程地址获取等功能</p>
+<h5 id="NioServerSocketChannel"><a href="#NioServerSocketChannel" class="headerlink" title="NioServerSocketChannel"></a>NioServerSocketChannel</h5><p>​	是 Netty 中基于 NIO 实现的服务端监听通道类，<strong>负责处理 TCP 连接的接入</strong>。它继承自 <code>AbstractNioMessageChannel</code>，封装了 JDK 的 <code>ServerSocketChannel</code>。</p>
+<p>​	该类的核心职责非常单一：<strong>监听 OP_ACCEPT 事件并接受新连接</strong>。当有客户端连接到来时，会触发 <code>doReadMessages()</code> 方法：</p>
+<ul>
+<li><code>doReadMessages(List&lt;Object&gt; buf)</code>：<strong>接受底层的 JDK  <code>SocketChannel</code>，并将其封装成 Netty 的 <code>NioSocketChannel</code> 实例添加到 <code>buf</code> 中，后续由 Acceptor 继续处理</strong>。</li>
+</ul>
+<p>​	<code>ServerSocketChannel</code>不会参与具体的数据发送，因此像 <code>connect()</code>、<code>write()</code> 等出站操作在该类中是不支持的（抛 <code>UnsupportedOperationException</code>）</p>
+<h2 id="Unsafe"><a href="#Unsafe" class="headerlink" title="Unsafe"></a>Unsafe</h2><p>​	首先其命名和JDK的Unsafe一样，表示它是<strong>不安全</strong>的，其作为io.netty.channel.Channel的<strong>内部接口</strong>，同时它的所有实现类也在对应的Channel实现类里，且都是private级别的，也表示了<strong>Netty不希望这个类在其他地方使用</strong><br>​	<strong>JDK的Unsafe是用来操作内存中的指针，而这个Unsafe是用来处理IO的。Netty将处理底层IO的细节都封装在里面，tail和head这两个端点Handler的功能就依赖Unsafe来完成read、connect、write、flush等IO操作</strong></p>
+<h3 id="NioByteUnsafe"><a href="#NioByteUnsafe" class="headerlink" title="NioByteUnsafe"></a>NioByteUnsafe</h3><p>​	<code>NioSocketChannel</code> 的专属 <code>Unsafe</code> 实现，负责与底层 <code>SocketChannel</code> 的读写交互和 Netty 的事件触发</p>
+<p>​	重点关注其 <code>read()</code> 方法，该方法会把数据读进 <code>ByteBuf</code>，期间可能多次触发 <code>channelRead</code>（网络可能拆包），用来处理<strong>解码和业务逻辑</strong>。读完后再触发一次 <code>channelReadComplete</code>。</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token keyword">class</span> <span class="token class-name">NioByteUnsafe</span> <span class="token keyword">extends</span> <span class="token class-name">AbstractNioUnsafe</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">/**
+     * NioSocketChannel 的实际读取逻辑，从底层 Channel 中读取字节数据并触发后续处理流程。
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">final</span> <span class="token keyword">void</span> <span class="token function">read</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">final</span> ChannelConfig config <span class="token operator">=</span> <span class="token function">config</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">shouldBreakReadReady</span><span class="token punctuation">(</span>config<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">clearReadPending</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">final</span> ChannelPipeline pipeline <span class="token operator">=</span> <span class="token function">pipeline</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">final</span> ByteBufAllocator allocator <span class="token operator">=</span> config<span class="token punctuation">.</span><span class="token function">getAllocator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">final</span> RecvByteBufAllocator<span class="token punctuation">.</span>Handle allocHandle <span class="token operator">=</span> <span class="token function">recvBufAllocHandle</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        allocHandle<span class="token punctuation">.</span><span class="token function">reset</span><span class="token punctuation">(</span>config<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        ByteBuf byteBuf <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        <span class="token keyword">boolean</span> close <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">do</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 由于我们不知道当前Channel能读取到多少字节的数据，所以需要分配一个估值容量的ByteBuf（容量过大会浪费，容量过小会读取多次）</span>
+                <span class="token comment" spellcheck="true">// 根据配置参数分配一个具有特定容量ByteBuf，当这个ByteBuf容量小于Channel中的数据时，就会触发多次读取</span>
+                byteBuf <span class="token operator">=</span> allocHandle<span class="token punctuation">.</span><span class="token function">allocate</span><span class="token punctuation">(</span>allocator<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 将Channel中的数据读取到ByteBuf中，并且设置读取到的字节数大小</span>
+                allocHandle<span class="token punctuation">.</span><span class="token function">lastBytesRead</span><span class="token punctuation">(</span><span class="token function">doReadBytes</span><span class="token punctuation">(</span>byteBuf<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>allocHandle<span class="token punctuation">.</span><span class="token function">lastBytesRead</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&lt;=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 没有读取到数据</span>
+                    <span class="token comment" spellcheck="true">// nothing was read. release the buffer.</span>
+                    byteBuf<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    byteBuf <span class="token operator">=</span> null<span class="token punctuation">;</span>
+                    <span class="token comment" spellcheck="true">// 读取的字节数小于0，通常表示连接已关闭（EOF）</span>
+                    close <span class="token operator">=</span> allocHandle<span class="token punctuation">.</span><span class="token function">lastBytesRead</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&lt;</span> <span class="token number">0</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>close<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token comment" spellcheck="true">// There is nothing left to read as we received an EOF.</span>
+                        readPending <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    <span class="token keyword">break</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// 读取数据的次数 + 1</span>
+                allocHandle<span class="token punctuation">.</span><span class="token function">incMessagesRead</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                readPending <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 传入读取到的ByteBuf作为参数，触发ChannelRead事件（解码、处理业务逻辑等操作）</span>
+                pipeline<span class="token punctuation">.</span><span class="token function">fireChannelRead</span><span class="token punctuation">(</span>byteBuf<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                byteBuf <span class="token operator">=</span> null<span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 判断是否应该继续从Channel中读取数据</span>
+                <span class="token comment" spellcheck="true">// 当上次读取到的数据容量等于我们准备的ByteBuf容量时，代表很大可能还没读取完，返回true继续读取数据</span>
+            <span class="token punctuation">}</span> <span class="token keyword">while</span> <span class="token punctuation">(</span>allocHandle<span class="token punctuation">.</span><span class="token function">continueReading</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 这次Channel发送的数据已被读取完毕，触发一次readComplete事件</span>
+            allocHandle<span class="token punctuation">.</span><span class="token function">readComplete</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            pipeline<span class="token punctuation">.</span><span class="token function">fireChannelReadComplete</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>close<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token function">closeOnRead</span><span class="token punctuation">(</span>pipeline<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">handleReadException</span><span class="token punctuation">(</span>pipeline<span class="token punctuation">,</span> byteBuf<span class="token punctuation">,</span> t<span class="token punctuation">,</span> close<span class="token punctuation">,</span> allocHandle<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 没有待处理的read请求 且 当前不再自动读取，则取消 READ 事件监听</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>readPending <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>config<span class="token punctuation">.</span><span class="token function">isAutoRead</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token function">removeReadOp</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+ 
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="NioMessageUnsafe"><a href="#NioMessageUnsafe" class="headerlink" title="NioMessageUnsafe"></a>NioMessageUnsafe</h3><p>​	这是 <code>NioServerSocketChannel</code> 专用的 <code>Unsafe</code> 实现类，主要负责处理底层 <code>ServerSocketChannel</code> 的 OP_ACCEPT 事件。其read的逻辑如下：</p>
+<ol>
+<li><p>从<strong>底层 <code>ServerSocketChannel</code> 接受连接</strong></p>
+</li>
+<li><p>为<strong>每个连接创建对应的 <code>NioSocketChannel</code> 实例</strong></p>
+</li>
+<li><p>通过 <code>pipeline.fireChannelRead</code> 触发事件，<strong>把每个NioSocketChannel交给NioServerSocketChannel中唯一的 <code>ServerBootstrapAcceptor</code> 这个Handler处理</strong></p>
+<blockquote>
+<p>​	<code>ServerBootstrapAcceptor</code> 会将该 <code>NioSocketChannel</code> 绑定自定义 handler，并注册到对应的 <code>EventLoop</code> 上</p>
+</blockquote>
+</li>
+<li><p>最后触发服务端的readComplete事件（里面啥都没做）</p>
+</li>
+</ol>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>通过上面Channel和Unsafe的分析，总结一下相比普通的JDK Channel，Netty的Channel提供了如下特性</p>
+<ol>
+<li><strong>EventLoop线程的绑定</strong>：Channel的所有IO操作都<strong>在该EventLoop绑定的线程中执行</strong>，不会有并发问题</li>
+<li><strong>事件分发</strong>机制：Channel的IO操作基本都会被<strong>包装为Netty事件，由对应的ChannelPipeline进行分发</strong></li>
+<li>更<strong>高级的异步编程</strong>：Channel的IO操作都是<strong>返回的异步结果</strong>，方便链式调用与回调监听（就算内部是同步的也是封装成异步结果，保持风格的统一）</li>
+<li><strong>接口的统一抽象</strong>：为了更大力度的能<strong>复用代码和最小化代价切换实现类</strong>，Channel进行了分层抽象：<strong>通用顶层接口和基类 -&gt; 具体的传输层接口和基类（NIO、Epoll、KQueue）-&gt; 具体的 server&#x2F;客户端 Channel 实现类</strong></li>
+<li><strong>安全考虑</strong>：将操作IO的能力抽象到了Unsafe这个内部类中，算是一种变相的警告</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/NIO/" rel="tag"># NIO</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2022-05-13/springboot-qian-ru-shi-tomcat-de-shi-yong/" rel="prev" title="SpringBoot（五） — 嵌入式Tomcat">
+                  <i class="fa fa-angle-left"></i> SpringBoot（五） — 嵌入式Tomcat
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/" rel="next" title="CloudFlare-CDN缓存清除">
+                  CloudFlare-CDN缓存清除 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">424k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">12:51</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

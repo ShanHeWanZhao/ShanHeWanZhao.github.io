@@ -37,6 +37,25 @@
   </entry>
   
   <entry>
+    <title>Netty（一） — Channel和Unsafe</title>
+    <link href="https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/"/>
+    <id>https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/</id>
+    <published>2022-07-20T11:33:03.000Z</published>
+    <updated>2022-07-25T11:58:09.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	基于 Netty 4.1.34，从 Channel 的整体架构入手，分析了 Channel 与 Unsafe 的配合机制，以及底层对应的 NIO 实现类。在分析过程中也穿插了对关键方法的说明，最后总结了 Netty Channel 相比原生 JDK Channel 在使用体验和扩展性上的优势。&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Netty" scheme="https://blog.shanzhao.site/categories/Netty/"/>
+    
+    
+    <category term="NIO" scheme="https://blog.shanzhao.site/tags/NIO/"/>
+    
+  </entry>
+  
+  <entry>
     <title>SpringBoot（五） — 嵌入式Tomcat</title>
     <link href="https://blog.shanzhao.site/2022-05-13/springboot-qian-ru-shi-tomcat-de-shi-yong/"/>
     <id>https://blog.shanzhao.site/2022-05-13/springboot-qian-ru-shi-tomcat-de-shi-yong/</id>
@@ -204,9 +223,9 @@
     
     <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
     
-    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
-    
     <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
+    
+    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
     
   </entry>
   
@@ -228,9 +247,9 @@
     
     <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
     
-    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
-    
     <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
+    
+    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
     
   </entry>
   
@@ -405,30 +424,6 @@
     
     <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
     
-    
-  </entry>
-  
-  <entry>
-    <title>Spring-ConfigurationClassPostProcessor</title>
-    <link href="https://blog.shanzhao.site/2021-05-13/spring-configurationclasspostprocessor/"/>
-    <id>https://blog.shanzhao.site/2021-05-13/spring-configurationclasspostprocessor/</id>
-    <published>2021-05-13T12:27:25.000Z</published>
-    <updated>2021-05-16T08:33:25.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	呕心沥血的分析了ConfigurationClassPostProcessor的核心源码，深入剖析了Spring注解驱动的原理。对其中的&lt;strong&gt;延迟机制、字节码解析优化和代理模型&lt;/strong&gt;进行了深度的思考，并通过arthas反编译反向验证了full configuration的代理&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
-    
-    
-    <category term="BeanPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanPostProcessor/"/>
-    
-    <category term="BeanDefinitionRegistryPostProcessor" scheme="https://blog.shanzhao.site/tags/BeanDefinitionRegistryPostProcessor/"/>
-    
-    <category term="Configuration注解" scheme="https://blog.shanzhao.site/tags/Configuration%E6%B3%A8%E8%A7%A3/"/>
     
   </entry>
   
