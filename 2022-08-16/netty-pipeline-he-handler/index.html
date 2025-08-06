@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	分析了 Netty 中 ChannelPipeline、ChannelHandler、ChannelHandlerContext 各自的作用和实现原理，重点讲了下解码器基类 ByteToMessageDecoder 是怎么解决粘包&#x2F;拆包的问题以及在实际使用时该如何考虑。最后用一张流程图总结了这三个核心组件在实际数据处理过程中的组合和协作方式">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Netty（二） — Pipeline和Handler">
+<meta property="og:url" content="https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	分析了 Netty 中 ChannelPipeline、ChannelHandler、ChannelHandlerContext 各自的作用和实现原理，重点讲了下解码器基类 ByteToMessageDecoder 是怎么解决粘包&#x2F;拆包的问题以及在实际使用时该如何考虑。最后用一张流程图总结了这三个核心组件在实际数据处理过程中的组合和协作方式">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://img.shanzhao.site/file/1754465202848_netty-pipeline-handler.png">
+<meta property="article:published_time" content="2022-08-16T13:33:03.000Z">
+<meta property="article:modified_time" content="2022-08-25T11:58:09.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="解码器">
+<meta property="article:tag" content="责任链模式">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://img.shanzhao.site/file/1754465202848_netty-pipeline-handler.png">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/","path":"2022-08-16/netty-pipeline-he-handler/","title":"Netty（二） — Pipeline和Handler"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Netty（二） — Pipeline和Handler | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#ChannelPipeline"><span class="nav-number">1.</span> <span class="nav-text">ChannelPipeline</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%96%B9%E6%B3%95"><span class="nav-number">1.1.</span> <span class="nav-text">核心方法</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ChannelHandler"><span class="nav-number">2.</span> <span class="nav-text">ChannelHandler</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ChannelInboundHandler"><span class="nav-number">2.1.</span> <span class="nav-text">ChannelInboundHandler</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#ByteToMessageDecoder"><span class="nav-number">2.1.1.</span> <span class="nav-text">ByteToMessageDecoder</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E6%96%B9%E6%B3%95-1"><span class="nav-number">2.1.1.1.</span> <span class="nav-text">核心方法</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%A7%A3%E7%A0%81%E5%99%A8"><span class="nav-number">2.1.1.2.</span> <span class="nav-text">常见解码器</span></a><ol class="nav-child"><li class="nav-item nav-level-6"><a class="nav-link" href="#FixedLengthFrameDecoder"><span class="nav-number">2.1.1.2.1.</span> <span class="nav-text">FixedLengthFrameDecoder</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#LineBasedFrameDecoder"><span class="nav-number">2.1.1.2.2.</span> <span class="nav-text">LineBasedFrameDecoder</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#DelimiterBasedFrameDecoder"><span class="nav-number">2.1.1.2.3.</span> <span class="nav-text">DelimiterBasedFrameDecoder</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#LengthFieldBasedFrameDecoder"><span class="nav-number">2.1.1.2.4.</span> <span class="nav-text">LengthFieldBasedFrameDecoder</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ChannelOutboundHandler"><span class="nav-number">2.2.</span> <span class="nav-text">ChannelOutboundHandler</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#MessageToByteEncoder"><span class="nav-number">2.2.1.</span> <span class="nav-text">MessageToByteEncoder</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ChannelHandlerContext"><span class="nav-number">3.</span> <span class="nav-text">ChannelHandlerContext</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E5%AD%97%E6%AE%B5"><span class="nav-number">3.1.</span> <span class="nav-text">核心字段</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%89%B9%E6%AE%8A%E7%9A%84HandlerContext"><span class="nav-number">3.2.</span> <span class="nav-text">特殊的HandlerContext</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#HeadContext"><span class="nav-number">3.2.1.</span> <span class="nav-text">HeadContext</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#TailContext"><span class="nav-number">3.2.2.</span> <span class="nav-text">TailContext</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">总结</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Handler%E4%BD%BF%E7%94%A8tips"><span class="nav-number">4.1.</span> <span class="nav-text">Handler使用tips</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">39</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">8</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">42</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Netty（二） — Pipeline和Handler | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Netty（二） — Pipeline和Handler
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-08-16 21:33:03" itemprop="dateCreated datePublished" datetime="2022-08-16T21:33:03+08:00">2022-08-16</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-08-25 19:58:09" itemprop="dateModified" datetime="2022-08-25T19:58:09+08:00">2022-08-25</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Netty/" itemprop="url" rel="index"><span itemprop="name">Netty</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>12k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>22 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	分析了 Netty 中 <strong>ChannelPipeline、ChannelHandler、ChannelHandlerContext</strong> 各自的作用和实现原理，重点讲了下<strong>解码器基类 ByteToMessageDecoder 是怎么解决粘包&#x2F;拆包的问题</strong>以及在<strong>实际使用时该如何考虑</strong>。最后用一张<strong>流程图总结了这三个核心组件在实际数据处理过程中的组合和协作方式</strong></p>
+<span id="more"></span>
+
+<h2 id="ChannelPipeline"><a href="#ChannelPipeline" class="headerlink" title="ChannelPipeline"></a>ChannelPipeline</h2><p>​	ChannelPipeline是 Netty 中用于处理 I&#x2F;O 事件和数据流的核心组件，表示 <strong>Channel 的事件处理链</strong>。每个 <code>Channel</code> 都绑定一个唯一的 <code>ChannelPipeline</code>，它实现了 <code>ChannelInboundInvoker</code> 和 <code>ChannelOutboundInvoker</code> 接口，默认实现类为 <code>DefaultChannelPipeline</code>。这个工具主要做两件事：</p>
+<ol>
+<li><p>维护ChannelHandler的双向链表结构</p>
+<blockquote>
+<p>添加、移除、和替换Handler，并触发相关的事件（handlerAdded、handerRemoved）</p>
+</blockquote>
+</li>
+<li><p>传播所有出入站事件</p>
+<blockquote>
+<ul>
+<li>outbound从tail开始传播</li>
+<li>inbound从head开始传播</li>
+</ul>
+</blockquote>
+</li>
+</ol>
+<h3 id="核心方法"><a href="#核心方法" class="headerlink" title="核心方法"></a>核心方法</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">DefaultChannelPipeline</span> <span class="token keyword">implements</span> <span class="token class-name">ChannelPipeline</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 固定的head，实现为HeadContext</span>
+    <span class="token keyword">final</span> AbstractChannelHandlerContext head<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 固定的tail，实现为TailContext</span>
+    <span class="token keyword">final</span> AbstractChannelHandlerContext tail<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 和当前pipeline关联的Channel</span>
+    <span class="token keyword">private</span> <span class="token keyword">final</span> Channel channel<span class="token punctuation">;</span>
+
+     <span class="token keyword">public</span> <span class="token keyword">final</span> ChannelPipeline <span class="token function">addFirst</span><span class="token punctuation">(</span>EventExecutorGroup group<span class="token punctuation">,</span> String name<span class="token punctuation">,</span> ChannelHandler handler<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">final</span> AbstractChannelHandlerContext newCtx<span class="token punctuation">;</span>
+        <span class="token keyword">synchronized</span> <span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 检查这个handler是否可以被多线程共享（被@Sharable标记）。避免多实例共享了不可共享的对象</span>
+            <span class="token comment" spellcheck="true">// 也就是handler默认下是每个Channel使用一个</span>
+            <span class="token function">checkMultiplicity</span><span class="token punctuation">(</span>handler<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 创建唯一的name并检查重名</span>
+            name <span class="token operator">=</span> <span class="token function">filterName</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> handler<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 创建handlerContext</span>
+            newCtx <span class="token operator">=</span> <span class="token function">newContext</span><span class="token punctuation">(</span>group<span class="token punctuation">,</span> name<span class="token punctuation">,</span> handler<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 作为head的下一个节点</span>
+            <span class="token function">addFirst0</span><span class="token punctuation">(</span>newCtx<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>registered<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 表示当前channel还未注册到eventLoop中，添加个handlerAdded的回调接口就直接返回</span>
+                newCtx<span class="token punctuation">.</span><span class="token function">setAddPending</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token function">callHandlerCallbackLater</span><span class="token punctuation">(</span>newCtx<span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token comment" spellcheck="true">// channel已经注册到eventLoop中，根据当前线程是否是eventLoop线程来决定是否直接调用handlerAdded事件</span>
+            EventExecutor executor <span class="token operator">=</span> newCtx<span class="token punctuation">.</span><span class="token function">executor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>executor<span class="token punctuation">.</span><span class="token function">inEventLoop</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token function">callHandlerAddedInEventLoop</span><span class="token punctuation">(</span>newCtx<span class="token punctuation">,</span> executor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token function">callHandlerAdded0</span><span class="token punctuation">(</span>newCtx<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token keyword">this</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="ChannelHandler"><a href="#ChannelHandler" class="headerlink" title="ChannelHandler"></a>ChannelHandler</h2><p>​	是所有Handler的顶层接口。<strong>内部定义了个@Sharable注解，表示只有加了这个注解的 Handler，才能被多个 Channel 共享使用</strong></p>
+<p>​	除了这个，ChannelHandler还定义了两个常见的生命周期回调：</p>
+<ul>
+<li><p><strong>handlerAdded</strong>：当前Handler被添加到ChannelPipeline里，且对应的Channel已注册到EventLoop后调用</p>
+</li>
+<li><p><strong>handlerRemoved</strong>：当前Handler从ChannelPipeline中移除后，且Channel已注册到EventLoop后调用</p>
+</li>
+</ul>
+<h3 id="ChannelInboundHandler"><a href="#ChannelInboundHandler" class="headerlink" title="ChannelInboundHandler"></a>ChannelInboundHandler</h3><p>​	这是入站事件的接口，也就是那些 <strong>外部（客户端）进来的操作</strong>，大多数方法（比如注册、激活）只会触发一次，而像 <code>channelRead</code>、<code>userEventTriggered</code> 这种则可能多次触发</p>
+<p>重点关注如下两个方法</p>
+<ol>
+<li><p>channelRead：从Socket中读取数据（<strong>多次触发</strong>）</p>
+<blockquote>
+<ol>
+<li>SocketChannel的一次请求可能由于<strong>网络的拆包、预分配的ByteBuf容量不够等原因触发多次channelRead</strong>。其<strong>参数msg是Object类型的，是因为这次读取可能是解码后的结果</strong>（如果是ByteBuf对象，则表示还未解码完毕）。这也<strong>是业务Handler的主要实现接口，很多自定义逻辑都会放在这里处理读取到的消息</strong>。触发点为<strong>NioByteUnsafe#read</strong></li>
+<li>ServerSocketChannel在这里处理与客户端创建的连接对象，所以<strong>其msg是SocketChannel</strong>。触发点为<strong>NioMessageUnsafe#read</strong></li>
+</ol>
+</blockquote>
+</li>
+<li><p>channelReadComplete：本轮读取完毕后触发（<strong>一次</strong>）</p>
+<blockquote>
+<p>​	所有可读的字节都已经从 Channel 中读取之后，将会调用该方法。一般可以再这个方法里<strong>对Socket进行wirte和flush</strong>了</p>
+</blockquote>
+</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">ChannelInboundHandler</span> <span class="token keyword">extends</span> <span class="token class-name">ChannelHandler</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 当前Channel注册到Selector时触发（此时还未注册感兴趣的事件）</span>
+    <span class="token keyword">void</span> <span class="token function">channelRegistered</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 当前Channel从Selector注销时触发</span>
+    <span class="token keyword">void</span> <span class="token function">channelUnregistered</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 当前Channel激活时触发。</span>
+    <span class="token comment" spellcheck="true">// 对于ServerSocketChannel，表示绑定了地址和端口。对于SocketChannel，代表已经连接了服务端</span>
+    <span class="token keyword">void</span> <span class="token function">channelActive</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// Channel 变为非活跃状态时触发，比如连接断开了</span>
+    <span class="token keyword">void</span> <span class="token function">channelInactive</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 从Socket中读取数据</span>
+    <span class="token keyword">void</span> <span class="token function">channelRead</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> Object msg<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 一次读操作完成时触发（意味着 channelRead 不会再进来了）</span>
+    <span class="token keyword">void</span> <span class="token function">channelReadComplete</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 用户定义的事件触发（比如检测心跳连接事件）</span>
+    <span class="token keyword">void</span> <span class="token function">userEventTriggered</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> Object evt<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token keyword">void</span> <span class="token function">channelWritabilityChanged</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 异常触发</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token annotation punctuation">@SuppressWarnings</span><span class="token punctuation">(</span><span class="token string">"deprecation"</span><span class="token punctuation">)</span>
+    <span class="token keyword">void</span> <span class="token function">exceptionCaught</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> Throwable cause<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="ByteToMessageDecoder"><a href="#ByteToMessageDecoder" class="headerlink" title="ByteToMessageDecoder"></a>ByteToMessageDecoder</h4><p>​	是<strong>解码器的顶级抽象类</strong>，用于<strong>处理 TCP 拆包&#x2F;粘包问题</strong>。通过重写 <code>ChannelInboundHandler#channelRead</code> 方法，实现将入站的 <code>ByteBuf</code> 解码为业务需要的消息对象。</p>
+<p>​	内部的<strong>cumulation字段为累积的ByteBuf缓冲区</strong>，通过内置的MERGE_CUMULATOR将其和本次读取到的ByteBuf进行合并（分配一个新的ByteBuf，将旧的cumulation和本次的ByteBuf复制进来，最终替换为新的cumulation）。</p>
+<p>​	<strong>ByteToMessageDecoder#decode这个模板方法是子类解码器需要唯一实现的接口。</strong>子类只需根据自己的协议来尝试解码，每次decode应该只尝试解析一次请求的数据，具体考虑如下：</p>
+<ol>
+<li><strong>ByteBuf数据不够（拆包）：不做任何处理，保留数据等待下一次读事件触发</strong></li>
+<li><strong>ByteBuf可读字节数 &gt;&#x3D; 当前请求的数据（粘包）：说明至少包含一个完整的报文，进行解码并将解码后的数据放入out这个List中</strong>。（不需要一次解码全部数据，多余的数据等待下次decode再进行解析）</li>
+</ol>
+<p>​	所以，通过ByteToMessageDecoder的功能可以推断出其<strong>不能在Channel中共享（构造方法中校验）</strong>。而且，<strong>应该将其放在Pipeline中尽量靠近head的位置，尽早完成 ByteBuf 到业务对象的转换</strong>，方便后续 Handler 的处理</p>
+<h5 id="核心方法-1"><a href="#核心方法-1" class="headerlink" title="核心方法"></a>核心方法</h5><pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">ByteToMessageDecoder</span> <span class="token keyword">extends</span> <span class="token class-name">ChannelInboundHandlerAdapter</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 累积的ByteBuf缓冲区</span>
+    ByteBuf cumulation<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// ByteBuf合并器</span>
+    <span class="token keyword">private</span> Cumulator cumulator <span class="token operator">=</span> MERGE_CUMULATOR<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 是否是一次请求中的第一次读取</span>
+    <span class="token keyword">private</span> <span class="token keyword">boolean</span> first<span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> discardAfterReads <span class="token operator">=</span> <span class="token number">16</span><span class="token punctuation">;</span>
+    <span class="token keyword">private</span> <span class="token keyword">int</span> numReads<span class="token punctuation">;</span>
+
+    <span class="token keyword">protected</span> <span class="token function">ByteToMessageDecoder</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 解码器一定不能被多个Channel共享，否则就可能读到多个Channel的数据</span>
+        <span class="token function">ensureNotSharable</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * ByteBuf合并器，通过合并两个ByteBuf返回一个新的ByteBuf
+     */</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> Cumulator MERGE_CUMULATOR <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">Cumulator</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token annotation punctuation">@Override</span>
+        <span class="token keyword">public</span> ByteBuf <span class="token function">cumulate</span><span class="token punctuation">(</span>ByteBufAllocator alloc<span class="token punctuation">,</span> ByteBuf cumulation<span class="token punctuation">,</span> ByteBuf in<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token keyword">final</span> ByteBuf buffer<span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// cumulation这个ByteBuf容量不够了 或被多个Handler引用了或只读模式，都需要新建一个扩容后的ByteBuf</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>cumulation<span class="token punctuation">.</span><span class="token function">writerIndex</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">></span> cumulation<span class="token punctuation">.</span><span class="token function">maxCapacity</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> in<span class="token punctuation">.</span><span class="token function">readableBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                        <span class="token operator">||</span> cumulation<span class="token punctuation">.</span><span class="token function">refCnt</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">></span> <span class="token number">1</span> <span class="token operator">||</span> cumulation<span class="token punctuation">.</span><span class="token function">isReadOnly</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 使用ByteBufAllocator分配新的更大容量的ByteBuf，并将cumulation写入到新的ByteBuf中</span>
+                    buffer <span class="token operator">=</span> <span class="token function">expandCumulation</span><span class="token punctuation">(</span>alloc<span class="token punctuation">,</span> cumulation<span class="token punctuation">,</span> in<span class="token punctuation">.</span><span class="token function">readableBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                    buffer <span class="token operator">=</span> cumulation<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                buffer<span class="token punctuation">.</span><span class="token function">writeBytes</span><span class="token punctuation">(</span>in<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span> buffer<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                in<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">;</span>
+
+    
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">channelRead</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> Object msg<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>msg <span class="token keyword">instanceof</span> <span class="token class-name">ByteBuf</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 这个out的数据结构就是我们解码后存放解码对象的容器（因为一次read可能解码出多条数据，所以需要List结构）</span>
+            CodecOutputList out <span class="token operator">=</span> CodecOutputList<span class="token punctuation">.</span><span class="token function">newInstance</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                ByteBuf data <span class="token operator">=</span> <span class="token punctuation">(</span>ByteBuf<span class="token punctuation">)</span> msg<span class="token punctuation">;</span>
+                first <span class="token operator">=</span> cumulation <span class="token operator">==</span> null<span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>first<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 第一次读</span>
+                    cumulation <span class="token operator">=</span> data<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 代表不是第一次读取了，可能由拆包，现需要组合两个ByteBuf</span>
+                    cumulation <span class="token operator">=</span> cumulator<span class="token punctuation">.</span><span class="token function">cumulate</span><span class="token punctuation">(</span>ctx<span class="token punctuation">.</span><span class="token function">alloc</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> cumulation<span class="token punctuation">,</span> data<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// 开始尝试解码</span>
+                <span class="token function">callDecode</span><span class="token punctuation">(</span>ctx<span class="token punctuation">,</span> cumulation<span class="token punctuation">,</span> out<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">DecoderException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">DecoderException</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>cumulation <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>cumulation<span class="token punctuation">.</span><span class="token function">isReadable</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 数据读完了，需要释放</span>
+                    numReads <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+                    cumulation<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    cumulation <span class="token operator">=</span> null<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">++</span>numReads <span class="token operator">>=</span> discardAfterReads<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 默认连续读了16次都没有完全读完数据，就丢弃一部分已读的数据以免内存溢出</span>
+                    <span class="token comment" spellcheck="true">// 出现这种情况一般都是一直有拆包，导致每次读取的ByteBuf组合后都不能完全解码掉</span>
+                    numReads <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+                    <span class="token function">discardSomeReadBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">int</span> size <span class="token operator">=</span> out<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                decodeWasNull <span class="token operator">=</span> <span class="token operator">!</span>out<span class="token punctuation">.</span><span class="token function">insertSinceRecycled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token function">fireChannelRead</span><span class="token punctuation">(</span>ctx<span class="token punctuation">,</span> out<span class="token punctuation">,</span> size<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 存在解码后的数据才会将解码对象向后传播</span>
+                out<span class="token punctuation">.</span><span class="token function">recycle</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 到了这里，out一定为空了，回收当前的CodecOutputList以便下次使用</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 说明已经被解码了，直接向后传递msg</span>
+            ctx<span class="token punctuation">.</span><span class="token function">fireChannelRead</span><span class="token punctuation">(</span>msg<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">callDecode</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> ByteBuf in<span class="token punctuation">,</span> List<span class="token operator">&lt;</span>Object<span class="token operator">></span> out<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">while</span> <span class="token punctuation">(</span>in<span class="token punctuation">.</span><span class="token function">isReadable</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 只要还有数据可读，就应该继续尝试解码</span>
+                <span class="token keyword">int</span> outSize <span class="token operator">=</span> out<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>outSize <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 有解码后的数据，应该通过调用channelRead来处理这些数据</span>
+                    <span class="token function">fireChannelRead</span><span class="token punctuation">(</span>ctx<span class="token punctuation">,</span> out<span class="token punctuation">,</span> outSize<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    out<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 传播完了，清空容器，等待后续可能的添加</span>
+
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token punctuation">.</span><span class="token function">isRemoved</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">break</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    outSize <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// 可读的字节数</span>
+                <span class="token keyword">int</span> oldInputLength <span class="token operator">=</span> in<span class="token punctuation">.</span><span class="token function">readableBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 让子类取去尝试解码</span>
+                <span class="token function">decodeRemovalReentryProtection</span><span class="token punctuation">(</span>ctx<span class="token punctuation">,</span> in<span class="token punctuation">,</span> out<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>ctx<span class="token punctuation">.</span><span class="token function">isRemoved</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">break</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>outSize <span class="token operator">==</span> out<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 没有解码出数据</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>oldInputLength <span class="token operator">==</span> in<span class="token punctuation">.</span><span class="token function">readableBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 没有解码数据，代表可能拆包了，还不够一次的数据。</span>
+                        <span class="token comment" spellcheck="true">// 跳出循环，等待下一次的channelRead一起处理数据</span>
+                        <span class="token keyword">break</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                        <span class="token keyword">continue</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>oldInputLength <span class="token operator">==</span> in<span class="token punctuation">.</span><span class="token function">readableBytes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">DecoderException</span><span class="token punctuation">(</span>
+                            StringUtil<span class="token punctuation">.</span><span class="token function">simpleClassName</span><span class="token punctuation">(</span><span class="token function">getClass</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">+</span>
+                                    <span class="token string">".decode() did not read anything but decoded a message."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">isSingleDecode</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">break</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">DecoderException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> cause<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">DecoderException</span><span class="token punctuation">(</span>cause<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 模板方法接口，等待子类去实现真正的解码，如果有待解码的数据，就将ByteBuf读取并进行解码，再将解码后的数据放入out就行</span>
+    <span class="token comment" spellcheck="true">// 如果没有待解码的数据（可能网络的拆包导致数据不完整），不用做任何操作</span>
+    <span class="token keyword">protected</span> <span class="token keyword">abstract</span> <span class="token keyword">void</span> <span class="token function">decode</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> ByteBuf in<span class="token punctuation">,</span> List<span class="token operator">&lt;</span>Object<span class="token operator">></span> out<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="常见解码器"><a href="#常见解码器" class="headerlink" title="常见解码器"></a>常见解码器</h5><h6 id="FixedLengthFrameDecoder"><a href="#FixedLengthFrameDecoder" class="headerlink" title="FixedLengthFrameDecoder"></a>FixedLengthFrameDecoder</h6><p>​	固定长度帧解码器。通过构造方法指定帧长 <code>frameLength</code>，每次从 <code>ByteBuf</code> 中读取固定字节数作为一帧进行解码</p>
+<h6 id="LineBasedFrameDecoder"><a href="#LineBasedFrameDecoder" class="headerlink" title="LineBasedFrameDecoder"></a>LineBasedFrameDecoder</h6><p>​	行分隔符解码器。以换行符 <code>\n</code>（或 <code>\r\n</code>）作为帧的结束标志，适用于基于文本行的协议解析</p>
+<h6 id="DelimiterBasedFrameDecoder"><a href="#DelimiterBasedFrameDecoder" class="headerlink" title="DelimiterBasedFrameDecoder"></a>DelimiterBasedFrameDecoder</h6><p>​	分隔符解码器。支持自定义一个或多个分隔符（<code>ByteBuf</code> 类型）作为帧边界，从 <code>ByteBuf</code> 中提取每帧数据</p>
+<h6 id="LengthFieldBasedFrameDecoder"><a href="#LengthFieldBasedFrameDecoder" class="headerlink" title="LengthFieldBasedFrameDecoder"></a>LengthFieldBasedFrameDecoder</h6><p>​	比上面三个都更加灵活的解码器，<strong>基于某个字段指定整帧长度的通用解码器</strong>。重要参数如下</p>
+<blockquote>
+<ul>
+<li>maxFrameLength：最大帧长度，超过此长度的帧将被丢弃</li>
+<li>lengthFieldOffset：长度域偏移。就是说数据开始的几个字节可能不是表示数据长度，需要后移几个字节才是长度域。</li>
+<li>lengthFieldLength：长度域字节数。用几个字节来表示数据长度。</li>
+<li>lengthAdjustment：数据长度修正。因为长度域指定的长度可以是header + body的整个长度，也可以只是body的长度。如果表示header+body的整个长度，那么我们需要修正数据长度。</li>
+<li>initialBytesToStrip：跳过的字节数。如果你需要接收header+body的所有数据，此值就是0，如果你只想接收body数据，那么需要跳过header所占用的字节数。</li>
+</ul>
+</blockquote>
+<h3 id="ChannelOutboundHandler"><a href="#ChannelOutboundHandler" class="headerlink" title="ChannelOutboundHandler"></a>ChannelOutboundHandler</h3><p>​	这是<strong>出站事件的接口</strong>，也就是我们<strong>主动发起的操作</strong>。大多数方法（比connect、bind、read）只会触发一次，而像 <code>write</code>、<code>flush</code> 才可能多次触发</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">ChannelOutboundHandler</span> <span class="token keyword">extends</span> <span class="token class-name">ChannelHandler</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// Channel绑定到本地地址时触发（仅ServerSocketChannel触发一次）</span>
+    <span class="token keyword">void</span> <span class="token function">bind</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> SocketAddress localAddress<span class="token punctuation">,</span> ChannelPromise promise<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 当 SocketChannel 连接远程地址时触发，仅触发一次</span>
+    <span class="token comment" spellcheck="true">// 触发地点：Bootstrap#doConnect</span>
+    <span class="token keyword">void</span> <span class="token function">connect</span><span class="token punctuation">(</span>
+            ChannelHandlerContext ctx<span class="token punctuation">,</span> SocketAddress remoteAddress<span class="token punctuation">,</span>
+            SocketAddress localAddress<span class="token punctuation">,</span> ChannelPromise promise<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 主动断开连接时触发（如 SocketChannel.disconnect()）</span>
+    <span class="token keyword">void</span> <span class="token function">disconnect</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> ChannelPromise promise<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token keyword">void</span> <span class="token function">close</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> ChannelPromise promise<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token keyword">void</span> <span class="token function">deregister</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> ChannelPromise promise<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 开始监听感兴趣的 IO 事件：</span>
+    <span class="token comment" spellcheck="true">// - 对 ServerSocketChannel 是 ACCEPT 事件</span>
+    <span class="token comment" spellcheck="true">// - 对 SocketChannel 是 READ 事件</span>
+    <span class="token keyword">void</span> <span class="token function">read</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 写数据到 Channel 的缓冲区，仅适用于 SocketChannel</span>
+    <span class="token keyword">void</span> <span class="token function">write</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> Object msg<span class="token punctuation">,</span> ChannelPromise promise<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 将缓冲区中的数据刷新到底层网络，仅适用于 SocketChannel</span>
+    <span class="token keyword">void</span> <span class="token function">flush</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="MessageToByteEncoder"><a href="#MessageToByteEncoder" class="headerlink" title="MessageToByteEncoder"></a>MessageToByteEncoder</h4><p>​	是<strong>出站方向编码器的抽象基类</strong>，相比解码器其逻辑更简单，没有太多复杂场景。</p>
+<p>​	子类只需实现encode这个模板方法，将消息对象 <code>msg</code> 编码为二进制数据写入 <code>out</code> 即可，Netty 会负责后续的写出逻辑</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">abstract</span> <span class="token keyword">class</span> <span class="token class-name">MessageToByteEncoder</span><span class="token operator">&lt;</span>I<span class="token operator">></span> <span class="token keyword">extends</span> <span class="token class-name">ChannelOutboundHandlerAdapter</span> <span class="token punctuation">{</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">write</span><span class="token punctuation">(</span>ChannelHandlerContext ctx<span class="token punctuation">,</span> Object msg<span class="token punctuation">,</span> ChannelPromise promise<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        ByteBuf buf <span class="token operator">=</span> null<span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">acceptOutboundMessage</span><span class="token punctuation">(</span>msg<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// msg类型匹配</span>
+                I cast <span class="token operator">=</span> <span class="token punctuation">(</span>I<span class="token punctuation">)</span> msg<span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 分配一个空的 ByteBuf（preferDirect 表示是否优先使用直接内存）</span>
+                buf <span class="token operator">=</span> <span class="token function">allocateBuffer</span><span class="token punctuation">(</span>ctx<span class="token punctuation">,</span> cast<span class="token punctuation">,</span> preferDirect<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 子类实现。将消息编码写入到ByteBuf中</span>
+                    <span class="token function">encode</span><span class="token punctuation">(</span>ctx<span class="token punctuation">,</span> cast<span class="token punctuation">,</span> buf<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                    ReferenceCountUtil<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span>cast<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>buf<span class="token punctuation">.</span><span class="token function">isReadable</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// buf被写入了数据，即编码了。触发write操作</span>
+                    ctx<span class="token punctuation">.</span><span class="token function">write</span><span class="token punctuation">(</span>buf<span class="token punctuation">,</span> promise<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 释放</span>
+                    buf<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    ctx<span class="token punctuation">.</span><span class="token function">write</span><span class="token punctuation">(</span>Unpooled<span class="token punctuation">.</span>EMPTY_BUFFER<span class="token punctuation">,</span> promise<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                buf <span class="token operator">=</span> null<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 不是对应的编码器，则向前继续传递</span>
+                ctx<span class="token punctuation">.</span><span class="token function">write</span><span class="token punctuation">(</span>msg<span class="token punctuation">,</span> promise<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">EncoderException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">EncoderException</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 兜底释放资源</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>buf <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                buf<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="ChannelHandlerContext"><a href="#ChannelHandlerContext" class="headerlink" title="ChannelHandlerContext"></a>ChannelHandlerContext</h2><p>​	<code>ChannelHandlerContext</code> 是每个 <code>ChannelHandler</code> 的上下文容器，本质上<strong>是 Netty 中 <code>ChannelPipeline</code> 双向链表结构的一个节点（Node）</strong>，其默认实现类为<code>DefaultChannelHandlerContext</code></p>
+<p>​	它不仅维护了当前 <code>Handler</code> 的状态信息，还实现了 <code>ChannelInboundInvoker</code> 和 <code>ChannelOutboundInvoker</code> 接口，具备<strong>将入站、出站事件沿链路传递到下一个合适的 <code>Handler</code> 的能力</strong></p>
+<h3 id="核心字段"><a href="#核心字段" class="headerlink" title="核心字段"></a>核心字段</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// 当前 Context 所包装的 ChannelHandler</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> ChannelHandler handler<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 指向下一个 HandlerContext，入站使用</span>
+<span class="token keyword">volatile</span> AbstractChannelHandlerContext next<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 指向前一个 HandlerContext，出站使用</span>
+<span class="token keyword">volatile</span> AbstractChannelHandlerContext prev<span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">// 能否处理inbound事件</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token keyword">boolean</span> inbound<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 能否处理outbound事件</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token keyword">boolean</span> outbound<span class="token punctuation">;</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> DefaultChannelPipeline pipeline<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 当前handler的名字</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> String name<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">/**
+ * 当前 handler 是否应按顺序触发事件，一般都为true
+ * 
+ * 为 true 时，只有在 handler 被完整添加到 Pipeline 并执行了 handlerAdded() 回调后，
+ * 才会触发该 handler 的其他事件（如 channelRead 等）
+ *
+ * 如果为 false，即便 handlerAdded() 尚未被调用，只要已添加到 Pipeline 中，
+ * 就允许立即触发其事件方法。通常用于一些内部 handler 的优化场景
+ */</span>
+<span class="token keyword">private</span> <span class="token keyword">final</span> <span class="token keyword">boolean</span> ordered<span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">// handler 已添加到 pipeline 中，但尚未调用 handlerAdded（即还未激活）</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> ADD_PENDING <span class="token operator">=</span> <span class="token number">1</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// handler 已添加到 pipeline 且 handlerAdded 已调用（已激活）</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> ADD_COMPLETE <span class="token operator">=</span> <span class="token number">2</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// handler 已从 pipeline 中移除，不能再触发事件</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> REMOVE_COMPLETE <span class="token operator">=</span> <span class="token number">3</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 初始化状态</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> INIT <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 当前context的状态</span>
+<span class="token keyword">private</span> <span class="token keyword">volatile</span> <span class="token keyword">int</span> handlerState <span class="token operator">=</span> INIT<span class="token punctuation">;</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="特殊的HandlerContext"><a href="#特殊的HandlerContext" class="headerlink" title="特殊的HandlerContext"></a>特殊的HandlerContext</h3><p>​	在 Netty 的 ChannelPipeline 中，除了我们自定义的 ChannelHandlerContext ，框架还内置了两个特殊的 Context：<strong>HeadContext</strong> 和 <strong>TailContext</strong>，分别作为出站和入站事件处理链的<strong>起始和终点</strong>，对事件传播机制进行收尾</p>
+<h4 id="HeadContext"><a href="#HeadContext" class="headerlink" title="HeadContext"></a>HeadContext</h4><p>​	<strong>出站事件链的终点，负责将最终的出站操作（如connect、bind、write、flush等）委托给底层的 Channel.Unsafe</strong></p>
+<p>​	虽然也实现了ChannelInboundHandler，但对入站事件基本没特殊的处理，仅向后续的Handler传播</p>
+<h4 id="TailContext"><a href="#TailContext" class="headerlink" title="TailContext"></a>TailContext</h4><p>​	<strong>入站事件链的终点，通常用于收尾处理，例如资源释放、日志记录等</strong>（如入站事件的异常（exceptionCaught）如果不做任何处理，继续向后传播的话，最终也只会记录日志，并不会抛出异常）</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><img src="https://img.shanzhao.site/file/1754465202848_netty-pipeline-handler.png" alt="netty-pipeline-handler.png"></p>
+<p>​	Pipeline + Handler是基于<strong>责任链模式</strong>设计的，主要用于网络事件的<strong>传递、处理和拦截</strong>。类似于Tomcat的Pipeline + Value。但 <strong>Netty 更底层、通用，它既能作为服务端，也可以作为客户端使用</strong>。</p>
+<p>​	Netty将网络通信中的<strong>被动接收和主动发起相关IO操作抽象成了inbound和outbound事件</strong>，使其在对应的handler中传递，具体为：</p>
+<blockquote>
+<p>出站(outbound)：<strong>tail  →  …各种OutboundHandler  →  head</strong>。bind, connect, write, flush等<strong>主动触发的IO操</strong></p>
+<p>入站(inbound)：<strong>head  →  …各种InboundHandler  →  tail</strong>。channelRead，channelActive, channelRegistered等<strong>被动接收的IO操作</strong></p>
+</blockquote>
+<p>​	同时它基于自身的架构设计了<strong>顶层的解码器ByteToMessageDecoder帮我们解决了网络中拆包粘包的问题，使我们在使用过程中只需关注具体的协议解析和业务处理部分</strong></p>
+<h3 id="Handler使用tips"><a href="#Handler使用tips" class="headerlink" title="Handler使用tips"></a>Handler使用tips</h3><ol>
+<li>Handler 的添加顺序决定其在 Pipeline 中的执行顺序，会影响事件的处理逻辑。使用时需根据具体依赖关系进行编排，比如：解码器应在业务处理器之前，编码器应在之后</li>
+<li><strong>Handler 默认不可复用</strong>（每个 Channel 一个实例）。如果 Handler 是线程安全的，可以加 @ChannelHandler.Sharable 注解，让这个Handler实例在多个Channel中共享使用</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E8%A7%A3%E7%A0%81%E5%99%A8/" rel="tag"># 解码器</a>
+              <a href="/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/" rel="tag"># 责任链模式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2022-07-20/netty-channel-he-unsafe/" rel="prev" title="Netty（一） — Channel和Unsafe">
+                  <i class="fa fa-angle-left"></i> Netty（一） — Channel和Unsafe
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/" rel="next" title="CloudFlare-CDN缓存清除">
+                  CloudFlare-CDN缓存清除 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">436k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">13:13</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

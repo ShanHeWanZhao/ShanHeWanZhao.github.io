@@ -37,6 +37,27 @@
   </entry>
   
   <entry>
+    <title>Netty（二） — Pipeline和Handler</title>
+    <link href="https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/"/>
+    <id>https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/</id>
+    <published>2022-08-16T13:33:03.000Z</published>
+    <updated>2022-08-25T11:58:09.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	分析了 Netty 中 &lt;strong&gt;ChannelPipeline、ChannelHandler、ChannelHandlerContext&lt;/strong&gt; 各自的作用和实现原理，重点讲了下&lt;strong&gt;解码器基类 ByteToMessageDecoder 是怎么解决粘包&amp;#x2F;拆包的问题&lt;/strong&gt;以及在&lt;strong&gt;实际使用时该如何考虑&lt;/strong&gt;。最后用一张&lt;strong&gt;流程图总结了这三个核心组件在实际数据处理过程中的组合和协作方式&lt;/strong&gt;&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Netty" scheme="https://blog.shanzhao.site/categories/Netty/"/>
+    
+    
+    <category term="解码器" scheme="https://blog.shanzhao.site/tags/%E8%A7%A3%E7%A0%81%E5%99%A8/"/>
+    
+    <category term="责任链模式" scheme="https://blog.shanzhao.site/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Netty（一） — Channel和Unsafe</title>
     <link href="https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/"/>
     <id>https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/</id>
@@ -401,24 +422,6 @@
     
     <summary type="html">&lt;hr&gt;
 &lt;p&gt;​	分析了Spring Scope的作用和实现类。并&lt;strong&gt;从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证&lt;/strong&gt;。重点应该关注基于代理的其他作用域Bean注册的&lt;strong&gt;两个BeanDefinition异同点，以及为何会注册两个BeanDefinition&lt;/strong&gt;&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
-    
-    
-  </entry>
-  
-  <entry>
-    <title>Spring-容器refresh</title>
-    <link href="https://blog.shanzhao.site/2021-06-03/spring-rong-qi-refresh/"/>
-    <id>https://blog.shanzhao.site/2021-06-03/spring-rong-qi-refresh/</id>
-    <published>2021-06-03T13:01:42.000Z</published>
-    <updated>2021-06-06T13:01:42.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	从源码分析了Spring容器的refresh过程，并通过图文的方式记录了整个流程的核心步骤&lt;/p&gt;</summary>
     
     
     
