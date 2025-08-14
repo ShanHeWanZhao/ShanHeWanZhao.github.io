@@ -37,6 +37,27 @@
   </entry>
   
   <entry>
+    <title>Netty（三） — EventLoopGroup和EventLoop</title>
+    <link href="https://blog.shanzhao.site/2022-10-13/netty-eventloop/"/>
+    <id>https://blog.shanzhao.site/2022-10-13/netty-eventloop/</id>
+    <published>2022-10-13T15:18:03.000Z</published>
+    <updated>2022-10-16T11:52:09.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	 基于Netty 4.1.34版本，分析了 Netty 中NIO相关的 &lt;strong&gt;EventLoopGroup&lt;/strong&gt; 与 &lt;strong&gt;EventLoop&lt;/strong&gt; 的核心功能和实现原理，重点涵盖了&lt;strong&gt;JDK Selector 的性能瓶颈与 Netty 优化策略&lt;/strong&gt;、&lt;strong&gt;事件循环线程的阻塞与唤醒机制（含空轮询 Bug 修复方案）、IO 事件与任务调度细节&lt;/strong&gt;，并配套流程图直观展示 EventLoop 工作流程&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Netty" scheme="https://blog.shanzhao.site/categories/Netty/"/>
+    
+    
+    <category term="NIO" scheme="https://blog.shanzhao.site/tags/NIO/"/>
+    
+    <category term="事件循环" scheme="https://blog.shanzhao.site/tags/%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF/"/>
+    
+  </entry>
+  
+  <entry>
     <title>Netty（二） — Pipeline和Handler</title>
     <link href="https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/"/>
     <id>https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/</id>
@@ -408,24 +429,6 @@
     
     
     <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-  </entry>
-  
-  <entry>
-    <title>Spring-Bean的Scope</title>
-    <link href="https://blog.shanzhao.site/2021-06-28/spring-bean-de-scope/"/>
-    <id>https://blog.shanzhao.site/2021-06-28/spring-bean-de-scope/</id>
-    <published>2021-06-28T13:04:19.000Z</published>
-    <updated>2021-06-28T13:04:19.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	分析了Spring Scope的作用和实现类。并&lt;strong&gt;从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证&lt;/strong&gt;。重点应该关注基于代理的其他作用域Bean注册的&lt;strong&gt;两个BeanDefinition异同点，以及为何会注册两个BeanDefinition&lt;/strong&gt;&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Spring" scheme="https://blog.shanzhao.site/categories/Spring/"/>
     
     
   </entry>
