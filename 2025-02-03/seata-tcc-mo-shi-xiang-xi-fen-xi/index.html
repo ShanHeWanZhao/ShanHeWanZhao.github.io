@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	深入分析了 Seata 的 TCC 模式，通过实际使用案例引出了关键注解的应用。结合 TM、RM 和 TC 的工作流程，剖析了 TccActionInterceptor 在 try 阶段的实现原理，详细讲解了 TCCResourceManager 如何处理 commit 和 rollback 操作。同时，解析了 TCC_FENCE_LOG 表如何保障事务幂等性，并有效解决了悬挂和空回滚等常见问">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Seata — TCC模式详细分析">
+<meta property="og:url" content="https://blog.shanzhao.site/2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	深入分析了 Seata 的 TCC 模式，通过实际使用案例引出了关键注解的应用。结合 TM、RM 和 TC 的工作流程，剖析了 TccActionInterceptor 在 try 阶段的实现原理，详细讲解了 TCCResourceManager 如何处理 commit 和 rollback 操作。同时，解析了 TCC_FENCE_LOG 表如何保障事务幂等性，并有效解决了悬挂和空回滚等常见问">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-02-03T12:45:09.000Z">
+<meta property="article:modified_time" content="2025-02-24T13:32:19.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="分布式事务">
+<meta property="article:tag" content="AT模式">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/","path":"2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/","title":"Seata — TCC模式详细分析"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Seata — TCC模式详细分析 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BD%BF%E7%94%A8%E6%A1%88%E4%BE%8B"><span class="nav-number">1.</span> <span class="nav-text">使用案例</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%89%A3%E5%BA%93%E5%AD%98"><span class="nav-number">1.1.</span> <span class="nav-text">扣库存</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%8B%E5%8D%95"><span class="nav-number">1.2.</span> <span class="nav-text">下单</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#TCC%E5%AE%9E%E7%8E%B0"><span class="nav-number">2.</span> <span class="nav-text">TCC实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BC%80%E5%90%AF%E5%85%A8%E5%B1%80%E4%BA%8B%E5%8A%A1"><span class="nav-number">2.1.</span> <span class="nav-text">开启全局事务</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#try"><span class="nav-number">2.2.</span> <span class="nav-text">try</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#commit"><span class="nav-number">2.3.</span> <span class="nav-text">commit</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#cancel"><span class="nav-number">2.4.</span> <span class="nav-text">cancel</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E5%86%B3"><span class="nav-number">2.5.</span> <span class="nav-text">常见问题解决</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%B9%82%E7%AD%89%E4%BF%9D%E8%AF%81"><span class="nav-number">2.5.1.</span> <span class="nav-text">幂等保证</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%A9%BA%E5%9B%9E%E6%BB%9A"><span class="nav-number">2.5.2.</span> <span class="nav-text">空回滚</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-number">2.5.2.1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="nav-number">2.5.2.2.</span> <span class="nav-text">解决方案</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%82%AC%E6%8C%82"><span class="nav-number">2.5.3.</span> <span class="nav-text">悬挂</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E8%83%8C%E6%99%AF-1"><span class="nav-number">2.5.3.1.</span> <span class="nav-text">背景</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-1"><span class="nav-number">2.5.3.2.</span> <span class="nav-text">解决方案</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">3.</span> <span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">49</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">52</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Seata — TCC模式详细分析 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Seata — TCC模式详细分析
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2025-02-03 20:45:09" itemprop="dateCreated datePublished" datetime="2025-02-03T20:45:09+08:00">2025-02-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2025-02-24 21:32:19" itemprop="dateModified" datetime="2025-02-24T21:32:19+08:00">2025-02-24</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Seata/" itemprop="url" rel="index"><span itemprop="name">Seata</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>8.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	深入分析了 Seata 的 TCC 模式，通过实际使用案例引出了关键注解的应用。结合 TM、RM 和 TC 的工作流程，剖析了 <code>TccActionInterceptor</code> 在 try 阶段的实现原理，详细讲解了 <code>TCCResourceManager</code> 如何处理 commit 和 rollback 操作。同时，解析了 <code>TCC_FENCE_LOG</code> 表如何保障事务幂等性，并有效解决了悬挂和空回滚等常见问题</p>
+<span id="more"></span>
+
+<h2 id="使用案例"><a href="#使用案例" class="headerlink" title="使用案例"></a>使用案例</h2><p>​	一个简单的使用TCC模式下订单，在本地扣减库存后再调用其他微服务的案例</p>
+<h3 id="扣库存"><a href="#扣库存" class="headerlink" title="扣库存"></a>扣库存</h3><pre class="line-numbers language-java"><code class="language-java">
+<span class="token annotation punctuation">@LocalTCC</span>
+<span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">StockTccAction</span> <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 预扣库存
+     */</span>
+    <span class="token annotation punctuation">@TwoPhaseBusinessAction</span><span class="token punctuation">(</span>name <span class="token operator">=</span> <span class="token string">"stockAction"</span><span class="token punctuation">,</span> useTCCFence <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">)</span>
+    <span class="token keyword">void</span> <span class="token function">prepareReduceInventory</span><span class="token punctuation">(</span><span class="token annotation punctuation">@BusinessActionContextParameter</span><span class="token punctuation">(</span>paramName <span class="token operator">=</span> <span class="token string">"sku"</span><span class="token punctuation">)</span> String sku<span class="token punctuation">,</span>
+                                <span class="token annotation punctuation">@BusinessActionContextParameter</span><span class="token punctuation">(</span>paramName <span class="token operator">=</span> <span class="token string">"quantity"</span><span class="token punctuation">)</span> Integer quantity<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">void</span> <span class="token function">commit</span><span class="token punctuation">(</span>BusinessActionContext businessActionContext<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">void</span> <span class="token function">rollback</span><span class="token punctuation">(</span>BusinessActionContext businessActionContext<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="下单"><a href="#下单" class="headerlink" title="下单"></a>下单</h3><pre class="line-numbers language-java"><code class="language-java"><span class="token annotation punctuation">@Component</span>
+<span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">OrderService</span> <span class="token punctuation">{</span>
+
+    <span class="token annotation punctuation">@Autowired</span>
+    <span class="token keyword">private</span> StockTccAction stockTccAction<span class="token punctuation">;</span>
+
+    <span class="token annotation punctuation">@GlobalTransactional</span><span class="token punctuation">(</span>rollbackFor <span class="token operator">=</span> Exception<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">placeOrder</span><span class="token punctuation">(</span>OrderDTO orderDTO<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+
+        stockTccAction<span class="token punctuation">.</span><span class="token function">prepareReduceInventory</span><span class="token punctuation">(</span>orderDTO<span class="token punctuation">.</span><span class="token function">getSku</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> orderDTO<span class="token punctuation">.</span><span class="token function">getQuantity</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 调用其他微服务....</span>
+
+    <span class="token punctuation">}</span>
+
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="TCC实现"><a href="#TCC实现" class="headerlink" title="TCC实现"></a>TCC实现</h2><p>​	Seata还是利用了GlobalTransactionScanner来实现TCC的代理。具体来说，方法上如果使用了<code>@TwoPhaseBusinessAction</code>注解，并且是远程引用bean（如<code>sofa:reference</code>、<code>dubbo:reference</code>），或者是带有<code>@LocalTCC</code>类注解的方法，都会由<code>TccActionInterceptor</code>作为切面来实现TCC在try阶段的代理</p>
+<h3 id="开启全局事务"><a href="#开启全局事务" class="headerlink" title="开启全局事务"></a>开启全局事务</h3><p>​	首先TCC模式还是使用了@GlobalTransactional开启全局事务，这部分和AT模式是一样的，具体解析可以看<a target="_blank" rel="noopener external nofollow noreferrer" href="http://localhost:4000/2024-07-26/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/#%E5%85%A8%E5%B1%80%E4%BA%8B%E5%8A%A1%E5%BC%80%E5%90%AF">之前的文章</a></p>
+<h3 id="try"><a href="#try" class="headerlink" title="try"></a>try</h3><p>​	调用带有<code>@TwoPhaseBusinessAction</code>注解的TccAction方法时，会进入<code>TccActionInterceptor</code>切面，该切面即是TCC的<strong>try</strong>阶段。核心的业务逻辑在<code>ActionInterceptorHandler#proceed</code>方法中实现，下面是重点流程的总结：</p>
+<ol>
+<li><p>构建BusinessActionContext，并填充相关参数</p>
+</li>
+<li><p>使用TCC的RM（TCCResourceManager）向TC注册分支事务</p>
+<blockquote>
+<ul>
+<li>注册时，<code>BusinessActionContext</code>的所有信息会被封装在<code>BranchRegisterRequest</code>中，并存储在<code>BranchTransactionDO</code>里。之后在<code>commit</code>或<code>rollback</code>阶段时会传回这些数据</li>
+<li>TC处理TCC分支事务注册的逻辑和AT注册分支事务的逻辑是一套的，唯一的区别是<strong>TCC不需要获取锁资源（BranchSession#lock方法只对AT生效）</strong></li>
+</ul>
+</blockquote>
+</li>
+<li><p>根据<code>useTCCFence</code>决定<code>try</code>阶段业务逻辑的执行方式</p>
+<blockquote>
+<ul>
+<li><code>useTCCFence=true</code>：在事务的try阶段，会先插入一条状态为<code>STATUS_TRIED</code>的<code>TCC_FENCE_LOG</code>数据，并随后执行业务代码。这两个操作会在同一个本地事务中执行</li>
+<li><code>useTCCFence=false</code>：则直接执行业务代码</li>
+</ul>
+</blockquote>
+</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> Object <span class="token function">proceed</span><span class="token punctuation">(</span>Method method<span class="token punctuation">,</span> Object<span class="token punctuation">[</span><span class="token punctuation">]</span> arguments<span class="token punctuation">,</span> String xid<span class="token punctuation">,</span> TwoPhaseBusinessAction businessAction<span class="token punctuation">,</span>
+        Callback<span class="token operator">&lt;</span>Object<span class="token operator">></span> targetCallback<span class="token punctuation">)</span> <span class="token keyword">throws</span> Throwable <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 获取参数里的BusinessActionContext，没有就新建</span>
+    BusinessActionContext actionContext <span class="token operator">=</span> <span class="token function">getOrCreateActionContextAndResetToArguments</span><span class="token punctuation">(</span>method<span class="token punctuation">.</span><span class="token function">getParameterTypes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            arguments<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    actionContext<span class="token punctuation">.</span><span class="token function">setXid</span><span class="token punctuation">(</span>xid<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    String actionName <span class="token operator">=</span> businessAction<span class="token punctuation">.</span><span class="token function">name</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    actionContext<span class="token punctuation">.</span><span class="token function">setActionName</span><span class="token punctuation">(</span>actionName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    actionContext<span class="token punctuation">.</span><span class="token function">setDelayReport</span><span class="token punctuation">(</span>businessAction<span class="token punctuation">.</span><span class="token function">isDelayReport</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 注册TCC分支事务到TC</span>
+    String branchId <span class="token operator">=</span> <span class="token function">doTccActionLogStore</span><span class="token punctuation">(</span>method<span class="token punctuation">,</span> arguments<span class="token punctuation">,</span> businessAction<span class="token punctuation">,</span> actionContext<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    actionContext<span class="token punctuation">.</span><span class="token function">setBranchId</span><span class="token punctuation">(</span>branchId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    MDC<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>RootContext<span class="token punctuation">.</span>MDC_KEY_BRANCH_ID<span class="token punctuation">,</span> branchId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// TCC使用存在嵌套，先将外面的TCC拿出来</span>
+    BusinessActionContext previousActionContext <span class="token operator">=</span> BusinessActionContextUtil<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 绑定当前事务上下文</span>
+        BusinessActionContextUtil<span class="token punctuation">.</span><span class="token function">setContext</span><span class="token punctuation">(</span>actionContext<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 如果启用了 TCC Fence，则使用 TCC Fence 机制进行处理</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>businessAction<span class="token punctuation">.</span><span class="token function">useTCCFence</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 插入一条状态为STATUS_TRIED的tcc_fence_log，再执行业务代码（这两个操作会在一个本地数据库事务中执行）</span>
+                <span class="token keyword">return</span> TCCFenceHandler<span class="token punctuation">.</span><span class="token function">prepareFence</span><span class="token punctuation">(</span>xid<span class="token punctuation">,</span> Long<span class="token punctuation">.</span><span class="token function">valueOf</span><span class="token punctuation">(</span>branchId<span class="token punctuation">)</span><span class="token punctuation">,</span> actionName<span class="token punctuation">,</span> targetCallback<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">SkipCallbackWrapperException</span> <span class="token operator">|</span> UndeclaredThrowableException e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                Throwable originException <span class="token operator">=</span> e<span class="token punctuation">.</span><span class="token function">getCause</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>originException <span class="token keyword">instanceof</span> <span class="token class-name">FrameworkException</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    LOGGER<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"[{}] prepare TCC fence error: {}"</span><span class="token punctuation">,</span> xid<span class="token punctuation">,</span> originException<span class="token punctuation">.</span><span class="token function">getMessage</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">throw</span> originException<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> targetCallback<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 向TC报告</span>
+            BusinessActionContextUtil<span class="token punctuation">.</span><span class="token function">reportContext</span><span class="token punctuation">(</span>actionContext<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>previousActionContext <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 恢复上一个事务上下文</span>
+                BusinessActionContextUtil<span class="token punctuation">.</span><span class="token function">setContext</span><span class="token punctuation">(</span>previousActionContext<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 清空当前的事务上下文</span>
+                BusinessActionContextUtil<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="commit"><a href="#commit" class="headerlink" title="commit"></a>commit</h3><p>​	当 <code>@GlobalTransactional</code> 注解的全局事务执行完毕并准备提交时，服务端的处理方式和前面的<a target="_blank" rel="noopener external nofollow noreferrer" href="http://localhost:4000/2024-07-27/seata-at-mo-shi-er-jie-duan-quan-jie-xi/#TC%E5%A4%84%E7%90%86commit">AT模式TC处理commit</a>逻辑基本一致，只有点小区别：</p>
+<ul>
+<li>TCC模式没有锁资源，不需要释放</li>
+<li>整个提交过程是同步的，TC会在提交阶段同步的回调RM来处理分支事务的提交</li>
+</ul>
+<p>​	而客户端的RM处理分支事务核心逻辑在 <code>TCCResourceManager#branchCommit</code> 方法中，主要逻辑总结如下：</p>
+<ol>
+<li><p>获取 <code>TCCResource</code> 对象</p>
+<blockquote>
+<p>​	据 <code>@TwoPhaseBusinessAction</code> 注解中的 <code>name</code> 属性，获取对应的 <code>TCCResource</code> 对象，这个对象代表了当前需要提交的 TCC 资源</p>
+</blockquote>
+</li>
+<li><p>构建 <code>BusinessActionContext</code></p>
+<blockquote>
+<p>​	<strong>使用 <code>BranchTransactionDO</code> 填充 <code>BusinessActionContext</code>，该上下文会在整个 TCC 流程中传递，确保业务信息一致性</strong></p>
+</blockquote>
+</li>
+<li><p>判断是否使用 TCC Fence</p>
+<blockquote>
+<ul>
+<li><code>useTCCFence=true</code>：一些列对<code>TCC_FENCE_LOG</code>的校验后再修改其状态为<code>STATUS_COMMITTED</code>，执行业务提交操作</li>
+<li><code>useTCCFence=false</code>：直接执行业务提交操作</li>
+</ul>
+</blockquote>
+</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> BranchStatus <span class="token function">branchCommit</span><span class="token punctuation">(</span>BranchType branchType<span class="token punctuation">,</span> String xid<span class="token punctuation">,</span> <span class="token keyword">long</span> branchId<span class="token punctuation">,</span> String resourceId<span class="token punctuation">,</span>
+        String applicationData<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 从缓存中获取TCC资源对象</span>
+    <span class="token comment" spellcheck="true">// 早在对bean做能否被TCC代理判断时就已经缓存了，方法在DefaultRemotingParser#parserRemotingServiceInfo里</span>
+    <span class="token comment" spellcheck="true">// resourceId即为@TwoPhaseBusinessAction.name属性</span>
+    TCCResource tccResource <span class="token operator">=</span> <span class="token punctuation">(</span>TCCResource<span class="token punctuation">)</span> tccResourceCache<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>resourceId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>tccResource <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ShouldNeverHappenException</span><span class="token punctuation">(</span>String<span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span><span class="token string">"TCC resource is not exist, resourceId: %s"</span><span class="token punctuation">,</span> resourceId<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 获取目标TCC Bean和commit方法</span>
+    Object targetTCCBean <span class="token operator">=</span> tccResource<span class="token punctuation">.</span><span class="token function">getTargetBean</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    Method commitMethod <span class="token operator">=</span> tccResource<span class="token punctuation">.</span><span class="token function">getCommitMethod</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>targetTCCBean <span class="token operator">==</span> null <span class="token operator">||</span> commitMethod <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ShouldNeverHappenException</span><span class="token punctuation">(</span>
+                String<span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span><span class="token string">"TCC resource is not available, resourceId: %s"</span><span class="token punctuation">,</span> resourceId<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 构建BusinessActionContext</span>
+        BusinessActionContext businessActionContext <span class="token operator">=</span> <span class="token function">getBusinessActionContext</span><span class="token punctuation">(</span>xid<span class="token punctuation">,</span> branchId<span class="token punctuation">,</span> resourceId<span class="token punctuation">,</span>
+                applicationData<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Object<span class="token punctuation">[</span><span class="token punctuation">]</span> args <span class="token operator">=</span> <span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getTwoPhaseCommitArgs</span><span class="token punctuation">(</span>tccResource<span class="token punctuation">,</span> businessActionContext<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        Object ret<span class="token punctuation">;</span>
+        <span class="token keyword">boolean</span> result<span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>Boolean<span class="token punctuation">.</span>TRUE<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>businessActionContext<span class="token punctuation">.</span><span class="token function">getActionContext</span><span class="token punctuation">(</span>Constants<span class="token punctuation">.</span>USE_TCC_FENCE<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 执行TCC Fence的提交操作</span>
+                result <span class="token operator">=</span> TCCFenceHandler<span class="token punctuation">.</span><span class="token function">commitFence</span><span class="token punctuation">(</span>commitMethod<span class="token punctuation">,</span> targetTCCBean<span class="token punctuation">,</span> xid<span class="token punctuation">,</span> branchId<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">SkipCallbackWrapperException</span> <span class="token operator">|</span> UndeclaredThrowableException e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">throw</span> e<span class="token punctuation">.</span><span class="token function">getCause</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            ret <span class="token operator">=</span> commitMethod<span class="token punctuation">.</span><span class="token function">invoke</span><span class="token punctuation">(</span>targetTCCBean<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>ret <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>ret <span class="token keyword">instanceof</span> <span class="token class-name">TwoPhaseResult</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    result <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>TwoPhaseResult<span class="token punctuation">)</span> ret<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isSuccess</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                    result <span class="token operator">=</span> <span class="token punctuation">(</span><span class="token keyword">boolean</span><span class="token punctuation">)</span> ret<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                result <span class="token operator">=</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> result <span class="token operator">?</span> BranchStatus<span class="token punctuation">.</span>PhaseTwo_Committed <span class="token operator">:</span> BranchStatus<span class="token punctuation">.</span>PhaseTwo_CommitFailed_Retryable<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 允许TC重试</span>
+        <span class="token keyword">return</span> BranchStatus<span class="token punctuation">.</span>PhaseTwo_CommitFailed_Retryable<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="cancel"><a href="#cancel" class="headerlink" title="cancel"></a>cancel</h3><p>​	TCC 模式下，全局事务回滚时触发的操作与提交（commit）类似，唯一不同的是最终执行的业务方法变为 <code>rollbackMethod</code>，其他流程与提交过程一致，就不细讲了</p>
+<h3 id="常见问题解决"><a href="#常见问题解决" class="headerlink" title="常见问题解决"></a>常见问题解决</h3><p>​	在前文的源码分析中，我们简要提到过 <code>tcc_fence_log</code> 表。这里将详细解析该表的作用，它是 Seata 用来解决 TCC 模式中可能出现的<strong>悬挂、空回滚等问题，并确保整个流程的幂等性</strong>。每个<strong>分支事务仅会对应一条 <code>tcc_fence_log</code> 数据（<code>xid</code> 和 <code>branch_id</code> 作为主键）</strong>。对<strong>该数据的判断与操作都通过本地数据库事务进行，从而将其与业务代码绑定</strong>，所有逻辑封装在 <code>TCCFenceHandler</code> 类中</p>
+<pre class="line-numbers language-sql"><code class="language-sql"><span class="token keyword">CREATE</span> <span class="token keyword">TABLE</span> <span class="token keyword">IF</span> <span class="token operator">NOT</span> <span class="token keyword">EXISTS</span> <span class="token punctuation">`</span>tcc_fence_log<span class="token punctuation">`</span>
+<span class="token punctuation">(</span>
+    <span class="token punctuation">`</span>xid<span class="token punctuation">`</span>           <span class="token keyword">VARCHAR</span><span class="token punctuation">(</span><span class="token number">128</span><span class="token punctuation">)</span>  <span class="token operator">NOT</span> <span class="token boolean">NULL</span> <span class="token keyword">COMMENT</span> <span class="token string">'global id'</span><span class="token punctuation">,</span>    
+    <span class="token punctuation">`</span>branch_id<span class="token punctuation">`</span>     <span class="token keyword">BIGINT</span>        <span class="token operator">NOT</span> <span class="token boolean">NULL</span> <span class="token keyword">COMMENT</span> <span class="token string">'branch id'</span><span class="token punctuation">,</span>    
+    <span class="token punctuation">`</span>action_name<span class="token punctuation">`</span>   <span class="token keyword">VARCHAR</span><span class="token punctuation">(</span><span class="token number">64</span><span class="token punctuation">)</span>   <span class="token operator">NOT</span> <span class="token boolean">NULL</span> <span class="token keyword">COMMENT</span> <span class="token string">'action name'</span><span class="token punctuation">,</span>    
+    <span class="token punctuation">`</span><span class="token keyword">status</span><span class="token punctuation">`</span>        <span class="token keyword">TINYINT</span>       <span class="token operator">NOT</span> <span class="token boolean">NULL</span> <span class="token keyword">COMMENT</span> <span class="token string">'status(tried:1;committed:2;rollbacked:3;suspended:4)'</span><span class="token punctuation">,</span>    
+    <span class="token punctuation">`</span>gmt_create<span class="token punctuation">`</span>    <span class="token keyword">DATETIME</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">)</span>   <span class="token operator">NOT</span> <span class="token boolean">NULL</span> <span class="token keyword">COMMENT</span> <span class="token string">'create time'</span><span class="token punctuation">,</span>    
+    <span class="token punctuation">`</span>gmt_modified<span class="token punctuation">`</span>  <span class="token keyword">DATETIME</span><span class="token punctuation">(</span><span class="token number">3</span><span class="token punctuation">)</span>   <span class="token operator">NOT</span> <span class="token boolean">NULL</span> <span class="token keyword">COMMENT</span> <span class="token string">'update time'</span><span class="token punctuation">,</span>    
+    <span class="token keyword">PRIMARY</span> <span class="token keyword">KEY</span> <span class="token punctuation">(</span><span class="token punctuation">`</span>xid<span class="token punctuation">`</span><span class="token punctuation">,</span> <span class="token punctuation">`</span>branch_id<span class="token punctuation">`</span><span class="token punctuation">)</span><span class="token punctuation">,</span>    
+    <span class="token keyword">KEY</span> <span class="token punctuation">`</span>idx_gmt_modified<span class="token punctuation">`</span> <span class="token punctuation">(</span><span class="token punctuation">`</span>gmt_modified<span class="token punctuation">`</span><span class="token punctuation">)</span><span class="token punctuation">,</span>    
+    <span class="token keyword">KEY</span> <span class="token punctuation">`</span>idx_status<span class="token punctuation">`</span> <span class="token punctuation">(</span><span class="token punctuation">`</span><span class="token keyword">status</span><span class="token punctuation">`</span><span class="token punctuation">)</span>
+<span class="token punctuation">)</span> <span class="token keyword">ENGINE</span> <span class="token operator">=</span> <span class="token keyword">InnoDB</span>
+<span class="token keyword">DEFAULT</span> <span class="token keyword">CHARSET</span> <span class="token operator">=</span> utf8mb4
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="幂等保证"><a href="#幂等保证" class="headerlink" title="幂等保证"></a>幂等保证</h4><p>​	通过对 <strong><code>tcc_fence_log</code></strong> 状态的校验，能够保证事务的幂等性。这是通过检查 <strong><code>tcc_fence_log</code></strong> 中的状态是否已被更新为 <strong><code>COMMITTED</code></strong> 或 **<code>ROLLBACKED</code>**，从而避免重复执行相同的操作。整个过程相对简单，确保了事务的幂等性，无需过多分析</p>
+<h4 id="空回滚"><a href="#空回滚" class="headerlink" title="空回滚"></a>空回滚</h4><h5 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h5><p>​	分支事务的 <strong><code>try</code></strong> 阶段出现异常或超时，导致 <strong>全局事务</strong> 发起回滚操作。此时，<strong>TC</strong> 会调用 <strong>RM</strong> 来触发分支事务的回滚操作。然而，分支事务本身并未成功进入 <code>try</code> 阶段，因此实际上不需要执行回滚。若此时仍然进行回滚操作，就会导致空回滚</p>
+<h5 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h5><p>​	当 <code>cancel</code> 时，如果 <code>tccFenceDO</code> 记录为空，表示 <code>try</code> 阶段未成功执行。在这种情况下，尝试插入一条状态为 <strong><code>SUSPENDED</code></strong> 的 <strong><code>tcc_fence_log</code></strong> 记录，以阻止后续的 <code>try</code> （悬挂）执行。然后直接返回 <code>true</code>表示回滚成功，避免执行 <code>rollback</code> 方法</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">boolean</span> <span class="token function">rollbackFence</span><span class="token punctuation">(</span>Method rollbackMethod<span class="token punctuation">,</span> Object targetTCCBean<span class="token punctuation">,</span>
+        String xid<span class="token punctuation">,</span> Long branchId<span class="token punctuation">,</span> Object<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">,</span> String actionName<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">return</span> Boolean<span class="token punctuation">.</span>TRUE<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>transactionTemplate<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span>status <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            Connection conn <span class="token operator">=</span> DataSourceUtils<span class="token punctuation">.</span><span class="token function">getConnection</span><span class="token punctuation">(</span>dataSource<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            TCCFenceDO tccFenceDO <span class="token operator">=</span> TCC_FENCE_DAO<span class="token punctuation">.</span><span class="token function">queryTCCFenceDO</span><span class="token punctuation">(</span>conn<span class="token punctuation">,</span> xid<span class="token punctuation">,</span> branchId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>tccFenceDO <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 空回滚场景，try都没有执行成功</span>
+                <span class="token comment" spellcheck="true">// 插入一条状态为SUSPENDED的tcc_fence_log记录，这样就算TCC中的cancel先于try执行，也不用担心try会被触发</span>
+                <span class="token keyword">boolean</span> result <span class="token operator">=</span> <span class="token function">insertTCCFenceLog</span><span class="token punctuation">(</span>conn<span class="token punctuation">,</span> xid<span class="token punctuation">,</span> branchId<span class="token punctuation">,</span> actionName<span class="token punctuation">,</span> TCCFenceConstant<span class="token punctuation">.</span>STATUS_SUSPENDED<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>result<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">TCCFenceException</span><span class="token punctuation">(</span>String<span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span>
+                            <span class="token string">"Insert tcc fence record error, rollback fence method failed. xid= %s, branchId= %s"</span><span class="token punctuation">,</span> xid<span class="token punctuation">,</span>
+                            branchId<span class="token punctuation">)</span><span class="token punctuation">,</span>
+                            FrameworkErrorCode<span class="token punctuation">.</span>InsertRecordError<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 幂等保证</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>TCCFenceConstant<span class="token punctuation">.</span>STATUS_ROLLBACKED <span class="token operator">==</span> tccFenceDO<span class="token punctuation">.</span><span class="token function">getStatus</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                        <span class="token operator">||</span> TCCFenceConstant<span class="token punctuation">.</span>STATUS_SUSPENDED <span class="token operator">==</span> tccFenceDO<span class="token punctuation">.</span><span class="token function">getStatus</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>TCCFenceConstant<span class="token punctuation">.</span>STATUS_COMMITTED <span class="token operator">==</span> tccFenceDO<span class="token punctuation">.</span><span class="token function">getStatus</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> <span class="token function">updateStatusAndInvokeTargetMethod</span><span class="token punctuation">(</span>conn<span class="token punctuation">,</span> rollbackMethod<span class="token punctuation">,</span> targetTCCBean<span class="token punctuation">,</span> xid<span class="token punctuation">,</span> branchId<span class="token punctuation">,</span>
+                    TCCFenceConstant<span class="token punctuation">.</span>STATUS_ROLLBACKED<span class="token punctuation">,</span> status<span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> t<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            status<span class="token punctuation">.</span><span class="token function">setRollbackOnly</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">SkipCallbackWrapperException</span><span class="token punctuation">(</span>t<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="悬挂"><a href="#悬挂" class="headerlink" title="悬挂"></a>悬挂</h4><h5 id="背景-1"><a href="#背景-1" class="headerlink" title="背景"></a>背景</h5><p>​	分支事务的 <strong><code>try</code></strong> 阶段正常执行，但由于网络或其他问题，分支事务进入了等待状态，导致 <strong>全局事务</strong> 超时并触发了回滚操作。此时，<strong>TC</strong> 会调用 <strong>RM</strong> 进行分支事务的回滚。然而，在回滚操作完成后，分支事务的 <strong><code>try</code></strong> 阶段最终才成功执行</p>
+<h5 id="解决方案-1"><a href="#解决方案-1" class="headerlink" title="解决方案"></a>解决方案</h5><p>​	在 <strong><code>try</code></strong> 阶段，首先尝试插入一条 <strong>TCCFenceLog</strong> 记录（主键确保每个分支事务仅会有一条记录）。如果此时 <strong>TCCFenceLog</strong> 已存在，说明 <strong><code>cancel</code></strong> 阶段已经提前触发并插入了记录，表示当前分支事务已经被标记为挂起（SUSPENDED）。此时，**<code>try</code>** 阶段插入将失败，抛出异常以阻止后续的业务代码执行，从而避免重复执行</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>​	整个流程看下来，发现TCC模式与AT模式是高度相似的，二者共享 <strong>TM</strong> 和 <strong>TC</strong>，但使用了不同的 <strong>RM</strong> 实现</p>
+<ul>
+<li><strong>AT模式</strong> 的 <strong>RM</strong> 是 <strong>DataSourceManager</strong>，由 Seata 完全实现，通过自动构建 <strong>undo_log</strong> 来帮助资源回滚。</li>
+<li><strong>TCC模式</strong> 的 <strong>RM</strong> 是 <strong>TCCResourceManager</strong>，需要我们自己实现 <strong>confirm</strong> 和 <strong>cancel</strong> 方法，来确认或回滚 <strong>try</strong> 阶段占用的资源，这也决定了它不能异步执行</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag"># 分布式事务</a>
+              <a href="/tags/AT%E6%A8%A1%E5%BC%8F/" rel="tag"># AT模式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2025-01-14/seata-at-mo-shi-er-jie-duan-quan-jie-xi/" rel="prev" title="Seata — AT模式二阶段全解析">
+                  <i class="fa fa-angle-left"></i> Seata — AT模式二阶段全解析
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2025-02-23/seata-at-he-tcc-mo-shi-de-xiang-xi-dui-bi/" rel="next" title="Seata — AT模式和TCC模式详细对比">
+                  Seata — AT模式和TCC模式详细对比 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">538k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">16:19</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

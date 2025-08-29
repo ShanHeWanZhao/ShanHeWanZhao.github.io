@@ -175,18 +175,18 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">41</span>
+          <span class="site-state-item-count">49</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
       <div class="site-state-item site-state-categories">
           <a href="/categories/">
-        <span class="site-state-item-count">8</span>
+        <span class="site-state-item-count">10</span>
         <span class="site-state-item-name">分类</span></a>
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">45</span>
+        <span class="site-state-item-count">52</span>
         <span class="site-state-item-name">标签</span></a>
       </div>
   </nav>
@@ -220,7 +220,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/favicon.png">
@@ -238,7 +238,7 @@
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/" class="post-title-link" itemprop="url">Tomcat-热加载之ThreadLocal内存泄漏篇（二）</a>
+          <a href="/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/" class="post-title-link" itemprop="url">Seata — AT模式一阶段全解析</a>
         </h2>
 
         <div class="post-meta-container">
@@ -249,14 +249,14 @@
       </span>
       <span class="post-meta-item-text">发表于</span>
 
-      <time title="创建时间：2021-12-23 19:45:06" itemprop="dateCreated datePublished" datetime="2021-12-23T19:45:06+08:00">2021-12-23</time>
+      <time title="创建时间：2024-12-24 18:34:09" itemprop="dateCreated datePublished" datetime="2024-12-24T18:34:09+08:00">2024-12-24</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-12-28 21:56:17" itemprop="dateModified" datetime="2021-12-28T21:56:17+08:00">2021-12-28</time>
+      <time title="修改时间：2024-12-28 19:13:34" itemprop="dateModified" datetime="2024-12-28T19:13:34+08:00">2024-12-28</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -264,7 +264,7 @@
       </span>
       <span class="post-meta-item-text">分类于</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+          <a href="/categories/Seata/" itemprop="url" rel="index"><span itemprop="name">Seata</span></a>
         </span>
     </span>
 
@@ -275,14 +275,14 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>9.8k</span>
+      <span>22k</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
         <i class="far fa-clock"></i>
       </span>
       <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>18 分钟</span>
+      <span>40 分钟</span>
     </span>
 </div>
 
@@ -293,11 +293,10 @@
     
     
     <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现<strong>无效的ThreadLocalMap.Entry清除</strong>、<strong>ThreadLocalLeakPreventionListener回收空闲worker线程</strong>和<strong>TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收</strong>这三种策略来优雅的解决ThreadLocal内存泄漏的问题</p>
+          <p>​	基于 <strong>Seata 1.7.1</strong> 源码，本篇文章详细拆解了一阶段分布式事务的执行流程，重点包括 <strong>降级检查策略</strong>、<strong>undo log 的生成与管理</strong>、<strong>非本地事务运行模式下的支持</strong>、<strong>锁冲突检测及重试机制</strong>，以及一阶段事务如何决定提交或回滚，为理解 AT 模式的核心原理提供了全面解析</p>
           <!--noindex-->
             <div class="post-button">
-              <a class="btn" href="/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/#more" rel="contents">
+              <a class="btn" href="/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/#more" rel="contents">
                 阅读全文 &raquo;
               </a>
             </div>
@@ -328,7 +327,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/favicon.png">
@@ -346,7 +345,7 @@
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/" class="post-title-link" itemprop="url">Tomcat-热加载和相关Class的垃圾回收探讨（一）</a>
+          <a href="/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/" class="post-title-link" itemprop="url">Seata — 核心组件和启动流程</a>
         </h2>
 
         <div class="post-meta-container">
@@ -357,14 +356,14 @@
       </span>
       <span class="post-meta-item-text">发表于</span>
 
-      <time title="创建时间：2021-12-11 13:07:06" itemprop="dateCreated datePublished" datetime="2021-12-11T13:07:06+08:00">2021-12-11</time>
+      <time title="创建时间：2024-11-15 20:34:07" itemprop="dateCreated datePublished" datetime="2024-11-15T20:34:07+08:00">2024-11-15</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-12-18 19:57:06" itemprop="dateModified" datetime="2021-12-18T19:57:06+08:00">2021-12-18</time>
+      <time title="修改时间：2024-11-27 14:13:07" itemprop="dateModified" datetime="2024-11-27T14:13:07+08:00">2024-11-27</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -372,7 +371,7 @@
       </span>
       <span class="post-meta-item-text">分类于</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+          <a href="/categories/Seata/" itemprop="url" rel="index"><span itemprop="name">Seata</span></a>
         </span>
     </span>
 
@@ -383,14 +382,14 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>8.9k</span>
+      <span>10k</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
         <i class="far fa-clock"></i>
       </span>
       <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>16 分钟</span>
+      <span>19 分钟</span>
     </span>
 </div>
 
@@ -401,11 +400,10 @@
     
     
     <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	本文深入分析了 WebappClassLoader 的热加载整体流程，并<strong>对热加载过程中遗留的垃圾回收问题进行了系统性拆解</strong>。重点涵盖了：<strong>垃圾的分类、核心引用关系的梳理、各类资源的清理策略</strong>。最后<strong>详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议</strong></p>
+          <p>​	基于 <strong>Seata 1.7.1</strong> 源码，这篇文章算是 AT 模式源码解析的前置内容。文章先从 <strong>自动配置类</strong> 切入，梳理了客户端核心组件（<strong>TM、RM</strong>）的职责和初始化流程，接着分析 <strong>AT 模式下 DataSource 代理的实现原理</strong>，最后再简单介绍了服务端的启动过程以及 <strong>TC 的创建逻辑</strong></p>
           <!--noindex-->
             <div class="post-button">
-              <a class="btn" href="/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/#more" rel="contents">
+              <a class="btn" href="/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/#more" rel="contents">
                 阅读全文 &raquo;
               </a>
             </div>
@@ -436,7 +434,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/favicon.png">
@@ -454,7 +452,7 @@
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-11-23/tomcat-lei-jia-zai-qi/" class="post-title-link" itemprop="url">Tomcat-类加载器</a>
+          <a href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/" class="post-title-link" itemprop="url">CloudFlare-CDN缓存清除</a>
         </h2>
 
         <div class="post-meta-container">
@@ -465,14 +463,14 @@
       </span>
       <span class="post-meta-item-text">发表于</span>
 
-      <time title="创建时间：2021-11-23 09:13:34" itemprop="dateCreated datePublished" datetime="2021-11-23T09:13:34+08:00">2021-11-23</time>
+      <time title="创建时间：2024-06-14 10:33:50" itemprop="dateCreated datePublished" datetime="2024-06-14T10:33:50+08:00">2024-06-14</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-11-28 18:09:17" itemprop="dateModified" datetime="2021-11-28T18:09:17+08:00">2021-11-28</time>
+      <time title="修改时间：2025-06-18 20:42:55" itemprop="dateModified" datetime="2025-06-18T20:42:55+08:00">2025-06-18</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -480,7 +478,7 @@
       </span>
       <span class="post-meta-item-text">分类于</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+          <a href="/categories/cloudflare/" itemprop="url" rel="index"><span itemprop="name">cloudflare</span></a>
         </span>
     </span>
 
@@ -491,223 +489,7 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>14k</span>
-    </span>
-    <span class="post-meta-item" title="阅读时长">
-      <span class="post-meta-item-icon">
-        <i class="far fa-clock"></i>
-      </span>
-      <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>25 分钟</span>
-    </span>
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	以问题切入，深入剖析了commonLoader与WebappClassLoader各自的定位与设计初衷，重点分析了WebappClassLoader如何在保证JVM核心类安全的前提下，部分打破双亲委派机制，实现Web应用之间的真正隔离。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021-11-23/tomcat-lei-jia-zai-qi/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/favicon.png">
-      <meta itemprop="name" content="reef">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Reef's Blog">
-      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | Reef's Blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/" class="post-title-link" itemprop="url">Tomcat-责任链之Pipeline+Valve和Filter</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">发表于</span>
-
-      <time title="创建时间：2021-11-02 19:18:11" itemprop="dateCreated datePublished" datetime="2021-11-02T19:18:11+08:00">2021-11-02</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-11-07 18:03:15" itemprop="dateModified" datetime="2021-11-07T18:03:15+08:00">2021-11-07</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">分类于</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
-        </span>
-    </span>
-
-  
-    <span class="post-meta-break"></span>
-    <span class="post-meta-item" title="本文字数">
-      <span class="post-meta-item-icon">
-        <i class="far fa-file-word"></i>
-      </span>
-      <span class="post-meta-item-text">本文字数：</span>
-      <span>7.5k</span>
-    </span>
-    <span class="post-meta-item" title="阅读时长">
-      <span class="post-meta-item-icon">
-        <i class="far fa-clock"></i>
-      </span>
-      <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>14 分钟</span>
-    </span>
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	分析了Tomcat中Pipeline+Valve和支持Filter的ApplicationFilterChain两种基于责任链模式的实现逻辑，并在最后总结了这两者的异同点以及为什么会有这两种类似的模块。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/favicon.png">
-      <meta itemprop="name" content="reef">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Reef's Blog">
-      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | Reef's Blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/" class="post-title-link" itemprop="url">Tomcat-启动流程和http请求流程</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">发表于</span>
-
-      <time title="创建时间：2021-10-18 11:02:15" itemprop="dateCreated datePublished" datetime="2021-10-18T11:02:15+08:00">2021-10-18</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-10-23 19:02:17" itemprop="dateModified" datetime="2021-10-23T19:02:17+08:00">2021-10-23</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">分类于</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
-        </span>
-    </span>
-
-  
-    <span class="post-meta-break"></span>
-    <span class="post-meta-item" title="本文字数">
-      <span class="post-meta-item-icon">
-        <i class="far fa-file-word"></i>
-      </span>
-      <span class="post-meta-item-text">本文字数：</span>
-      <span>2.1k</span>
+      <span>1.9k</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
@@ -726,10 +508,10 @@
     
     <div class="post-body" itemprop="articleBody">
           <hr>
-<p>​	分析并总结了tomcat的启动流程和整个http请求流程，重点可关注<strong>启动流程的UML图和请求流程图</strong></p>
+<p>​	给出了一些api用于清除Cloudflare的CDN缓存方式</p>
           <!--noindex-->
             <div class="post-button">
-              <a class="btn" href="/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/#more" rel="contents">
+              <a class="btn" href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/#more" rel="contents">
                 阅读全文 &raquo;
               </a>
             </div>
@@ -760,7 +542,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2023-08-19/redisson-redissonlocalcachedmap/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/favicon.png">
@@ -778,7 +560,7 @@
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-10-03/tomcat-context-contextconfig-he-wrapper/" class="post-title-link" itemprop="url">Tomcat-Context,ContextConfig和Wrapper</a>
+          <a href="/2023-08-19/redisson-redissonlocalcachedmap/" class="post-title-link" itemprop="url">Redisson — 分布式本地缓存RLocalCachedMap的实现</a>
         </h2>
 
         <div class="post-meta-container">
@@ -789,14 +571,14 @@
       </span>
       <span class="post-meta-item-text">发表于</span>
 
-      <time title="创建时间：2021-10-03 18:39:39" itemprop="dateCreated datePublished" datetime="2021-10-03T18:39:39+08:00">2021-10-03</time>
+      <time title="创建时间：2023-08-19 17:43:07" itemprop="dateCreated datePublished" datetime="2023-08-19T17:43:07+08:00">2023-08-19</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-10-07 14:31:39" itemprop="dateModified" datetime="2021-10-07T14:31:39+08:00">2021-10-07</time>
+      <time title="修改时间：2023-08-25 19:34:03" itemprop="dateModified" datetime="2023-08-25T19:34:03+08:00">2023-08-25</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -804,115 +586,7 @@
       </span>
       <span class="post-meta-item-text">分类于</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
-        </span>
-    </span>
-
-  
-    <span class="post-meta-break"></span>
-    <span class="post-meta-item" title="本文字数">
-      <span class="post-meta-item-icon">
-        <i class="far fa-file-word"></i>
-      </span>
-      <span class="post-meta-item-text">本文字数：</span>
-      <span>13k</span>
-    </span>
-    <span class="post-meta-item" title="阅读时长">
-      <span class="post-meta-item-icon">
-        <i class="far fa-clock"></i>
-      </span>
-      <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>23 分钟</span>
-    </span>
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	StandardContext、ContextConfig以及StandardWrapper的核心逻辑源码解析及总结</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021-10-03/tomcat-context-contextconfig-he-wrapper/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-09-23/tomcat-engine-host-he-hostconfig/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/favicon.png">
-      <meta itemprop="name" content="reef">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Reef's Blog">
-      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | Reef's Blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-09-23/tomcat-engine-host-he-hostconfig/" class="post-title-link" itemprop="url">Tomcat-Engine,Host和HostConfig</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">发表于</span>
-
-      <time title="创建时间：2021-09-23 10:35:44" itemprop="dateCreated datePublished" datetime="2021-09-23T10:35:44+08:00">2021-09-23</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-10-02 15:33:44" itemprop="dateModified" datetime="2021-10-02T15:33:44+08:00">2021-10-02</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">分类于</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
+          <a href="/categories/Redisson/" itemprop="url" rel="index"><span itemprop="name">Redisson</span></a>
         </span>
     </span>
 
@@ -941,11 +615,10 @@
     
     
     <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	从源码分析了ContainerBase，StandardEngine，StandardHost和HostConfig的实现逻辑。需要<strong>重点注意HostConfig的作用和部署流程</strong></p>
+          <p>​	基于 Redisson 3.16.8，对 <strong>RedissonLocalCachedMap</strong> 的功能及核心方法进行了深入解析，并重点探讨其关键参数对整体缓存行为的影响，为后续定向优化提供参考</p>
           <!--noindex-->
             <div class="post-button">
-              <a class="btn" href="/2021-09-23/tomcat-engine-host-he-hostconfig/#more" rel="contents">
+              <a class="btn" href="/2023-08-19/redisson-redissonlocalcachedmap/#more" rel="contents">
                 阅读全文 &raquo;
               </a>
             </div>
@@ -976,7 +649,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2023-06-18/redisson-fen-bu-shi-suo-de-shi-xian/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/favicon.png">
@@ -994,7 +667,7 @@
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-09-04/tomcat-server-he-service/" class="post-title-link" itemprop="url">Tomcat-Server和Service</a>
+          <a href="/2023-06-18/redisson-fen-bu-shi-suo-de-shi-xian/" class="post-title-link" itemprop="url">Redisson — 分布式锁的实现</a>
         </h2>
 
         <div class="post-meta-container">
@@ -1005,14 +678,762 @@
       </span>
       <span class="post-meta-item-text">发表于</span>
 
-      <time title="创建时间：2021-09-04 20:43:45" itemprop="dateCreated datePublished" datetime="2021-09-04T20:43:45+08:00">2021-09-04</time>
+      <time title="创建时间：2023-06-18 18:33:03" itemprop="dateCreated datePublished" datetime="2023-06-18T18:33:03+08:00">2023-06-18</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2025-09-11 15:22:45" itemprop="dateModified" datetime="2025-09-11T15:22:45+08:00">2025-09-11</time>
+      <time title="修改时间：2023-06-25 20:58:09" itemprop="dateModified" datetime="2023-06-25T20:58:09+08:00">2023-06-25</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Redisson/" itemprop="url" rel="index"><span itemprop="name">Redisson</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>11k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>20 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>​	基于 Redisson 3.16.8版本，对互斥型分布式锁的源码做了详细分析，主要包括：<strong>Lua 脚本的加解锁逻辑</strong>、<strong>看门狗机制的背景与实现</strong>，以及<strong>如何通过 Redis 的 pub&#x2F;sub 功能配合 JDK Semaphore 来实现线程阻塞与唤醒，从而避免忙等待</strong></p>
+<p>另外，也简单分析了一下共享型分布式锁的实现思路，比如 <strong>RCountDownLatch 和 RSemaphore</strong></p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2023-06-18/redisson-fen-bu-shi-suo-de-shi-xian/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-11-19/netty-yi-bu-bian-cheng-zhi-promise/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022-11-19/netty-yi-bu-bian-cheng-zhi-promise/" class="post-title-link" itemprop="url">Netty（四） — 异步编程的实现和思考</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-11-19 17:58:03" itemprop="dateCreated datePublished" datetime="2022-11-19T17:58:03+08:00">2022-11-19</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-11-24 21:52:09" itemprop="dateModified" datetime="2022-11-24T21:52:09+08:00">2022-11-24</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Netty/" itemprop="url" rel="index"><span itemprop="name">Netty</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>9 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>​	分析了 Netty 的 Future 与 Promise 的实现与设计理念，并在此基础上总结了异步编程概念的应用及个人思考</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022-11-19/netty-yi-bu-bian-cheng-zhi-promise/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-08-16/netty-pipeline-he-handler/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022-08-16/netty-pipeline-he-handler/" class="post-title-link" itemprop="url">Netty（二） — Pipeline和Handler</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-08-16 21:33:03" itemprop="dateCreated datePublished" datetime="2022-08-16T21:33:03+08:00">2022-08-16</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-08-25 19:58:09" itemprop="dateModified" datetime="2022-08-25T19:58:09+08:00">2022-08-25</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Netty/" itemprop="url" rel="index"><span itemprop="name">Netty</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>12k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>22 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>​	分析了 Netty 中 <strong>ChannelPipeline、ChannelHandler、ChannelHandlerContext</strong> 各自的作用和实现原理，重点讲了下<strong>解码器基类 ByteToMessageDecoder 是怎么解决粘包&#x2F;拆包的问题</strong>以及在<strong>实际使用时该如何考虑</strong>。最后用一张<strong>流程图总结了这三个核心组件在实际数据处理过程中的组合和协作方式</strong></p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022-08-16/netty-pipeline-he-handler/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-07-20/netty-channel-he-unsafe/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022-07-20/netty-channel-he-unsafe/" class="post-title-link" itemprop="url">Netty（一） — Channel和Unsafe</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-07-20 19:33:03" itemprop="dateCreated datePublished" datetime="2022-07-20T19:33:03+08:00">2022-07-20</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-07-25 19:58:09" itemprop="dateModified" datetime="2022-07-25T19:58:09+08:00">2022-07-25</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Netty/" itemprop="url" rel="index"><span itemprop="name">Netty</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>8.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>​	基于 Netty 4.1.34，从 Channel 的整体架构入手，分析了 Channel 与 Unsafe 的配合机制，以及底层对应的 NIO 实现类。在分析过程中也穿插了对关键方法的说明，最后总结了 Netty Channel 相比原生 JDK Channel 在使用体验和扩展性上的优势。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022-07-20/netty-channel-he-unsafe/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-03-04/springboot-spi-he-starter-you-hua-qi/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022-03-04/springboot-spi-he-starter-you-hua-qi/" class="post-title-link" itemprop="url">SpringBoot（二）— SPI和starter优化器原理</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-03-04 20:40:03" itemprop="dateCreated datePublished" datetime="2022-03-04T20:40:03+08:00">2022-03-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-03-19 19:33:20" itemprop="dateModified" datetime="2022-03-19T19:33:20+08:00">2022-03-19</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/SpringBoot/" itemprop="url" rel="index"><span itemprop="name">SpringBoot</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>8.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>​	算是一篇SrpingBoot自动配置原理解析的前置文章。首先从源码角度回顾了早期的 <code>spring.factories</code> SPI 加载机制，接着分析了 Spring Boot 2.7.x 引入的基于注解粒度的 <code>.imports</code> 文件机制，展示了其在自动配置解耦方面的优势。并介绍了两个常被 starter 使用的辅助组件：</p>
+<ul>
+<li>spring-boot-configuration-processor：生成配置元数据，IDE使用</li>
+<li>spring-boot-autoconfigure-processor：加速自动配置加载</li>
+</ul>
+<p>​	最后，结合自定义 starter 的实践，附上了完整的测试用例，验证上述机制在实际开发中的可用性</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022-03-04/springboot-spi-he-starter-you-hua-qi/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/" class="post-title-link" itemprop="url">Spring-事物NOT_SUPPORTED策略下多数据源切换的问题</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-03-03 18:34:17" itemprop="dateCreated datePublished" datetime="2022-03-03T18:34:17+08:00">2022-03-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Spring/" itemprop="url" rel="index"><span itemprop="name">Spring</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>5 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>​	从案例中分析了NOT_SUPPORTED默认情况下为什么不能进行多数据源切换以及优雅的解决办法，以及给出了自己的思考</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022-03-03/spring-shi-wu-not-supported-ce-lue-xia-duo-shu-ju-yuan-qie-huan-de-wen-ti/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/" class="post-title-link" itemprop="url">SpringBoot（一）— fatJar启动和LaunchedURLClassLoader加载class的原理</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-02-15 21:16:27" itemprop="dateCreated datePublished" datetime="2022-02-15T21:16:27+08:00">2022-02-15</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-02-17 15:33:23" itemprop="dateModified" datetime="2022-02-17T15:33:23+08:00">2022-02-17</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/SpringBoot/" itemprop="url" rel="index"><span itemprop="name">SpringBoot</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>19k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>34 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>​	基于 Spring Boot 2.7.x，从整体架构角度出发，梳理并串联了 fatjar 模式下的关键组件：<code>Archive</code>、<code>JarFile</code>、<code>JarEntry</code>、<code>Handler</code>、<code>JarURLConnection</code>，重点<strong>分析它们在类加载过程中的职责与协作关系</strong>。全文<strong>不聚焦具体 jar 包结构解析细节，而是深入源码层面解析 fatjar 启动流程及 <code>LaunchedURLClassLoader#loadClass</code> 实现机制</strong>，并辅以实际测试用例进行debug和验证。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2022-02-15/springboot-fatjar-qi-dong-he-launchedurlclassloader-jia-zai-class-de-yuan-li/#more" rel="contents">
+                阅读全文 &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2022-01-09/tomcat-session-guan-li/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="undefined | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2022-01-09/tomcat-session-guan-li/" class="post-title-link" itemprop="url">Tomcat-Session管理</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2022-01-09 14:13:33" itemprop="dateCreated datePublished" datetime="2022-01-09T14:13:33+08:00">2022-01-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2022-01-14 19:09:20" itemprop="dateModified" datetime="2022-01-14T19:09:20+08:00">2022-01-14</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -1031,14 +1452,14 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>13k</span>
+      <span>10k</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
         <i class="far fa-clock"></i>
       </span>
       <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>24 分钟</span>
+      <span>18 分钟</span>
     </span>
 </div>
 
@@ -1050,435 +1471,10 @@
     
     <div class="post-body" itemprop="articleBody">
           <hr>
-<p>​	对Tomcat中Server，Service的init和start方法 + 核心字段进行了分析，并<strong>重点分析了Connector-NioEndpoint内部的Acceptor和Poller线程，并用图文的方法做了总结</strong>。并简单总结了Mapper和MapperListener的作用</p>
+<p>​	本文从源码出发，剖析 Tomcat 中 Session 的懒加载、保活与生命周期控制机制，并解析了 StandardManager 如何借助序列化完成热部署场景下的 Session 持久化与自动恢复</p>
           <!--noindex-->
             <div class="post-button">
-              <a class="btn" href="/2021-09-04/tomcat-server-he-service/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/favicon.png">
-      <meta itemprop="name" content="reef">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Reef's Blog">
-      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | Reef's Blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/" class="post-title-link" itemprop="url">Tomcat-整体架构和Lifecycle</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">发表于</span>
-
-      <time title="创建时间：2021-08-19 21:21:06" itemprop="dateCreated datePublished" datetime="2021-08-19T21:21:06+08:00">2021-08-19</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2022-03-12 14:33:07" itemprop="dateModified" datetime="2022-03-12T14:33:07+08:00">2022-03-12</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">分类于</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Tomcat/" itemprop="url" rel="index"><span itemprop="name">Tomcat</span></a>
-        </span>
-    </span>
-
-  
-    <span class="post-meta-break"></span>
-    <span class="post-meta-item" title="本文字数">
-      <span class="post-meta-item-icon">
-        <i class="far fa-file-word"></i>
-      </span>
-      <span class="post-meta-item-text">本文字数：</span>
-      <span>5.3k</span>
-    </span>
-    <span class="post-meta-item" title="阅读时长">
-      <span class="post-meta-item-icon">
-        <i class="far fa-clock"></i>
-      </span>
-      <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>10 分钟</span>
-    </span>
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	基于Tomcat-8.5.x版本，简单分析了整体的架构和核心组件。并详细分析和总结了Lifecycle机制</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021-08-19/tomcat-zheng-ti-jia-gou-he-lifecycle/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-06-28/spring-bean-de-scope/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/favicon.png">
-      <meta itemprop="name" content="reef">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Reef's Blog">
-      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | Reef's Blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-06-28/spring-bean-de-scope/" class="post-title-link" itemprop="url">Spring-Bean的Scope</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">发表于</span>
-
-      <time title="创建时间：2021-06-28 21:04:19" itemprop="dateCreated datePublished" datetime="2021-06-28T21:04:19+08:00">2021-06-28</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">分类于</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Spring/" itemprop="url" rel="index"><span itemprop="name">Spring</span></a>
-        </span>
-    </span>
-
-  
-    <span class="post-meta-break"></span>
-    <span class="post-meta-item" title="本文字数">
-      <span class="post-meta-item-icon">
-        <i class="far fa-file-word"></i>
-      </span>
-      <span class="post-meta-item-text">本文字数：</span>
-      <span>9.4k</span>
-    </span>
-    <span class="post-meta-item" title="阅读时长">
-      <span class="post-meta-item-icon">
-        <i class="far fa-clock"></i>
-      </span>
-      <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>17 分钟</span>
-    </span>
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	分析了Spring Scope的作用和实现类。并<strong>从源码分析了其Scoped Proxy作用和实现，并在最后用arthas进行了简单的验证</strong>。重点应该关注基于代理的其他作用域Bean注册的<strong>两个BeanDefinition异同点，以及为何会注册两个BeanDefinition</strong></p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021-06-28/spring-bean-de-scope/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-06-03/spring-rong-qi-refresh/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/favicon.png">
-      <meta itemprop="name" content="reef">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Reef's Blog">
-      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | Reef's Blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-06-03/spring-rong-qi-refresh/" class="post-title-link" itemprop="url">Spring-容器refresh</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">发表于</span>
-
-      <time title="创建时间：2021-06-03 21:01:42" itemprop="dateCreated datePublished" datetime="2021-06-03T21:01:42+08:00">2021-06-03</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-06-06 21:01:42" itemprop="dateModified" datetime="2021-06-06T21:01:42+08:00">2021-06-06</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">分类于</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Spring/" itemprop="url" rel="index"><span itemprop="name">Spring</span></a>
-        </span>
-    </span>
-
-  
-    <span class="post-meta-break"></span>
-    <span class="post-meta-item" title="本文字数">
-      <span class="post-meta-item-icon">
-        <i class="far fa-file-word"></i>
-      </span>
-      <span class="post-meta-item-text">本文字数：</span>
-      <span>18k</span>
-    </span>
-    <span class="post-meta-item" title="阅读时长">
-      <span class="post-meta-item-icon">
-        <i class="far fa-clock"></i>
-      </span>
-      <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>33 分钟</span>
-    </span>
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	从源码分析了Spring容器的refresh过程，并通过图文的方式记录了整个流程的核心步骤</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021-06-03/spring-rong-qi-refresh/#more" rel="contents">
-                阅读全文 &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2021-05-13/spring-configurationclasspostprocessor/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/favicon.png">
-      <meta itemprop="name" content="reef">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Reef's Blog">
-      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="undefined | Reef's Blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2021-05-13/spring-configurationclasspostprocessor/" class="post-title-link" itemprop="url">Spring-ConfigurationClassPostProcessor</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">发表于</span>
-
-      <time title="创建时间：2021-05-13 20:27:25" itemprop="dateCreated datePublished" datetime="2021-05-13T20:27:25+08:00">2021-05-13</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">更新于</span>
-      <time title="修改时间：2021-05-16 16:33:25" itemprop="dateModified" datetime="2021-05-16T16:33:25+08:00">2021-05-16</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">分类于</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/Spring/" itemprop="url" rel="index"><span itemprop="name">Spring</span></a>
-        </span>
-    </span>
-
-  
-    <span class="post-meta-break"></span>
-    <span class="post-meta-item" title="本文字数">
-      <span class="post-meta-item-icon">
-        <i class="far fa-file-word"></i>
-      </span>
-      <span class="post-meta-item-text">本文字数：</span>
-      <span>44k</span>
-    </span>
-    <span class="post-meta-item" title="阅读时长">
-      <span class="post-meta-item-icon">
-        <i class="far fa-clock"></i>
-      </span>
-      <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>1:20</span>
-    </span>
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <hr>
-<p>​	呕心沥血的分析了ConfigurationClassPostProcessor的核心源码，深入剖析了Spring注解驱动的原理。对其中的<strong>延迟机制、字节码解析优化和代理模型</strong>进行了深度的思考，并通过arthas反编译反向验证了full configuration的代理</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021-05-13/spring-configurationclasspostprocessor/#more" rel="contents">
+              <a class="btn" href="/2022-01-09/tomcat-session-guan-li/#more" rel="contents">
                 阅读全文 &raquo;
               </a>
             </div>
@@ -1502,7 +1498,7 @@
 
 
   <nav class="pagination">
-    <a class="extend prev" rel="prev" title="上一页" aria-label="上一页" href="/"><i class="fa fa-angle-left"></i></a><a class="page-number" href="/">1</a><span class="page-number current">2</span><a class="page-number" href="/page/3/">3</a><a class="page-number" href="/page/4/">4</a><a class="extend next" rel="next" title="下一页" aria-label="下一页" href="/page/3/"><i class="fa fa-angle-right"></i></a>
+    <a class="extend prev" rel="prev" title="上一页" aria-label="上一页" href="/"><i class="fa fa-angle-left"></i></a><a class="page-number" href="/">1</a><span class="page-number current">2</span><a class="page-number" href="/page/3/">3</a><span class="space">&hellip;</span><a class="page-number" href="/page/5/">5</a><a class="extend next" rel="next" title="下一页" aria-label="下一页" href="/page/3/"><i class="fa fa-angle-right"></i></a>
   </nav>
 
 </div>
@@ -1527,14 +1523,14 @@
       <i class="fa fa-chart-line"></i>
     </span>
       <span>站点总字数：</span>
-    <span title="站点总字数">450k</span>
+    <span title="站点总字数">538k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">13:39</span>
+    <span title="站点阅读时长">16:19</span>
   </span>
 </div>
 

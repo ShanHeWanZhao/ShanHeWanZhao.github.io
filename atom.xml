@@ -6,7 +6,7 @@
   <link href="https://blog.shanzhao.site/atom.xml" rel="self"/>
   
   <link href="https://blog.shanzhao.site/"/>
-  <updated>2025-06-18T12:42:55.855Z</updated>
+  <updated>2025-02-27T09:11:19.000Z</updated>
   <id>https://blog.shanzhao.site/</id>
   
   <author>
@@ -15,6 +15,121 @@
   </author>
   
   <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>Seata — AT模式和TCC模式详细对比</title>
+    <link href="https://blog.shanzhao.site/2025-02-23/seata-at-he-tcc-mo-shi-de-xiang-xi-dui-bi/"/>
+    <id>https://blog.shanzhao.site/2025-02-23/seata-at-he-tcc-mo-shi-de-xiang-xi-dui-bi/</id>
+    <published>2025-02-23T15:01:08.000Z</published>
+    <updated>2025-02-27T09:11:19.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	深入对比分析了 &lt;strong&gt;AT&lt;/strong&gt; 和 &lt;strong&gt;TCC&lt;/strong&gt; 模式在 &lt;strong&gt;网络 I&amp;#x2F;O&lt;/strong&gt; 和 &lt;strong&gt;锁资源&lt;/strong&gt; 两个方面的性能差异，并根据分析结果提供了选择建议。最后，讨论了 &lt;strong&gt;AT&lt;/strong&gt; 模式在业务中使用不当可能带来的问题，并提出了相应的解决方案&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Seata" scheme="https://blog.shanzhao.site/categories/Seata/"/>
+    
+    
+    <category term="分布式" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    
+    <category term="分布式事务" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/"/>
+    
+    <category term="AT模式" scheme="https://blog.shanzhao.site/tags/AT%E6%A8%A1%E5%BC%8F/"/>
+    
+    <category term="TCC模式" scheme="https://blog.shanzhao.site/tags/TCC%E6%A8%A1%E5%BC%8F/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Seata — TCC模式详细分析</title>
+    <link href="https://blog.shanzhao.site/2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/"/>
+    <id>https://blog.shanzhao.site/2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/</id>
+    <published>2025-02-03T12:45:09.000Z</published>
+    <updated>2025-02-24T13:32:19.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	深入分析了 Seata 的 TCC 模式，通过实际使用案例引出了关键注解的应用。结合 TM、RM 和 TC 的工作流程，剖析了 &lt;code&gt;TccActionInterceptor&lt;/code&gt; 在 try 阶段的实现原理，详细讲解了 &lt;code&gt;TCCResourceManager&lt;/code&gt; 如何处理 commit 和 rollback 操作。同时，解析了 &lt;code&gt;TCC_FENCE_LOG&lt;/code&gt; 表如何保障事务幂等性，并有效解决了悬挂和空回滚等常见问题&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Seata" scheme="https://blog.shanzhao.site/categories/Seata/"/>
+    
+    
+    <category term="分布式" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    
+    <category term="分布式事务" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/"/>
+    
+    <category term="AT模式" scheme="https://blog.shanzhao.site/tags/AT%E6%A8%A1%E5%BC%8F/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Seata — AT模式二阶段全解析</title>
+    <link href="https://blog.shanzhao.site/2025-01-14/seata-at-mo-shi-er-jie-duan-quan-jie-xi/"/>
+    <id>https://blog.shanzhao.site/2025-01-14/seata-at-mo-shi-er-jie-duan-quan-jie-xi/</id>
+    <published>2025-01-14T04:38:09.000Z</published>
+    <updated>2025-01-18T03:27:54.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	本文深入解析了 Seata AT 模式下&lt;strong&gt;全局事务的提交与回滚&lt;/strong&gt;机制，详细讲解了 &lt;strong&gt;&lt;code&gt;GlobalTransaction&lt;/code&gt; 提交全局事务&lt;/strong&gt;、&lt;strong&gt;分支事务的异步提交&lt;/strong&gt;以及 &lt;strong&gt;全局回滚的执行流程&lt;/strong&gt;。重点探讨了 &lt;strong&gt;事务协调器（TC）和资源管理器（RM）如何协作完成事务提交与回滚&lt;/strong&gt;。特别是在 &lt;strong&gt;并发控制与数据一致性&lt;/strong&gt; 问题上，展示了 Seata 如何通过 &lt;strong&gt;UndoLog校验&lt;/strong&gt; 机制避免“脏写”问题，并实现&lt;strong&gt;强一致性&lt;/strong&gt;的全局事务回滚&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Seata" scheme="https://blog.shanzhao.site/categories/Seata/"/>
+    
+    
+    <category term="分布式" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    
+    <category term="分布式事务" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/"/>
+    
+    <category term="AT模式" scheme="https://blog.shanzhao.site/tags/AT%E6%A8%A1%E5%BC%8F/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Seata — AT模式一阶段全解析</title>
+    <link href="https://blog.shanzhao.site/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/"/>
+    <id>https://blog.shanzhao.site/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/</id>
+    <published>2024-12-24T10:34:09.000Z</published>
+    <updated>2024-12-28T11:13:34.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	基于 &lt;strong&gt;Seata 1.7.1&lt;/strong&gt; 源码，本篇文章详细拆解了一阶段分布式事务的执行流程，重点包括 &lt;strong&gt;降级检查策略&lt;/strong&gt;、&lt;strong&gt;undo log 的生成与管理&lt;/strong&gt;、&lt;strong&gt;非本地事务运行模式下的支持&lt;/strong&gt;、&lt;strong&gt;锁冲突检测及重试机制&lt;/strong&gt;，以及一阶段事务如何决定提交或回滚，为理解 AT 模式的核心原理提供了全面解析&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Seata" scheme="https://blog.shanzhao.site/categories/Seata/"/>
+    
+    
+    <category term="分布式" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    
+    <category term="分布式事务" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/"/>
+    
+    <category term="AT模式" scheme="https://blog.shanzhao.site/tags/AT%E6%A8%A1%E5%BC%8F/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Seata — 核心组件和启动流程</title>
+    <link href="https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/"/>
+    <id>https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/</id>
+    <published>2024-11-15T12:34:07.000Z</published>
+    <updated>2024-11-27T06:13:07.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	基于 &lt;strong&gt;Seata 1.7.1&lt;/strong&gt; 源码，这篇文章算是 AT 模式源码解析的前置内容。文章先从 &lt;strong&gt;自动配置类&lt;/strong&gt; 切入，梳理了客户端核心组件（&lt;strong&gt;TM、RM&lt;/strong&gt;）的职责和初始化流程，接着分析 &lt;strong&gt;AT 模式下 DataSource 代理的实现原理&lt;/strong&gt;，最后再简单介绍了服务端的启动过程以及 &lt;strong&gt;TC 的创建逻辑&lt;/strong&gt;&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Seata" scheme="https://blog.shanzhao.site/categories/Seata/"/>
+    
+    
+    <category term="分布式" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    
+    <category term="分布式事务" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/"/>
+    
+  </entry>
   
   <entry>
     <title>CloudFlare-CDN缓存清除</title>
@@ -33,6 +148,70 @@
     
     
     <category term="cdn缓存清除" scheme="https://blog.shanzhao.site/tags/cdn%E7%BC%93%E5%AD%98%E6%B8%85%E9%99%A4/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Redisson — 分布式本地缓存RLocalCachedMap的实现</title>
+    <link href="https://blog.shanzhao.site/2023-08-19/redisson-redissonlocalcachedmap/"/>
+    <id>https://blog.shanzhao.site/2023-08-19/redisson-redissonlocalcachedmap/</id>
+    <published>2023-08-19T09:43:07.000Z</published>
+    <updated>2023-08-25T11:34:03.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	基于 Redisson 3.16.8，对 &lt;strong&gt;RedissonLocalCachedMap&lt;/strong&gt; 的功能及核心方法进行了深入解析，并重点探讨其关键参数对整体缓存行为的影响，为后续定向优化提供参考&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Redisson" scheme="https://blog.shanzhao.site/categories/Redisson/"/>
+    
+    
+    <category term="分布式" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    
+    <category term="缓存" scheme="https://blog.shanzhao.site/tags/%E7%BC%93%E5%AD%98/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Redisson — 红锁的实现与思考</title>
+    <link href="https://blog.shanzhao.site/2023-07-27/redisson-hong-suo-de-shi-xian-yu-si-kao/"/>
+    <id>https://blog.shanzhao.site/2023-07-27/redisson-hong-suo-de-shi-xian-yu-si-kao/</id>
+    <published>2023-07-27T11:48:03.000Z</published>
+    <updated>2023-08-22T14:34:10.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	基于 Redisson 3.16.8版本，深入分析了&lt;strong&gt;红锁的设计背景&lt;/strong&gt;及其&lt;strong&gt;在 Redisson 中的实现&lt;/strong&gt;，最后讨论了&lt;strong&gt;红锁的局限性&lt;/strong&gt;，并介绍了可能的替代方案。同时，还详细的分析了 &lt;strong&gt;Redisson 如何通过引入 &lt;code&gt;WAIT&lt;/code&gt; 命令来优化普通分布式锁的可靠性&lt;/strong&gt;&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Redisson" scheme="https://blog.shanzhao.site/categories/Redisson/"/>
+    
+    
+    <category term="分布式" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    
+    <category term="红锁" scheme="https://blog.shanzhao.site/tags/%E7%BA%A2%E9%94%81/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Redisson — 分布式锁的实现</title>
+    <link href="https://blog.shanzhao.site/2023-06-18/redisson-fen-bu-shi-suo-de-shi-xian/"/>
+    <id>https://blog.shanzhao.site/2023-06-18/redisson-fen-bu-shi-suo-de-shi-xian/</id>
+    <published>2023-06-18T10:33:03.000Z</published>
+    <updated>2023-06-25T12:58:09.000Z</updated>
+    
+    
+    <summary type="html">&lt;p&gt;​	基于 Redisson 3.16.8版本，对互斥型分布式锁的源码做了详细分析，主要包括：&lt;strong&gt;Lua 脚本的加解锁逻辑&lt;/strong&gt;、&lt;strong&gt;看门狗机制的背景与实现&lt;/strong&gt;，以及&lt;strong&gt;如何通过 Redis 的 pub&amp;#x2F;sub 功能配合 JDK Semaphore 来实现线程阻塞与唤醒，从而避免忙等待&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;另外，也简单分析了一下共享型分布式锁的实现思路，比如 &lt;strong&gt;RCountDownLatch 和 RSemaphore&lt;/strong&gt;&lt;/p&gt;</summary>
+    
+    
+    
+    <category term="Redisson" scheme="https://blog.shanzhao.site/categories/Redisson/"/>
+    
+    
+    <category term="分布式" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F/"/>
+    
+    <category term="分布式锁" scheme="https://blog.shanzhao.site/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/"/>
     
   </entry>
   
@@ -72,9 +251,9 @@
     <category term="Netty" scheme="https://blog.shanzhao.site/categories/Netty/"/>
     
     
-    <category term="NIO" scheme="https://blog.shanzhao.site/tags/NIO/"/>
-    
     <category term="事件循环" scheme="https://blog.shanzhao.site/tags/%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF/"/>
+    
+    <category term="NIO" scheme="https://blog.shanzhao.site/tags/NIO/"/>
     
   </entry>
   
@@ -265,174 +444,6 @@
     
     <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
     
-    
-  </entry>
-  
-  <entry>
-    <title>Tomcat-热加载之ThreadLocal内存泄漏篇（二）</title>
-    <link href="https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/"/>
-    <id>https://blog.shanzhao.site/2021-12-23/tomcat-re-jia-zai-zhi-threadlocal-nei-cun-xie-lou-pian-er/</id>
-    <published>2021-12-23T11:45:06.000Z</published>
-    <updated>2021-12-28T13:56:17.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	通过举例深入的分析了热加载场景下ThreadLocal使用不当造成的内存泄漏。并剖析了Tomcat通过实现&lt;strong&gt;无效的ThreadLocalMap.Entry清除&lt;/strong&gt;、&lt;strong&gt;ThreadLocalLeakPreventionListener回收空闲worker线程&lt;/strong&gt;和&lt;strong&gt;TaskQueue对取任务逻辑的重写来兜底剩余worker线程回收&lt;/strong&gt;这三种策略来优雅的解决ThreadLocal内存泄漏的问题&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-    <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
-    
-    <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
-    
-    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Tomcat-热加载和相关Class的垃圾回收探讨（一）</title>
-    <link href="https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/"/>
-    <id>https://blog.shanzhao.site/2021-12-11/tomcat-re-jia-zai-he-xiang-guan-class-de-la-ji-hui-shou-tan-tao-yi/</id>
-    <published>2021-12-11T05:07:06.000Z</published>
-    <updated>2021-12-18T11:57:06.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	本文深入分析了 WebappClassLoader 的热加载整体流程，并&lt;strong&gt;对热加载过程中遗留的垃圾回收问题进行了系统性拆解&lt;/strong&gt;。重点涵盖了：&lt;strong&gt;垃圾的分类、核心引用关系的梳理、各类资源的清理策略&lt;/strong&gt;。最后&lt;strong&gt;详细解析了 Tomcat 如何通过兜底机制清理仍存活的线程，并结合实践给出了线程资源管理的最佳建议&lt;/strong&gt;&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-    <category term="热加载" scheme="https://blog.shanzhao.site/tags/%E7%83%AD%E5%8A%A0%E8%BD%BD/"/>
-    
-    <category term="内存泄漏" scheme="https://blog.shanzhao.site/tags/%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F/"/>
-    
-    <category term="垃圾回收" scheme="https://blog.shanzhao.site/tags/%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Tomcat-类加载器</title>
-    <link href="https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/"/>
-    <id>https://blog.shanzhao.site/2021-11-23/tomcat-lei-jia-zai-qi/</id>
-    <published>2021-11-23T01:13:34.000Z</published>
-    <updated>2021-11-28T10:09:17.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	以问题切入，深入剖析了commonLoader与WebappClassLoader各自的定位与设计初衷，重点分析了WebappClassLoader如何在保证JVM核心类安全的前提下，部分打破双亲委派机制，实现Web应用之间的真正隔离。&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-    <category term="类加载器" scheme="https://blog.shanzhao.site/tags/%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Tomcat-责任链之Pipeline+Valve和Filter</title>
-    <link href="https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/"/>
-    <id>https://blog.shanzhao.site/2021-11-02/tomcat-ze-ren-lian-zhi-pipeline-valve-he-filter/</id>
-    <published>2021-11-02T11:18:11.000Z</published>
-    <updated>2021-11-07T10:03:15.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	分析了Tomcat中Pipeline+Valve和支持Filter的ApplicationFilterChain两种基于责任链模式的实现逻辑，并在最后总结了这两者的异同点以及为什么会有这两种类似的模块。&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-    <category term="责任链模式" scheme="https://blog.shanzhao.site/tags/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Tomcat-启动流程和http请求流程</title>
-    <link href="https://blog.shanzhao.site/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/"/>
-    <id>https://blog.shanzhao.site/2021-10-18/tomcat-qi-dong-liu-cheng-he-http-qing-qiu-liu-cheng/</id>
-    <published>2021-10-18T03:02:15.000Z</published>
-    <updated>2021-10-23T11:02:17.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	分析并总结了tomcat的启动流程和整个http请求流程，重点可关注&lt;strong&gt;启动流程的UML图和请求流程图&lt;/strong&gt;&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-  </entry>
-  
-  <entry>
-    <title>Tomcat-Context,ContextConfig和Wrapper</title>
-    <link href="https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/"/>
-    <id>https://blog.shanzhao.site/2021-10-03/tomcat-context-contextconfig-he-wrapper/</id>
-    <published>2021-10-03T10:39:39.000Z</published>
-    <updated>2021-10-07T06:31:39.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	StandardContext、ContextConfig以及StandardWrapper的核心逻辑源码解析及总结&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-    <category term="Container" scheme="https://blog.shanzhao.site/tags/Container/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Tomcat-Engine,Host和HostConfig</title>
-    <link href="https://blog.shanzhao.site/2021-09-23/tomcat-engine-host-he-hostconfig/"/>
-    <id>https://blog.shanzhao.site/2021-09-23/tomcat-engine-host-he-hostconfig/</id>
-    <published>2021-09-23T02:35:44.000Z</published>
-    <updated>2021-10-02T07:33:44.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	从源码分析了ContainerBase，StandardEngine，StandardHost和HostConfig的实现逻辑。需要&lt;strong&gt;重点注意HostConfig的作用和部署流程&lt;/strong&gt;&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-    <category term="Container" scheme="https://blog.shanzhao.site/tags/Container/"/>
-    
-  </entry>
-  
-  <entry>
-    <title>Tomcat-Server和Service</title>
-    <link href="https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/"/>
-    <id>https://blog.shanzhao.site/2021-09-04/tomcat-server-he-service/</id>
-    <published>2021-09-04T12:43:45.000Z</published>
-    <updated>2025-09-11T07:22:45.000Z</updated>
-    
-    
-    <summary type="html">&lt;hr&gt;
-&lt;p&gt;​	对Tomcat中Server，Service的init和start方法 + 核心字段进行了分析，并&lt;strong&gt;重点分析了Connector-NioEndpoint内部的Acceptor和Poller线程，并用图文的方法做了总结&lt;/strong&gt;。并简单总结了Mapper和MapperListener的作用&lt;/p&gt;</summary>
-    
-    
-    
-    <category term="Tomcat" scheme="https://blog.shanzhao.site/categories/Tomcat/"/>
-    
-    
-    <category term="Acceptor" scheme="https://blog.shanzhao.site/tags/Acceptor/"/>
-    
-    <category term="Poller" scheme="https://blog.shanzhao.site/tags/Poller/"/>
     
   </entry>
   

@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	基于 Seata 1.7.1 源码，本篇文章详细拆解了一阶段分布式事务的执行流程，重点包括 降级检查策略、undo log 的生成与管理、非本地事务运行模式下的支持、锁冲突检测及重试机制，以及一阶段事务如何决定提交或回滚，为理解 AT 模式的核心原理提供了全面解析">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Seata — AT模式一阶段全解析">
+<meta property="og:url" content="https://blog.shanzhao.site/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	基于 Seata 1.7.1 源码，本篇文章详细拆解了一阶段分布式事务的执行流程，重点包括 降级检查策略、undo log 的生成与管理、非本地事务运行模式下的支持、锁冲突检测及重试机制，以及一阶段事务如何决定提交或回滚，为理解 AT 模式的核心原理提供了全面解析">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-12-24T10:34:09.000Z">
+<meta property="article:modified_time" content="2024-12-28T11:13:34.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="分布式事务">
+<meta property="article:tag" content="AT模式">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/","path":"2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/","title":"Seata — AT模式一阶段全解析"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Seata — AT模式一阶段全解析 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%99%8D%E7%BA%A7%E6%A3%80%E6%9F%A5"><span class="nav-number">1.</span> <span class="nav-text">降级检查</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1%E7%9A%84%E6%89%A7%E8%A1%8C"><span class="nav-number">2.</span> <span class="nav-text">分布式事务的执行</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#XID"><span class="nav-number">2.1.</span> <span class="nav-text">XID</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#Launcher%EF%BC%88%E5%85%A8%E5%B1%80%E4%BA%8B%E5%8A%A1%E5%8F%91%E8%B5%B7%E8%80%85%EF%BC%89"><span class="nav-number">2.1.1.</span> <span class="nav-text">Launcher（全局事务发起者）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Participant%EF%BC%88%E5%85%A8%E5%B1%80%E4%BA%8B%E5%8A%A1%E5%8F%82%E4%B8%8E%E8%80%85%EF%BC%89"><span class="nav-number">2.1.2.</span> <span class="nav-text">Participant（全局事务参与者）</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%A8%E5%B1%80%E4%BA%8B%E5%8A%A1%E5%BC%80%E5%90%AF"><span class="nav-number">2.2.</span> <span class="nav-text">全局事务开启</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%89%A7%E8%A1%8C%E4%B8%9A%E5%8A%A1%E4%BB%A3%E7%A0%81"><span class="nav-number">2.3.</span> <span class="nav-text">执行业务代码</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#PreparedStatementProxy"><span class="nav-number">2.3.1.</span> <span class="nav-text">PreparedStatementProxy</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#AbstractDMLBaseExecutor"><span class="nav-number">2.3.1.1.</span> <span class="nav-text">AbstractDMLBaseExecutor</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E9%9D%9E%E6%9C%AC%E5%9C%B0%E4%BA%8B%E5%8A%A1%E6%89%A7%E8%A1%8C%E6%9C%BA%E5%88%B6"><span class="nav-number">2.3.1.2.</span> <span class="nav-text">非本地事务执行机制</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#ConnectionProxy"><span class="nav-number">2.3.2.</span> <span class="nav-text">ConnectionProxy</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%B3%A8%E5%86%8C%E5%88%86%E6%94%AF%E4%BA%8B%E5%8A%A1%E5%92%8C%E9%94%81%E6%A3%80%E6%9F%A5"><span class="nav-number">2.3.2.1.</span> <span class="nav-text">注册分支事务和锁检查</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E9%94%81%E5%86%B2%E7%AA%81%E9%87%8D%E8%AF%95"><span class="nav-number">2.3.2.2.</span> <span class="nav-text">锁冲突重试</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E5%88%B7%E6%96%B0undo-log"><span class="nav-number">2.3.2.3.</span> <span class="nav-text">刷新undo_log</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#%E6%9C%AC%E5%9C%B0%E4%BA%8B%E5%8A%A1%E7%9C%9F%E6%AD%A3%E6%8F%90%E4%BA%A4"><span class="nav-number">2.3.2.4.</span> <span class="nav-text">本地事务真正提交</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#rollback"><span class="nav-number">2.3.2.5.</span> <span class="nav-text">rollback</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E9%98%B6%E6%AE%B5%E7%AE%80%E5%8D%95%E6%80%BB%E7%BB%93"><span class="nav-number">3.</span> <span class="nav-text">一阶段简单总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%9B%B8%E5%85%B3%E9%93%BE%E6%8E%A5"><span class="nav-number">4.</span> <span class="nav-text">相关链接</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">49</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">52</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Seata — AT模式一阶段全解析 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Seata — AT模式一阶段全解析
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2024-12-24 18:34:09" itemprop="dateCreated datePublished" datetime="2024-12-24T18:34:09+08:00">2024-12-24</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2024-12-28 19:13:34" itemprop="dateModified" datetime="2024-12-28T19:13:34+08:00">2024-12-28</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Seata/" itemprop="url" rel="index"><span itemprop="name">Seata</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>22k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>40 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	基于 <strong>Seata 1.7.1</strong> 源码，本篇文章详细拆解了一阶段分布式事务的执行流程，重点包括 <strong>降级检查策略</strong>、<strong>undo log 的生成与管理</strong>、<strong>非本地事务运行模式下的支持</strong>、<strong>锁冲突检测及重试机制</strong>，以及一阶段事务如何决定提交或回滚，为理解 AT 模式的核心原理提供了全面解析</p>
+<span id="more"></span>
+
+<p>​	Seata 的 AT 模式本质上就是在<strong>一阶段做足准备，二阶段才能高效提交或回滚</strong>。我们从<code>@GlobalTransactional</code> 入手，来看看 <code>GlobalTransactionalInterceptor</code> 在分布式事务的一阶段里到底做了什么</p>
+<h2 id="降级检查"><a href="#降级检查" class="headerlink" title="降级检查"></a>降级检查</h2><p>​	<code>GlobalTransactionalInterceptor</code> 会在方法执行前先判断是否处于降级状态，<strong>如果已经降级，就直接跳过全局事务逻辑，改走本地事务，避免全局事务挂掉时影响业务</strong>。其降级检查相关参数和方法如下，核心逻辑如下：</p>
+<ol>
+<li><p><strong>启动定时任务，定期做可用性检测</strong></p>
+<blockquote>
+<p>​	在 <code>GlobalTransactionalInterceptor</code> 构造方法里，会调用 <code>startDegradeCheck()</code>，开启一个定时任务。这个任务每隔一段时间，创建一个空的全局事务并马上提交，以此测试 TC 是否正常</p>
+<p>​	另外，业务中的全局事务执行完成后，也会根据执行结果发布DegradeCheckEvent事件</p>
+</blockquote>
+</li>
+<li><p><strong>根据事件统计状态</strong></p>
+<blockquote>
+<p>​	通过监听 <code>DegradeCheckEvent</code>，统计连续失败次数degradeNum和连续成功次数reachNum</p>
+<ul>
+<li>降级：失败次数达到degradeCheckAllowTimes（默认 10 次）</li>
+<li>恢复：连续成功达到degradeCheckAllowTimes（同样是 10 次）</li>
+</ul>
+</blockquote>
+</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// 降级检查任务执行的时间间隔（单位：毫秒）</span>
+<span class="token comment" spellcheck="true">// 仅当 degradeCheck = true 时有效，默认值为 2000 毫秒</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">int</span> degradeCheckPeriod<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 是否启用降级检查策略的动态开关</span>
+<span class="token comment" spellcheck="true">// 受配置中心的client.tm.degradeCheck参数控制</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> AtomicBoolean ATOMIC_DEGRADE_CHECK <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">AtomicBoolean</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 降级检查失败允许的最大次数</span>
+<span class="token comment" spellcheck="true">// 当连续失败次数 >= 此值时，会触发事务模式降级（从全局事务退化为本地事务）</span>
+<span class="token comment" spellcheck="true">// 仅当 degradeCheck = true 时有效，默认值为 10</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">int</span> degradeCheckAllowTimes<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 当前累计的连续失败次数（用于降级）</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">volatile</span> Integer degradeNum <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 当前累计的连续成功次数（用于恢复）</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">volatile</span> Integer reachNum <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 基于 Guava 的事件总线，用于发布和监听降级相关事件</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> EventBus EVENT_BUS <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">GuavaEventBus</span><span class="token punctuation">(</span><span class="token string">"degradeCheckEventBus"</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 定时任务线程池，只会执行降级检查任务</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">volatile</span> ScheduledThreadPoolExecutor executor<span class="token punctuation">;</span>
+
+
+<span class="token comment" spellcheck="true">/**
+ * 开启降级检查的定时任务
+ */</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">startDegradeCheck</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>ATOMIC_DEGRADE_CHECK<span class="token punctuation">.</span><span class="token function">compareAndSet</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>executor <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span>executor<span class="token punctuation">.</span><span class="token function">isShutdown</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    executor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ScheduledThreadPoolExecutor</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">,</span> <span class="token keyword">new</span> <span class="token class-name">NamedThreadFactory</span><span class="token punctuation">(</span><span class="token string">"degradeCheckWorker"</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    executor<span class="token punctuation">.</span><span class="token function">scheduleAtFixedRate</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ATOMIC_DEGRADE_CHECK<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 开启一个空的全局事务</span>
+                String xid <span class="token operator">=</span> TransactionManagerHolder<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">begin</span><span class="token punctuation">(</span>null<span class="token punctuation">,</span> null<span class="token punctuation">,</span> <span class="token string">"degradeCheck"</span><span class="token punctuation">,</span> <span class="token number">60000</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// 马上提交全局事务</span>
+                TransactionManagerHolder<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span>xid<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                EVENT_BUS<span class="token punctuation">.</span><span class="token function">post</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">DegradeCheckEvent</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                EVENT_BUS<span class="token punctuation">.</span><span class="token function">post</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">DegradeCheckEvent</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span><span class="token punctuation">,</span> degradeCheckPeriod<span class="token punctuation">,</span> degradeCheckPeriod<span class="token punctuation">,</span> TimeUnit<span class="token punctuation">.</span>MILLISECONDS<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment" spellcheck="true">/**
+ * DegradeCheckEvent事件触发，统计降级相关数据
+ */</span>
+<span class="token annotation punctuation">@Subscribe</span>
+<span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">onDegradeCheck</span><span class="token punctuation">(</span>DegradeCheckEvent event<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 10</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>event<span class="token punctuation">.</span><span class="token function">isRequestSuccess</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 成功</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>degradeNum <span class="token operator">>=</span> degradeCheckAllowTimes<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 已经处于降级状态</span>
+            <span class="token comment" spellcheck="true">// 统计连续成功次数</span>
+            reachNum<span class="token operator">++</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>reachNum <span class="token operator">>=</span> degradeCheckAllowTimes<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 连续成功次数达到阈值 → 恢复全局事务</span>
+                reachNum <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+                degradeNum <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>LOGGER<span class="token punctuation">.</span><span class="token function">isInfoEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    LOGGER<span class="token punctuation">.</span><span class="token function">info</span><span class="token punctuation">(</span><span class="token string">"the current global transaction has been restored"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>degradeNum <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 不在降级状态直接重置degradeNum，因为不连续了</span>
+            degradeNum <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 失败</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>degradeNum <span class="token operator">&lt;</span> degradeCheckAllowTimes<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 还没降级</span>
+            <span class="token comment" spellcheck="true">// 增加失败计数</span>
+            degradeNum<span class="token operator">++</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>degradeNum <span class="token operator">>=</span> degradeCheckAllowTimes<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 连续失败次数达到阈值 → 会启用降级模式，这个做个日志</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>LOGGER<span class="token punctuation">.</span><span class="token function">isWarnEnabled</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    LOGGER<span class="token punctuation">.</span><span class="token function">warn</span><span class="token punctuation">(</span><span class="token string">"the current global transaction has been automatically downgraded"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>reachNum <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 已降级，但之前有成功累计 → 重置成功次数</span>
+            reachNum <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="分布式事务的执行"><a href="#分布式事务的执行" class="headerlink" title="分布式事务的执行"></a>分布式事务的执行</h2><p>​	<code>@GlobalTransactional</code> 的核心逻辑封装在<strong>TransactionalTemplate#execute</strong>方法中，其整体设计思路明显借鉴了 Spring 的事务处理模式。可以将其类比理解为：</p>
+<ol>
+<li>解析注解信息，将 <code>@GlobalTransactional</code> 的属性组装为 <code>TransactionInfo</code>（类似 Spring 的 <code>TransactionAttribute</code>）</li>
+<li><strong>基于该信息创建并绑定 <code>GlobalTransaction</code>，并应用对应的传播行为</strong>（相当于 Spring 的 <code>TransactionStatus</code> ）</li>
+<li>执行业务逻辑，根据是否抛出异常决定调用 <strong>rollback</strong> 还是 <strong>commit</strong></li>
+<li>恢复执行上下文，确保支持 <strong>REQUIRES_NEW</strong> 和 <strong>NOT_SUPPORTED</strong> 这类传播策略</li>
+</ol>
+<p>​	整体流程可以概括为：<strong>构建事务上下文 → 执行业务逻辑 → 结束事务 → 恢复现场</strong>，与 Spring 事务的核心思想是一致的，只是这里针对的是 <strong>分布式全局事务</strong>。我们先有个整体印象，然后再详细分析关键步骤的细节	</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> Object <span class="token function">execute</span><span class="token punctuation">(</span>TransactionalExecutor business<span class="token punctuation">)</span> <span class="token keyword">throws</span> Throwable <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 1. 获取事务信息（事务传播、超时时间、隔离级别等）</span>
+    TransactionInfo txInfo <span class="token operator">=</span> business<span class="token punctuation">.</span><span class="token function">getTransactionInfo</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>txInfo <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ShouldNeverHappenException</span><span class="token punctuation">(</span><span class="token string">"transactionInfo does not exist"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 1.1 获取当前线程绑定的全局事务（不存在则表示是初次，则为发起者，否则为参与者）</span>
+    GlobalTransaction tx <span class="token operator">=</span> GlobalTransactionContext<span class="token punctuation">.</span><span class="token function">getCurrent</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    Propagation propagation <span class="token operator">=</span> txInfo<span class="token punctuation">.</span><span class="token function">getPropagation</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    SuspendedResourcesHolder suspendedResourcesHolder <span class="token operator">=</span> null<span class="token punctuation">;</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token keyword">switch</span> <span class="token punctuation">(</span>propagation<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">case</span> NOT_SUPPORTED<span class="token operator">:</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">existingTransaction</span><span class="token punctuation">(</span>tx<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 存在事务就先暂停，以非全局事务来处理</span>
+                    suspendedResourcesHolder <span class="token operator">=</span> tx<span class="token punctuation">.</span><span class="token function">suspend</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">return</span> business<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">case</span> REQUIRES_NEW<span class="token operator">:</span>
+                <span class="token comment" spellcheck="true">// 存在事务就先暂停，开启一个新的全局事务</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">existingTransaction</span><span class="token punctuation">(</span>tx<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    suspendedResourcesHolder <span class="token operator">=</span> tx<span class="token punctuation">.</span><span class="token function">suspend</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                tx <span class="token operator">=</span> GlobalTransactionContext<span class="token punctuation">.</span><span class="token function">createNew</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token keyword">case</span> SUPPORTS<span class="token operator">:</span> 
+                <span class="token comment" spellcheck="true">// 存在全局事务就加入，不存在就以非全局事务的方式执行</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">notExistingTransaction</span><span class="token punctuation">(</span>tx<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> business<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token keyword">case</span> REQUIRED<span class="token operator">:</span>
+                <span class="token comment" spellcheck="true">// 如果没有全局事务，则创建一个；否则使用当前事务</span>
+                tx <span class="token operator">=</span> GlobalTransactionContext<span class="token punctuation">.</span><span class="token function">getCurrentOrCreate</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token keyword">case</span> NEVER<span class="token operator">:</span>
+                <span class="token comment" spellcheck="true">// 如果存在事务，直接抛异常</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">existingTransaction</span><span class="token punctuation">(</span>tx<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">TransactionException</span><span class="token punctuation">(</span>
+                            String<span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span>
+                                    <span class="token string">"Existing transaction found for transaction marked with propagation 'never', xid = %s"</span><span class="token punctuation">,</span>
+                                    tx<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> business<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token keyword">case</span> MANDATORY<span class="token operator">:</span>
+                <span class="token comment" spellcheck="true">// 必须有全局事务，否则抛异常</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">notExistingTransaction</span><span class="token punctuation">(</span>tx<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">TransactionException</span><span class="token punctuation">(</span>
+                            <span class="token string">"No existing transaction found for transaction marked with propagation 'mandatory'"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// Continue and execute with current transaction.</span>
+                <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token keyword">default</span><span class="token operator">:</span>
+                <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">TransactionException</span><span class="token punctuation">(</span><span class="token string">"Not Supported Propagation:"</span> <span class="token operator">+</span> propagation<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        GlobalLockConfig previousConfig <span class="token operator">=</span> <span class="token function">replaceGlobalLockConfig</span><span class="token punctuation">(</span>txInfo<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// ======================= 进入事务逻辑 =======================</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 利用TM开启全局事务（只有全局事务的发起者开可以开启），注册到server端并触发对应的的hook</span>
+            <span class="token function">beginTransaction</span><span class="token punctuation">(</span>txInfo<span class="token punctuation">,</span> tx<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            Object rs<span class="token punctuation">;</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 执行业务代码</span>
+                rs <span class="token operator">=</span> business<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token comment" spellcheck="true">// =============== 往下走就算是二阶段的任务了，准备全局事务的提交或回滚 =====================</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 业务异常触发全局事务回滚</span>
+                <span class="token function">completeTransactionAfterThrowing</span><span class="token punctuation">(</span>txInfo<span class="token punctuation">,</span> tx<span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">throw</span> ex<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token comment" spellcheck="true">// 业务执行成功 → 提交全局事务（只有事务发起者能提交）</span>
+            <span class="token function">commitTransaction</span><span class="token punctuation">(</span>tx<span class="token punctuation">,</span> txInfo<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+            <span class="token keyword">return</span> rs<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 全局事务配置（锁重试次数和锁重试时间间隔）回退（回退到上一个事务）或清除</span>
+            <span class="token function">resumeGlobalLockConfig</span><span class="token punctuation">(</span>previousConfig<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// afterCompletion的钩子函数</span>
+            <span class="token function">triggerAfterCompletion</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 钩子函数的clean</span>
+            <span class="token function">cleanUp</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 上一个事务的resume，很简单，重新绑定上一个xid就行</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>suspendedResourcesHolder <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            tx<span class="token punctuation">.</span><span class="token function">resume</span><span class="token punctuation">(</span>suspendedResourcesHolder<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="XID"><a href="#XID" class="headerlink" title="XID"></a>XID</h3><p>​	<code>GlobalTransactionContext#getCurrent</code> 用于获取当前全局事务信息，内部逻辑很简单：根据当前线程上下文是否存在 <strong>XID</strong> 来判断是 <strong>全局事务发起者</strong> 还是 <strong>参与者</strong></p>
+<p>​	<strong>XID 在整个分布式事务链路中起到类似 traceId 的作用，必须传递给下游服务，才能将多个微服务串联成一个完整的全局事务</strong>。Seata 的 <code>integration</code> 模块中实现了主流 RPC 框架的 XID 传播机制，例如 Dubbo 对应的 <code>AlibabaDubboTransactionPropagationFilter</code></p>
+<h4 id="Launcher（全局事务发起者）"><a href="#Launcher（全局事务发起者）" class="headerlink" title="Launcher（全局事务发起者）"></a>Launcher（全局事务发起者）</h4><p>​		作为全局事务的起点，如果线程上下文不存在 XID 时，才有资格创建新的全局事务。<strong>发起者负责开启全局事务，并在业务逻辑跑完后，根据是否抛异常来决定提交还是回滚</strong></p>
+<h4 id="Participant（全局事务参与者）"><a href="#Participant（全局事务参与者）" class="headerlink" title="Participant（全局事务参与者）"></a>Participant（全局事务参与者）</h4><p>​	处于微服务调用链的中下层，<strong>参与到了其他上游服务发起的全局事务（这时线程上下文存在xid）</strong>。对应 Spring 的 加入已有事务传播行为。所以，<strong>全局事务的参与者不能触发全局事务的回滚或提交</strong>，它能做的就是<strong>通过 RM 报告当前分支事务的执行结果。如果执行失败，会把状态标记成 <code>PhaseOne_Failed</code>，等全局回滚的时候一起处理</strong></p>
+<h3 id="全局事务开启"><a href="#全局事务开启" class="headerlink" title="全局事务开启"></a>全局事务开启</h3><p>​	全局事务是通过 <strong><code>GlobalTransaction#begin</code></strong> 来启动的。内部由<strong>TM构建一个 <code>GlobalBeginRequest</code> 请求发到 TC，TC 处理完成后会回传一个 XID，客户端拿到这个 XID 后绑定到当前线程上下文，用于后续分支事务的关联</strong></p>
+<p>​	server端的TC 收到请求后，最终会走到 <strong><code>DefaultCore#begin</code></strong> 方法，核心逻辑可以简单概括为：</p>
+<ol>
+<li><p><strong>创建 GlobalSession</strong>：初始化一个全局事务对象，并生成唯一的 <strong>XID</strong></p>
+</li>
+<li><p><strong>存储 GlobalSession</strong></p>
+<blockquote>
+<p>​	通过不同的SessionLifecycleListener实现类来选择存储策略。以DataBaseSessionManager为例，会<strong>将GlobalSession转化为GlobalTransactionDO数据结构，并插入到global_table表中</strong>。至此全局事务信息完成持久化</p>
+</blockquote>
+</li>
+<li><p><strong>回传 XID 给客户端</strong></p>
+</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// DefaultCore#begin</span>
+<span class="token keyword">public</span> String <span class="token function">begin</span><span class="token punctuation">(</span>String applicationId<span class="token punctuation">,</span> String transactionServiceGroup<span class="token punctuation">,</span> String name<span class="token punctuation">,</span> <span class="token keyword">int</span> timeout<span class="token punctuation">)</span>
+        <span class="token keyword">throws</span> TransactionException <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 创建globalSession</span>
+        GlobalSession session <span class="token operator">=</span> GlobalSession<span class="token punctuation">.</span><span class="token function">createGlobalSession</span><span class="token punctuation">(</span>applicationId<span class="token punctuation">,</span> transactionServiceGroup<span class="token punctuation">,</span> name<span class="token punctuation">,</span> timeout<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        MDC<span class="token punctuation">.</span><span class="token function">put</span><span class="token punctuation">(</span>RootContext<span class="token punctuation">.</span>MDC_KEY_XID<span class="token punctuation">,</span> session<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        session<span class="token punctuation">.</span><span class="token function">addSessionLifecycleListener</span><span class="token punctuation">(</span>SessionHolder<span class="token punctuation">.</span><span class="token function">getRootSessionManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// 开启session，根据不同的策略（file、db、redis）将session保存起来</span>
+        session<span class="token punctuation">.</span><span class="token function">begin</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token comment" spellcheck="true">// transaction start event</span>
+        MetricsPublisher<span class="token punctuation">.</span><span class="token function">postSessionDoingEvent</span><span class="token punctuation">(</span>session<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">return</span> session<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="执行业务代码"><a href="#执行业务代码" class="headerlink" title="执行业务代码"></a>执行业务代码</h3><p>​	分布式事务要管的核心，其实就是数据库的读写操作。根据<a href="https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/#SeataDataSourceAutoConfiguration">上一篇文章</a>的分析，Seata通过代理<strong>DataSource</strong>、<strong>Connection</strong>、<strong>PreparedStatement</strong>来插入分布式事务逻辑。不过 DataSource 代理在事务期间主要是为了提供 ConnectionProxy，因此真正的重点在 <strong>ConnectionProxy</strong> 和 <strong>PreparedStatementProxy</strong>，这两个才是实现核心逻辑的关键角色</p>
+<h4 id="PreparedStatementProxy"><a href="#PreparedStatementProxy" class="headerlink" title="PreparedStatementProxy"></a>PreparedStatementProxy</h4><p>​	<code>PreparedStatementProxy</code> 在执行 SQL 时，会借助 Druid 等工具解析当前业务的 DML 语句，然后根据 SQL 类型选择对应的 <code>AbstractDMLBaseExecutor</code> 子类，并最终调用 <code>Executor#execute</code> 完成执行。SQL 类型和执行器映射关系大致如下：</p>
+<ul>
+<li>INSERT → 不同的数据库有不同的实现，MYSQL为MySQLInsertExecutor：其<strong>beforeImage为空实现，此时数据都还没有的</strong></li>
+<li><strong>UPDATE → <code>UpdateExecutor</code><strong>：</strong>最常用的一种Executor，前后镜像都要执行SELECT</strong></li>
+<li>DELETE → <code>DeleteExecutor</code>：其afterImage为空实现，因为数据都删了</li>
+<li><strong>SELECT_FOR_UPDATE → <code>SelectForUpdateExecutor</code><strong>：</strong>全局事务读已提交功能的核心实现</strong></li>
+<li>INSERT_ON_DUPLICATE_UPDATE → MYSQL为<code>MySQLInsertOnDuplicateUpdateExecutor</code></li>
+<li>UPDATE_JOIN → MYSQL为<code>MySQLUpdateJoinExecutor</code></li>
+<li><strong>SELECT</strong>  → <code>PlainExecutor</code>：这种 SQL 不涉及数据修改，不会生成前后镜像，也不会构建 <code>undo_log</code>，直接执行原 SQL</li>
+</ul>
+<h5 id="AbstractDMLBaseExecutor"><a href="#AbstractDMLBaseExecutor" class="headerlink" title="AbstractDMLBaseExecutor"></a>AbstractDMLBaseExecutor</h5><p>​	AbstractDMLBaseExecutor<strong>是Seata 处理 DML 语句（INSERT、UPDATE、DELETE）的核心抽象类，它定义了执行 SQL 前后获取镜像数据的模板方法</strong>：</p>
+<ul>
+<li>beforeImage()：在SQL <strong>之前</strong>，查询<strong>旧数据保存为TableRecords</strong></li>
+<li>afterImage()：在SQL<strong>之后</strong>，查询<strong>新数据保存为TableRecords</strong></li>
+</ul>
+<p>这两份TableRecords是后续构建undo_log和lockKey基础：</p>
+<ul>
+<li><strong>undo_log</strong>：<strong>全局事务回滚时用于执行反向补偿</strong></li>
+<li><strong>lockKey</strong>：用于<strong>全局锁控制，避免不同的全局事务在结束前并发修改同一行数据</strong></li>
+</ul>
+<p>​	其核心方法如下，execute()作为整体的入口，最终都会走到 executeAutoCommitFalse()，在这里<strong>完成 SQL 执行、镜像采集，以及 undo_log 和 lockKey 的生成</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">/**
+ * 入口
+ */</span>
+<span class="token keyword">public</span> T <span class="token function">execute</span><span class="token punctuation">(</span>Object<span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> Throwable <span class="token punctuation">{</span>
+        String xid <span class="token operator">=</span> RootContext<span class="token punctuation">.</span><span class="token function">getXID</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>xid <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 存在全局事务，将全局事务id设置到ConnectionProxy中</span>
+            statementProxy<span class="token punctuation">.</span><span class="token function">getConnectionProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">bind</span><span class="token punctuation">(</span>xid<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// @GlobalLock注解支持</span>
+        statementProxy<span class="token punctuation">.</span><span class="token function">getConnectionProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setGlobalLockRequire</span><span class="token punctuation">(</span>RootContext<span class="token punctuation">.</span><span class="token function">requireGlobalLock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token function">doExecute</span><span class="token punctuation">(</span>args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+<span class="token keyword">public</span> T <span class="token function">doExecute</span><span class="token punctuation">(</span>Object<span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> Throwable <span class="token punctuation">{</span>
+    AbstractConnectionProxy connectionProxy <span class="token operator">=</span> statementProxy<span class="token punctuation">.</span><span class="token function">getConnectionProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>connectionProxy<span class="token punctuation">.</span><span class="token function">getAutoCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 当前事务为自动提交（代表没有主动开启事务）</span>
+        <span class="token comment" spellcheck="true">// 一般就是只用了分布式事务但没有使用本地事务的情况。</span>
+        <span class="token comment" spellcheck="true">// 这时每条dml都会被当作分支事务来执行，即执行完后都会操作seata的commit来注册分支事务（增加了rpc通信压力）</span>
+        <span class="token keyword">return</span> <span class="token function">executeAutoCommitTrue</span><span class="token punctuation">(</span>args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> <span class="token function">executeAutoCommitFalse</span><span class="token punctuation">(</span>args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">protected</span> T <span class="token function">executeAutoCommitTrue</span><span class="token punctuation">(</span>Object<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> Throwable <span class="token punctuation">{</span>
+    ConnectionProxy connectionProxy <span class="token operator">=</span> statementProxy<span class="token punctuation">.</span><span class="token function">getConnectionProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 执行所有SQL前修改autoCommit为false，即手动提交事务</span>
+        connectionProxy<span class="token punctuation">.</span><span class="token function">changeAutoCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 锁重试机制来commit</span>
+        <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">LockRetryPolicy</span><span class="token punctuation">(</span>connectionProxy<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+            T result <span class="token operator">=</span> <span class="token function">executeAutoCommitFalse</span><span class="token punctuation">(</span>args<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 走非自动提交事务的commit逻辑（准备undo日志）</span>
+            connectionProxy<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// when exception occur in finally,this exception will lost, so just print it</span>
+        <span class="token comment" spellcheck="true">// here</span>
+        LOGGER<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"execute executeAutoCommitTrue error:{}"</span><span class="token punctuation">,</span> e<span class="token punctuation">.</span><span class="token function">getMessage</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>LockRetryPolicy<span class="token punctuation">.</span><span class="token function">isLockRetryPolicyBranchRollbackOnConflict</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            connectionProxy<span class="token punctuation">.</span><span class="token function">getTargetConnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">rollback</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+        connectionProxy<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">reset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        connectionProxy<span class="token punctuation">.</span><span class="token function">setAutoCommit</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment" spellcheck="true">/**
+ * 准备执行SQL了
+ */</span>
+<span class="token keyword">protected</span> T <span class="token function">executeAutoCommitFalse</span><span class="token punctuation">(</span>Object<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+    <span class="token keyword">try</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 1. 记录sql执行前镜像</span>
+        TableRecords beforeImage <span class="token operator">=</span> <span class="token function">beforeImage</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 2. 执行业务sql</span>
+        T result <span class="token operator">=</span> statementCallback<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span>statementProxy<span class="token punctuation">.</span><span class="token function">getTargetStatement</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 3. 记录sql执行后的镜像</span>
+        TableRecords afterImage <span class="token operator">=</span> <span class="token function">afterImage</span><span class="token punctuation">(</span>beforeImage<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">// 4. 准备undo_log（只是准备，还未写表的）</span>
+        <span class="token function">prepareUndoLog</span><span class="token punctuation">(</span>beforeImage<span class="token punctuation">,</span> afterImage<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">TableMetaException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        LOGGER<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"table meta will be refreshed later, due to TableMetaException, table:{}, column:{}"</span><span class="token punctuation">,</span>
+                e<span class="token punctuation">.</span><span class="token function">getTableName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> e<span class="token punctuation">.</span><span class="token function">getColumnName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        statementProxy<span class="token punctuation">.</span><span class="token function">getConnectionProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getDataSourceProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">tableMetaRefreshEvent</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+<span class="token comment" spellcheck="true">/**
+ * 准备undo_log数据
+ */</span>
+<span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">prepareUndoLog</span><span class="token punctuation">(</span>TableRecords beforeImage<span class="token punctuation">,</span> TableRecords afterImage<span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>beforeImage<span class="token punctuation">.</span><span class="token function">getRows</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> afterImage<span class="token punctuation">.</span><span class="token function">getRows</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isEmpty</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// update语句的前后镜像Records数量一定要一样，Seata是不允许Update主键数据的</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>SQLType<span class="token punctuation">.</span>UPDATE <span class="token operator">==</span> sqlRecognizer<span class="token punctuation">.</span><span class="token function">getSQLType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>beforeImage<span class="token punctuation">.</span><span class="token function">getRows</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> afterImage<span class="token punctuation">.</span><span class="token function">getRows</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">ShouldNeverHappenException</span><span class="token punctuation">(</span>
+                    <span class="token string">"Before image size is not equaled to after image size, probably because you updated the primary keys."</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    ConnectionProxy connectionProxy <span class="token operator">=</span> statementProxy<span class="token punctuation">.</span><span class="token function">getConnectionProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 准备先构建lockKey，可以映射到具体变化的某一行数据</span>
+    <span class="token comment" spellcheck="true">// DELETE作为删除操作，只有beforeImage可以定位到lockKey</span>
+    <span class="token comment" spellcheck="true">// 其余的update、insert都可以用afterImage来定位lockKey</span>
+    TableRecords lockKeyRecords <span class="token operator">=</span> sqlRecognizer<span class="token punctuation">.</span><span class="token function">getSQLType</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> SQLType<span class="token punctuation">.</span>DELETE <span class="token operator">?</span> beforeImage <span class="token operator">:</span> afterImage<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 构建lock</span>
+    String lockKeys <span class="token operator">=</span> <span class="token function">buildLockKey</span><span class="token punctuation">(</span>lockKeyRecords<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>null <span class="token operator">!=</span> lockKeys<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 将lockKey和undo_log数据都先暂存起来</span>
+
+        connectionProxy<span class="token punctuation">.</span><span class="token function">appendLockKey</span><span class="token punctuation">(</span>lockKeys<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        SQLUndoLog sqlUndoLog <span class="token operator">=</span> <span class="token function">buildUndoItem</span><span class="token punctuation">(</span>beforeImage<span class="token punctuation">,</span> afterImage<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        connectionProxy<span class="token punctuation">.</span><span class="token function">appendUndoLog</span><span class="token punctuation">(</span>sqlUndoLog<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+
+<span class="token comment" spellcheck="true">/**
+ * 锁冲突回滚策略
+ */</span>
+<span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">LockRetryPolicy</span> <span class="token keyword">extends</span> <span class="token class-name">ConnectionProxy<span class="token punctuation">.</span>LockRetryPolicy</span> <span class="token punctuation">{</span>
+
+    <span class="token function">LockRetryPolicy</span><span class="token punctuation">(</span><span class="token keyword">final</span> ConnectionProxy connection<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">super</span><span class="token punctuation">(</span>connection<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token operator">&lt;</span>T<span class="token operator">></span> T <span class="token function">execute</span><span class="token punctuation">(</span>Callable<span class="token operator">&lt;</span>T<span class="token operator">></span> callable<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>LOCK_RETRY_POLICY_BRANCH_ROLLBACK_ON_CONFLICT<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> <span class="token function">doRetryOnLockConflict</span><span class="token punctuation">(</span>callable<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span> callable<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 出现其他异常，则操作origin connection进行真正的回滚
+     */</span>
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">onException</span><span class="token punctuation">(</span>Exception e<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        ConnectionContext context <span class="token operator">=</span> connection<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token comment" spellcheck="true">//UndoItems can't use the Set collection class to prevent ABA</span>
+        context<span class="token punctuation">.</span><span class="token function">removeSavepoint</span><span class="token punctuation">(</span>null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        connection<span class="token punctuation">.</span><span class="token function">getTargetConnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">rollback</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">boolean</span> <span class="token function">isLockRetryPolicyBranchRollbackOnConflict</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> LOCK_RETRY_POLICY_BRANCH_ROLLBACK_ON_CONFLICT<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="非本地事务执行机制"><a href="#非本地事务执行机制" class="headerlink" title="非本地事务执行机制"></a>非本地事务执行机制</h5><p>​	注意在 <code>AbstractDMLBaseExecutor#doExecute</code> 方法里会把事务的自动提交改成手动提交，为什么呢？</p>
+<blockquote>
+<p>​	假设你在一个分布式事务里，只用了 Seata 的 <code>@GlobalTransactional</code> 注解，而没用 Spring 的 <code>@Transactional</code> 控制本地事务，其实 Seata 也是支持的</p>
+<p>这种情况下，如果没有本地事务，JDBC 默认是 <strong>autoCommit&#x3D;true</strong>，也就是每条 SQL 执行完就直接提交事务。问题是如果这样做，Seata 就没法保证 <strong>业务 SQL 和 undo_log 写入的原子性</strong></p>
+<p>​	所以 Seata 在这里会先判断：如果当前连接是自动提交的，就把它改成手动提交（<code>autoCommit=false</code>）。这样能确保它先完成这几个步骤：</p>
+<p>​	 <strong>镜像 SQL 准备 → 业务 SQL 执行 → undo_log 构建 → 注册分支事务 → undo_log 落库</strong><br>最后再统一 <code>commit</code>，这样业务 SQL 和 undo_log 写入就是一个原子操作，不会出问题</p>
+<p>再说分支事务：</p>
+<ul>
+<li>如果代码里开启了本地事务，那么整个本地事务算一个分支事务，共享同一个 XID</li>
+<li>如果没开本地事务，那每一条 <code>update</code>、<code>delete</code>、<code>insert</code> 都会被 Seata 当成一个分支事务，由它来管全局一致性</li>
+</ul>
+<p>所以只用 Seata，不开本地事务，也是可以的，但性能会差不少。为什么？因为<strong>每个分支事务都得跟 TC 通信、做数据库锁检查、写 undo_log，成本就变得很高了</strong></p>
+</blockquote>
+<h4 id="ConnectionProxy"><a href="#ConnectionProxy" class="headerlink" title="ConnectionProxy"></a>ConnectionProxy</h4><p>​	ConnectionProxy 是一阶段的核心控制器，它承载了<strong>分支事务的注册、锁冲突处理和重试、undo_log 落库以及事务提交&#x2F;回滚等核心逻辑</strong>，我们依次来拆解一下这些功能，看看它们到底做了什么</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">class</span> <span class="token class-name">ConnectionProxy</span> <span class="token keyword">extends</span> <span class="token class-name">AbstractConnectionProxy</span> <span class="token punctuation">{</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> Logger LOGGER <span class="token operator">=</span> LoggerFactory<span class="token punctuation">.</span><span class="token function">getLogger</span><span class="token punctuation">(</span>ConnectionProxy<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> ConnectionContext context <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ConnectionContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">final</span> LockRetryPolicy lockRetryPolicy <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LockRetryPolicy</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">int</span> REPORT_RETRY_COUNT <span class="token operator">=</span> ConfigurationFactory<span class="token punctuation">.</span><span class="token function">getInstance</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getInt</span><span class="token punctuation">(</span>
+            ConfigurationKeys<span class="token punctuation">.</span>CLIENT_REPORT_RETRY_COUNT<span class="token punctuation">,</span> DEFAULT_CLIENT_REPORT_RETRY_COUNT<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 默认false
+     */</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">boolean</span> IS_REPORT_SUCCESS_ENABLE <span class="token operator">=</span> ConfigurationFactory<span class="token punctuation">.</span><span class="token function">getInstance</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getBoolean</span><span class="token punctuation">(</span>
+            ConfigurationKeys<span class="token punctuation">.</span>CLIENT_REPORT_SUCCESS_ENABLE<span class="token punctuation">,</span> DEFAULT_CLIENT_REPORT_SUCCESS_ENABLE<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">checkLock</span><span class="token punctuation">(</span>String lockKeys<span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>StringUtils<span class="token punctuation">.</span><span class="token function">isBlank</span><span class="token punctuation">(</span>lockKeys<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 仅检查，不上锁</span>
+            <span class="token keyword">boolean</span> lockable <span class="token operator">=</span> DefaultResourceManager<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">lockQuery</span><span class="token punctuation">(</span>BranchType<span class="token punctuation">.</span>AT<span class="token punctuation">,</span>
+                    <span class="token function">getDataSourceProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getResourceId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> context<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> lockKeys<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>lockable<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 锁冲突，直接抛LockConflictException让上层去处理</span>
+                <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">LockConflictException</span><span class="token punctuation">(</span>String<span class="token punctuation">.</span><span class="token function">format</span><span class="token punctuation">(</span><span class="token string">"get lock failed, lockKey: %s"</span><span class="token punctuation">,</span> lockKeys<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">TransactionException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">recognizeLockKeyConflictException</span><span class="token punctuation">(</span>e<span class="token punctuation">,</span> lockKeys<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">lockQuery</span><span class="token punctuation">(</span>String lockKeys<span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token keyword">boolean</span> result <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            result <span class="token operator">=</span> DefaultResourceManager<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">lockQuery</span><span class="token punctuation">(</span>BranchType<span class="token punctuation">.</span>AT<span class="token punctuation">,</span> <span class="token function">getDataSourceProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getResourceId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                    context<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> lockKeys<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">TransactionException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">recognizeLockKeyConflictException</span><span class="token punctuation">(</span>e<span class="token punctuation">,</span> lockKeys<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * LockConflictException异常转换
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">recognizeLockKeyConflictException</span><span class="token punctuation">(</span>TransactionException te<span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token function">recognizeLockKeyConflictException</span><span class="token punctuation">(</span>te<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">recognizeLockKeyConflictException</span><span class="token punctuation">(</span>TransactionException te<span class="token punctuation">,</span> String lockKeys<span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>te<span class="token punctuation">.</span><span class="token function">getCode</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> TransactionExceptionCode<span class="token punctuation">.</span>LockKeyConflict
+                <span class="token operator">||</span> te<span class="token punctuation">.</span><span class="token function">getCode</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> TransactionExceptionCode<span class="token punctuation">.</span>LockKeyConflictFailFast<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            StringBuilder reasonBuilder <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">StringBuilder</span><span class="token punctuation">(</span><span class="token string">"get global lock fail, xid:"</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            reasonBuilder<span class="token punctuation">.</span><span class="token function">append</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>StringUtils<span class="token punctuation">.</span><span class="token function">isNotBlank</span><span class="token punctuation">(</span>lockKeys<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                reasonBuilder<span class="token punctuation">.</span><span class="token function">append</span><span class="token punctuation">(</span><span class="token string">", lockKeys:"</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">append</span><span class="token punctuation">(</span>lockKeys<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">LockConflictException</span><span class="token punctuation">(</span>reasonBuilder<span class="token punctuation">.</span><span class="token function">toString</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> te<span class="token punctuation">.</span><span class="token function">getCode</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 转换为SQLException用于后续的回滚</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">SQLException</span><span class="token punctuation">(</span>te<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * 提交事务
+     */</span>
+   <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">commit</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            lockRetryPolicy<span class="token punctuation">.</span><span class="token function">execute</span><span class="token punctuation">(</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+                <span class="token function">doCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span> null<span class="token punctuation">;</span>
+            <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">SQLException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>targetConnection <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span><span class="token function">getAutoCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isAutoCommitChanged</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> 
+                <span class="token comment" spellcheck="true">// 说明是Spring主动开启了事务，这里才操作回滚</span>
+                <span class="token comment" spellcheck="true">// 因为如果是Seata帮我们开启的本地事务（即设置autoCommit=false），会在AbstractDMLBaseExecutor$LockRetryPolicy#onException里进行回滚</span>
+                <span class="token function">rollback</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">SQLException</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">doCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">inGlobalTransaction</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">processGlobalTransactionCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 会注册分支事务到server端，并对修改的数据上锁（所以，至少会操作server端的两张表，branch_session和lock_table表）</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token keyword">if</span> <span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">isGlobalLockRequire</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">processLocalCommitWithGlobalLocks</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 速度快，因为仅对修改的数据进行锁检查（不上锁）。适合不需要使用事务但不能脏读（读到其他全局事务未整体提交但分支事务已提交的场景）的场景使用</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            targetConnection<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+      <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">processGlobalTransactionCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 注册分支事务，对当前分支事务修改的数据进行上锁（netty通信，server端上锁到lock_table表）</span>
+            <span class="token function">register</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">TransactionException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 锁冲突异常判断（发生了锁冲突会重新抛出LockConflictException）</span>
+            <span class="token function">recognizeLockKeyConflictException</span><span class="token punctuation">(</span>e<span class="token punctuation">,</span> context<span class="token punctuation">.</span><span class="token function">buildLockKeys</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// 刷新undo_log到数据库</span>
+            UndoLogManagerFactory<span class="token punctuation">.</span><span class="token function">getUndoLogManager</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">.</span><span class="token function">getDbType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">flushUndoLogs</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token comment" spellcheck="true">// 当前分支事务真正提交</span>
+            targetConnection<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            LOGGER<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"process connectionProxy commit error: {}"</span><span class="token punctuation">,</span> ex<span class="token punctuation">.</span><span class="token function">getMessage</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token function">report</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">SQLException</span><span class="token punctuation">(</span>ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>IS_REPORT_SUCCESS_ENABLE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">report</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        context<span class="token punctuation">.</span><span class="token function">reset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">processLocalCommitWithGlobalLocks</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 检查锁资源，存在其他事务上锁了就直接抛LockConflictException异常，进行锁重试</span>
+        <span class="token function">checkLock</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">buildLockKeys</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            targetConnection<span class="token punctuation">.</span><span class="token function">commit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">SQLException</span><span class="token punctuation">(</span>ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        context<span class="token punctuation">.</span><span class="token function">reset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+  
+
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">register</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// undo_log或lockKey不存在，表示当前事务没有数据修改（可能只有select操作），也就不需要注册为分支事务了</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>context<span class="token punctuation">.</span><span class="token function">hasUndoLog</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">||</span> <span class="token operator">!</span>context<span class="token punctuation">.</span><span class="token function">hasLockKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        Long branchId <span class="token operator">=</span> DefaultResourceManager<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">branchRegister</span><span class="token punctuation">(</span>BranchType<span class="token punctuation">.</span>AT<span class="token punctuation">,</span> <span class="token function">getDataSourceProxy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getResourceId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                null<span class="token punctuation">,</span> context<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> context<span class="token punctuation">.</span><span class="token function">getApplicationData</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                context<span class="token punctuation">.</span><span class="token function">buildLockKeys</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        context<span class="token punctuation">.</span><span class="token function">setBranchId</span><span class="token punctuation">(</span>branchId<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">rollback</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        targetConnection<span class="token punctuation">.</span><span class="token function">rollback</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">inGlobalTransaction</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> context<span class="token punctuation">.</span><span class="token function">isBranchRegistered</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 身在全局事务中且当前事务已注册为分支事务才有资格report</span>
+            <span class="token function">report</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        context<span class="token punctuation">.</span><span class="token function">reset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">/**
+     * change connection autoCommit to false by seata
+     * &lt;p/>
+     * 修改当前Connection为非自动提交事务
+     *
+     * @throws SQLException the sql exception
+     */</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">changeAutoCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">setAutoCommitChanged</span><span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token function">setAutoCommit</span><span class="token punctuation">(</span><span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token annotation punctuation">@Override</span>
+    <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">setAutoCommit</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> autoCommit<span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">inGlobalTransaction</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">||</span> context<span class="token punctuation">.</span><span class="token function">isGlobalLockRequire</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token operator">&amp;&amp;</span> autoCommit <span class="token operator">&amp;&amp;</span> <span class="token operator">!</span><span class="token function">getAutoCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">// change autocommit from false to true, we should commit() first according to</span>
+            <span class="token comment" spellcheck="true">// JDBC spec.</span>
+            <span class="token function">doCommit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        targetConnection<span class="token punctuation">.</span><span class="token function">setAutoCommit</span><span class="token punctuation">(</span>autoCommit<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+     <span class="token comment" spellcheck="true">/**
+     * 根据commitDone向TC报告分支事务的状态
+     * TC也仅修改分支事务的状态，不会做回滚操作
+     */</span>
+    <span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">report</span><span class="token punctuation">(</span><span class="token keyword">boolean</span> commitDone<span class="token punctuation">)</span> <span class="token keyword">throws</span> SQLException <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>context<span class="token punctuation">.</span><span class="token function">getBranchId</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">int</span> retry <span class="token operator">=</span> REPORT_RETRY_COUNT<span class="token punctuation">;</span>
+        <span class="token keyword">while</span> <span class="token punctuation">(</span>retry <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                DefaultResourceManager<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">branchReport</span><span class="token punctuation">(</span>BranchType<span class="token punctuation">.</span>AT<span class="token punctuation">,</span> context<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> context<span class="token punctuation">.</span><span class="token function">getBranchId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+                        commitDone <span class="token operator">?</span> BranchStatus<span class="token punctuation">.</span>PhaseOne_Done <span class="token operator">:</span> BranchStatus<span class="token punctuation">.</span>PhaseOne_Failed<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Throwable</span> ex<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                LOGGER<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"Failed to report ["</span> <span class="token operator">+</span> context<span class="token punctuation">.</span><span class="token function">getBranchId</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"/"</span> <span class="token operator">+</span> context<span class="token punctuation">.</span><span class="token function">getXid</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">"] commit done ["</span>
+                        <span class="token operator">+</span> commitDone <span class="token operator">+</span> <span class="token string">"] Retry Countdown: "</span> <span class="token operator">+</span> retry<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                retry<span class="token operator">--</span><span class="token punctuation">;</span>
+
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>retry <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">SQLException</span><span class="token punctuation">(</span><span class="token string">"Failed to report branch status "</span> <span class="token operator">+</span> commitDone<span class="token punctuation">,</span> ex<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+     <span class="token comment" spellcheck="true">/**
+     * LockRetryPolicy：用于处理锁冲突时的重试策略。
+     *
+     * 在分布式事务场景下，数据写操作可能因锁冲突而失败，此类提供重试机制来提升成功率。
+     */</span>
+    <span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">class</span> <span class="token class-name">LockRetryPolicy</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">/**
+         * 是否开启 锁冲突后分支事务回滚 策略
+         * 如果为 true，则表示在锁冲突时直接回滚分支事务，而不再进行多次重试。
+         */</span>
+        <span class="token keyword">protected</span> <span class="token keyword">static</span> <span class="token keyword">final</span> <span class="token keyword">boolean</span> LOCK_RETRY_POLICY_BRANCH_ROLLBACK_ON_CONFLICT <span class="token operator">=</span> ConfigurationFactory
+            <span class="token punctuation">.</span><span class="token function">getInstance</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getBoolean</span><span class="token punctuation">(</span>ConfigurationKeys<span class="token punctuation">.</span>CLIENT_LOCK_RETRY_POLICY_BRANCH_ROLLBACK_ON_CONFLICT<span class="token punctuation">,</span> DEFAULT_CLIENT_LOCK_RETRY_POLICY_BRANCH_ROLLBACK_ON_CONFLICT<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">protected</span> <span class="token keyword">final</span> ConnectionProxy connection<span class="token punctuation">;</span>
+
+        <span class="token keyword">public</span> <span class="token function">LockRetryPolicy</span><span class="token punctuation">(</span>ConnectionProxy connection<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">this</span><span class="token punctuation">.</span>connection <span class="token operator">=</span> connection<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">public</span> <span class="token operator">&lt;</span>T<span class="token operator">></span> T <span class="token function">execute</span><span class="token punctuation">(</span>Callable<span class="token operator">&lt;</span>T<span class="token operator">></span> callable<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+            <span class="token comment" spellcheck="true">/*
+            不需要重试的机制如下：
+                1、开启了锁冲突回滚策略
+                2、当前Connection的自动提交改变过（由true变为false），这种情况已经单独处理了，就不需要再重试了
+             */</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>LOCK_RETRY_POLICY_BRANCH_ROLLBACK_ON_CONFLICT <span class="token operator">&amp;&amp;</span> connection<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isAutoCommitChanged</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">return</span> callable<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 重试</span>
+                <span class="token keyword">return</span> <span class="token function">doRetryOnLockConflict</span><span class="token punctuation">(</span>callable<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">/**
+         * 锁冲突重试
+         */</span>
+        <span class="token keyword">protected</span> <span class="token operator">&lt;</span>T<span class="token operator">></span> T <span class="token function">doRetryOnLockConflict</span><span class="token punctuation">(</span>Callable<span class="token operator">&lt;</span>T<span class="token operator">></span> callable<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+            LockRetryController lockRetryController <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">LockRetryController</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">while</span> <span class="token punctuation">(</span><span class="token boolean">true</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> callable<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">LockConflictException</span> lockConflict<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 所冲突异常捕获</span>
+                    <span class="token function">onException</span><span class="token punctuation">(</span>lockConflict<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span>connection<span class="token punctuation">.</span><span class="token function">getContext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">isAutoCommitChanged</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                        <span class="token operator">&amp;&amp;</span> lockConflict<span class="token punctuation">.</span><span class="token function">getCode</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> TransactionExceptionCode<span class="token punctuation">.</span>LockKeyConflictFailFast<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        lockConflict<span class="token punctuation">.</span><span class="token function">setCode</span><span class="token punctuation">(</span>TransactionExceptionCode<span class="token punctuation">.</span>LockKeyConflict<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                    <span class="token comment" spellcheck="true">// sleep后重试，默认重试30次，间隔时间为10毫秒</span>
+                    lockRetryController<span class="token punctuation">.</span><span class="token function">sleep</span><span class="token punctuation">(</span>lockConflict<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 其他非锁冲突异常，不重试，直接抛出</span>
+                    <span class="token function">onException</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">throw</span> e<span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">onException</span><span class="token punctuation">(</span>Exception e<span class="token punctuation">)</span> <span class="token keyword">throws</span> Exception <span class="token punctuation">{</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="注册分支事务和锁检查"><a href="#注册分支事务和锁检查" class="headerlink" title="注册分支事务和锁检查"></a>注册分支事务和锁检查</h5><p>​	在 <strong>ConnectionProxy#register</strong> 方法里，会通过 RM 的 <code>branchRegister</code> 向 TC 发送一条 <code>BranchRegisterRequest</code> 消息，请求注册分支事务。TC 端的处理逻辑主要在 <strong>AbstractCore#branchRegister</strong> 里，代码很多我就不贴了，直接说流程：</p>
+<ol>
+<li><strong>将 BranchRegisterRequest 转成 BranchSession 对象</strong></li>
+<li><strong>尝试加锁（AT 模式才需要）</strong><ul>
+<li>会检查锁并调用 <code>LockStoreDataBaseDAO#acquireLock</code> 去操作 <code>lock_table</code></li>
+</ul>
+</li>
+<li><strong>加锁逻辑</strong><ul>
+<li>查询 <code>lock_table</code> 是否已有对应的 <code>row_key</code>，即行锁（每个 <code>row_key</code> 唯一标识数据库某张表的某行）<ul>
+<li><strong>没查到</strong>：说明没人占，直接插入 lock_table，加锁成功。</li>
+<li><strong>查到了，且 xid 一致</strong>：说明是当前全局事务的重复加锁，只需补充缺失的锁记录，依然算成功</li>
+<li><strong>查到了，xid 不一致</strong>：说明被别的全局事务占用，返回加锁失败，直接抛 <code>LockKeyConflict</code> 异常（非常重要，客户端会靠它判断是否重试）</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>加锁成功后的处理</strong><ul>
+<li>把 BranchSession 转成 BranchTransactionDO</li>
+<li><strong>通过 SessionLifecycleListener 持久化（db 模式会写入 <code>branch_table</code>）</strong></li>
+<li>返回 <code>branchId</code> 给客户端</li>
+</ul>
+</li>
+<li><strong>加锁失败</strong><ul>
+<li>抛出 <code>BranchTransactionException</code>，异常码 <code>LockKeyConflict</code></li>
+<li>由 AbstractCallback 捕获并转成响应消息，发回客户端</li>
+</ul>
+</li>
+</ol>
+<h5 id="锁冲突重试"><a href="#锁冲突重试" class="headerlink" title="锁冲突重试"></a>锁冲突重试</h5><p>​	当 <strong>ConnectionProxy#recognizeLockKeyConflictException</strong> 方法发现是 <strong>LockKeyConflict</strong> 异常时，会再包装成 <strong>LockConflictException</strong> 抛出去。接着，<strong>LockRetryPolicy</strong> 会接手，按重试策略继续尝试执行 SQL。默认策略是：<strong>重试 30 次，每次间隔 10ms</strong>（这些值受 GlobalLockConfig配置影响，可以调整）</p>
+<p>​	如果 30 次重试之后还是抢不到锁，说明冲突一直没解决，那就直接触发 <strong>本地事务回滚</strong>，整个业务 SQL 失败收场</p>
+<h5 id="刷新undo-log"><a href="#刷新undo-log" class="headerlink" title="刷新undo_log"></a>刷新undo_log</h5><p>​	分支事务注册成功后，就可以把之前暂存的 Undo Log 真正写进数据库的 <strong>undo_log</strong> 表，确保如果二阶段回滚发生，可以通过它恢复数据</p>
+<h5 id="本地事务真正提交"><a href="#本地事务真正提交" class="headerlink" title="本地事务真正提交"></a>本地事务真正提交</h5><p>​	该做的事都做完了：分支事务注册搞定、Undo Log 入库也搞定，这时候就可以安全地提交本地事务了</p>
+<h5 id="rollback"><a href="#rollback" class="headerlink" title="rollback"></a>rollback</h5><p>​	一阶段的回滚逻辑很简单，核心就两件事：</p>
+<ul>
+<li><strong>回滚本地事务</strong></li>
+<li>调用 <strong>RM → TC 的 branchReport 方法</strong>，把分支异常状态上报。TC 接到后只是把对应分支事务的状态改成 <strong>PhaseOne_Failed</strong>，并不会触发全局回滚</li>
+</ul>
+<h2 id="一阶段简单总结"><a href="#一阶段简单总结" class="headerlink" title="一阶段简单总结"></a>一阶段简单总结</h2><p>​	一阶段的核心，就是把 <strong>undo_log</strong> 准备好，并保证 <strong>业务 SQL + undo_log + 分支事务注册</strong> 的原子性，这样二阶段的全局提交或回滚才能顺利进行。二阶段的具体操作，我们留到下一篇再详细讲</p>
+<h2 id="相关链接"><a href="#相关链接" class="headerlink" title="相关链接"></a>相关链接</h2><ul>
+<li><a href="https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/">前置文章：Seata核心组件和启动流程</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag"># 分布式事务</a>
+              <a href="/tags/AT%E6%A8%A1%E5%BC%8F/" rel="tag"># AT模式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/" rel="prev" title="Seata — 核心组件和启动流程">
+                  <i class="fa fa-angle-left"></i> Seata — 核心组件和启动流程
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2025-01-14/seata-at-mo-shi-er-jie-duan-quan-jie-xi/" rel="next" title="Seata — AT模式二阶段全解析">
+                  Seata — AT模式二阶段全解析 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">538k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">16:19</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

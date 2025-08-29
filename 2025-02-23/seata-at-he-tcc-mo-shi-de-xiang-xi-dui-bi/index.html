@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	深入对比分析了 AT 和 TCC 模式在 网络 I&#x2F;O 和 锁资源 两个方面的性能差异，并根据分析结果提供了选择建议。最后，讨论了 AT 模式在业务中使用不当可能带来的问题，并提出了相应的解决方案">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Seata — AT模式和TCC模式详细对比">
+<meta property="og:url" content="https://blog.shanzhao.site/2025-02-23/seata-at-he-tcc-mo-shi-de-xiang-xi-dui-bi/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	深入对比分析了 AT 和 TCC 模式在 网络 I&#x2F;O 和 锁资源 两个方面的性能差异，并根据分析结果提供了选择建议。最后，讨论了 AT 模式在业务中使用不当可能带来的问题，并提出了相应的解决方案">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-02-23T15:01:08.000Z">
+<meta property="article:modified_time" content="2025-02-27T09:11:19.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="分布式事务">
+<meta property="article:tag" content="AT模式">
+<meta property="article:tag" content="TCC模式">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2025-02-23/seata-at-he-tcc-mo-shi-de-xiang-xi-dui-bi/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2025-02-23/seata-at-he-tcc-mo-shi-de-xiang-xi-dui-bi/","path":"2025-02-23/seata-at-he-tcc-mo-shi-de-xiang-xi-dui-bi/","title":"Seata — AT模式和TCC模式详细对比"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Seata — AT模式和TCC模式详细对比 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%8D%E7%BD%AE%E6%96%87%E7%AB%A0"><span class="nav-number">1.</span> <span class="nav-text">前置文章</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%A7%E8%83%BD"><span class="nav-number">2.</span> <span class="nav-text">性能</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BD%91%E7%BB%9CIO"><span class="nav-number">2.1.</span> <span class="nav-text">网络IO</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%B8%80%E9%98%B6%E6%AE%B5"><span class="nav-number">2.1.1.</span> <span class="nav-text">一阶段</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%BA%8C%E9%98%B6%E6%AE%B5"><span class="nav-number">2.1.2.</span> <span class="nav-text">二阶段</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%94%81"><span class="nav-number">2.2.</span> <span class="nav-text">锁</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">2.3.</span> <span class="nav-text">总结</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%9A%E5%8A%A1%E4%BE%B5%E5%85%A5%E6%80%A7"><span class="nav-number">3.</span> <span class="nav-text">业务侵入性</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%80%89%E6%8B%A9%E5%BB%BA%E8%AE%AE"><span class="nav-number">4.</span> <span class="nav-text">选择建议</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BD%BF%E7%94%A8%E6%8F%90%E9%86%92"><span class="nav-number">5.</span> <span class="nav-text">使用提醒</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">49</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">52</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2025-02-23/seata-at-he-tcc-mo-shi-de-xiang-xi-dui-bi/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Seata — AT模式和TCC模式详细对比 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Seata — AT模式和TCC模式详细对比
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2025-02-23 23:01:08" itemprop="dateCreated datePublished" datetime="2025-02-23T23:01:08+08:00">2025-02-23</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2025-02-27 17:11:19" itemprop="dateModified" datetime="2025-02-27T17:11:19+08:00">2025-02-27</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Seata/" itemprop="url" rel="index"><span itemprop="name">Seata</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>3 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	深入对比分析了 <strong>AT</strong> 和 <strong>TCC</strong> 模式在 <strong>网络 I&#x2F;O</strong> 和 <strong>锁资源</strong> 两个方面的性能差异，并根据分析结果提供了选择建议。最后，讨论了 <strong>AT</strong> 模式在业务中使用不当可能带来的问题，并提出了相应的解决方案</p>
+ <span id="more"></span>
+
+<h2 id="前置文章"><a href="#前置文章" class="headerlink" title="前置文章"></a>前置文章</h2><ul>
+<li><a href="https://blog.shanzhao.site/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/">AT模式一阶段全解析</a></li>
+<li><a href="https://blog.shanzhao.site/2025-01-14/seata-at-mo-shi-er-jie-duan-quan-jie-xi/">AT模式二阶段全解析</a></li>
+<li><a href="https://blog.shanzhao.site/2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/">TCC模式详细分析</a></li>
+</ul>
+<h2 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h2><p>​	首先要明确一点，当数据量不大的时候，纯内存计算是受本地硬件的限制，掌握在自己手里的东西都算是可控的，所以性能问题不需要特别担心。况且内存操作本身非常快，更不用在性能分析里占用太多关注。所以业务运行效率的主要瓶颈还是 <strong>网络 I&#x2F;O</strong> 和 <strong>锁资源开销</strong>。网络性能会受到很多不可控因素影响，比如<strong>带宽、延迟、网络波动、CDN 状况，甚至对方的运行效率</strong>。而锁资源往往存在竞争，通常会导致并行处理受阻。所以，评估业务性能时，网络 I&#x2F;O 和锁资源开销才是最值得关注的两个点。我们也从这两个点切入对比分析AT和TCC模式下非业务部分的性能损耗</p>
+<h3 id="网络IO"><a href="#网络IO" class="headerlink" title="网络IO"></a>网络IO</h3><h4 id="一阶段"><a href="#一阶段" class="headerlink" title="一阶段"></a>一阶段</h4><ul>
+<li><p>AT</p>
+<ul>
+<li>开启全局事务和注册分支都通过 <strong>RPC</strong> 与 <strong>TC</strong> 通信</li>
+<li>每条非SELECT的DML都会生成前后镜像 SQL，并进行查询</li>
+<li>分支事务的undo_log数据落库</li>
+</ul>
+</li>
+<li><p>TCC：一阶段即try阶段，仅有开启全局事务和注册分支事务会和TC进行PRC通信</p>
+</li>
+</ul>
+<h4 id="二阶段"><a href="#二阶段" class="headerlink" title="二阶段"></a>二阶段</h4><ul>
+<li>AT<ul>
+<li>commit：仅同步删除lock_table，其余都异步完成，很快</li>
+<li>rollback：依次同步，TC会和每个分支事务通信。每个分支事务需要查询自己的 <strong>undo_log</strong>，并且查询最新的数据与 <strong>undo_log</strong> 中的数据进行对比，接着，生成补偿 SQL 来执行回滚</li>
+</ul>
+</li>
+<li>TCC<ul>
+<li>commit：依次同步，TC会和每个分支事务通信，都操作自己的commit方法</li>
+<li>rollback：：依次同步，TC会和每个分支事务通信，都操作自己的rollback方法</li>
+</ul>
+</li>
+</ul>
+<h3 id="锁"><a href="#锁" class="headerlink" title="锁"></a>锁</h3><ul>
+<li>AT：在一阶段注册分支事务时，<strong>TC</strong> 会为每个分支事务构建行锁，并进行独占锁定（基于 <strong>xid</strong>）。如果发生锁冲突，可能会触发多次重试，直到获得锁或超时</li>
+<li>TCC：<strong>try</strong> 阶段仅仅是预留资源，并不会直接操作最终资源，因此不存在锁竞争问题</li>
+</ul>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>​	可以看出，在全局事务的 <strong>commit</strong> 阶段，<strong>AT</strong> 确实比 <strong>TCC</strong> 更快，但在其他阶段，<strong>AT</strong> 的性能通常较差。AT 需要大量构<strong>建数据镜像和准备 undo_log</strong>，而回滚时还需将 undo_log 与最新数据对比，确保数据没有被其他非全局事务并发修改。最重要的是，AT 存在<strong>锁竞争问题，在整个全局事务期间会阻止其他全局事务并发操作数据</strong>。如果有非全局事务操作数据，还需要使用 <code>@GlobalLock</code> 来防止并发修改。</p>
+<p>​	因此，从整体来看，<strong>AT 的性能通常要比 TCC 差的多</strong></p>
+<h2 id="业务侵入性"><a href="#业务侵入性" class="headerlink" title="业务侵入性"></a>业务侵入性</h2><p>​	<strong>AT</strong> 模式几乎没有业务侵入，只需通过一个 <code>@GlobalTransactional</code> 注解即可完成事务管理。</p>
+<p>​	而 <strong>TCC</strong> 模式则相对复杂，除了需要在数据库层增加资源预扣减字段，还需要在代码中手动实现完整的 <strong>try</strong>、<strong>commit</strong> 和 <strong>rollback</strong> 逻辑</p>
+<p>​	因此，从业务侵入性和使用难易度来看，<strong>AT</strong> 完胜 <strong>TCC</strong></p>
+<h2 id="选择建议"><a href="#选择建议" class="headerlink" title="选择建议"></a>选择建议</h2><p>​	<strong>AT</strong> 适用于流程简单、业务逻辑较直观且 SQL 操作不复杂的场景，尤其是当事务的回滚操作主要依赖于自动生成的 <strong>undo_log</strong> 时。<strong>AT</strong> 模式适合对性能要求不高的业务，因为复杂的 SQL 可能会影响 <strong>undo_log</strong> 的构建和性能。</p>
+<p>​	而 <strong>TCC</strong> 更适合那些复杂、对性能要求较高的场景，特别是当需要对每个参与者的操作进行精确控制时。例如，在涉及多个服务的核心业务中，<strong>TCC</strong> 可以确保每个事务阶段的行为都能被灵活处理和回滚</p>
+<h2 id="使用提醒"><a href="#使用提醒" class="headerlink" title="使用提醒"></a>使用提醒</h2><p>​	在使用 <strong>AT</strong> 模式时，建议将 <code>@GlobalTransactional</code> 和 <code>@Transactional</code> 配合使用。单独使用 <code>@GlobalTransactional</code> 虽然也能实现分布式事务的管理，但每个 SQL 操作都会创建一个新的分支事务，导致频繁的与 <strong>TC</strong> 进行 RPC 通信，这会显著增加性能开销</p>
+<p>​	此外，<strong>全局事务</strong> 的发起者是控制全局事务回滚的核心。如果下游分支事务发生问题导致本地回滚，必须确保最上游的全局事务发起者能够感知到异常，才能触发全局事务的完整回滚，避免数据不一致</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag"># 分布式事务</a>
+              <a href="/tags/AT%E6%A8%A1%E5%BC%8F/" rel="tag"># AT模式</a>
+              <a href="/tags/TCC%E6%A8%A1%E5%BC%8F/" rel="tag"># TCC模式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2025-02-03/seata-tcc-mo-shi-xiang-xi-fen-xi/" rel="prev" title="Seata — TCC模式详细分析">
+                  <i class="fa fa-angle-left"></i> Seata — TCC模式详细分析
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">538k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">16:19</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	基于 Seata 1.7.1 源码，这篇文章算是 AT 模式源码解析的前置内容。文章先从 自动配置类 切入，梳理了客户端核心组件（TM、RM）的职责和初始化流程，接着分析 AT 模式下 DataSource 代理的实现原理，最后再简单介绍了服务端的启动过程以及 TC 的创建逻辑">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Seata — 核心组件和启动流程">
+<meta property="og:url" content="https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	基于 Seata 1.7.1 源码，这篇文章算是 AT 模式源码解析的前置内容。文章先从 自动配置类 切入，梳理了客户端核心组件（TM、RM）的职责和初始化流程，接着分析 AT 模式下 DataSource 代理的实现原理，最后再简单介绍了服务端的启动过程以及 TC 的创建逻辑">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-11-15T12:34:07.000Z">
+<meta property="article:modified_time" content="2024-11-27T06:13:07.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="分布式事务">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/","path":"2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/","title":"Seata — 核心组件和启动流程"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Seata — 核心组件和启动流程 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF"><span class="nav-number">1.</span> <span class="nav-text">客户端</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#SeataAutoConfiguration"><span class="nav-number">1.1.</span> <span class="nav-text">SeataAutoConfiguration</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B3%A8%E8%A7%A3%E4%BB%A3%E7%90%86"><span class="nav-number">1.1.1.</span> <span class="nav-text">注解代理</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%88%9D%E5%A7%8B%E5%8C%96"><span class="nav-number">1.1.2.</span> <span class="nav-text">客户端初始化</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#TMClient"><span class="nav-number">1.1.2.1.</span> <span class="nav-text">TMClient</span></a><ol class="nav-child"><li class="nav-item nav-level-6"><a class="nav-link" href="#TM%EF%BC%88Transaction-Manager%EF%BC%89"><span class="nav-number">1.1.2.1.1.</span> <span class="nav-text">TM（Transaction Manager）</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96"><span class="nav-number">1.1.2.1.2.</span> <span class="nav-text">初始化</span></a></li></ol></li><li class="nav-item nav-level-5"><a class="nav-link" href="#RMClient"><span class="nav-number">1.1.2.2.</span> <span class="nav-text">RMClient</span></a><ol class="nav-child"><li class="nav-item nav-level-6"><a class="nav-link" href="#RM%EF%BC%88Resource-Manager%EF%BC%89"><span class="nav-number">1.1.2.2.1.</span> <span class="nav-text">RM（Resource Manager）</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96-1"><span class="nav-number">1.1.2.2.2.</span> <span class="nav-text">初始化</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#SeataDataSourceAutoConfiguration"><span class="nav-number">1.2.</span> <span class="nav-text">SeataDataSourceAutoConfiguration</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#SQL%E6%89%A7%E8%A1%8C%E4%BB%A3%E7%90%86"><span class="nav-number">1.2.1.</span> <span class="nav-text">SQL执行代理</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%8D%E5%8A%A1%E7%AB%AF"><span class="nav-number">2.</span> <span class="nav-text">服务端</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#NettyRemotingServer%E5%88%9B%E5%BB%BA"><span class="nav-number">2.1.</span> <span class="nav-text">NettyRemotingServer创建</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#TC%E5%88%9B%E5%BB%BA%E5%92%8C%E5%88%9D%E5%A7%8B%E5%8C%96"><span class="nav-number">2.2.</span> <span class="nav-text">TC创建和初始化</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9C%8D%E5%8A%A1%E7%AB%AFNetty%E5%90%AF%E5%8A%A8"><span class="nav-number">2.3.</span> <span class="nav-text">服务端Netty启动</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">49</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">52</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2024-11-15/seata-he-xin-zu-jian-he-qi-dong-liu-cheng/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Seata — 核心组件和启动流程 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Seata — 核心组件和启动流程
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2024-11-15 20:34:07" itemprop="dateCreated datePublished" datetime="2024-11-15T20:34:07+08:00">2024-11-15</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2024-11-27 14:13:07" itemprop="dateModified" datetime="2024-11-27T14:13:07+08:00">2024-11-27</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Seata/" itemprop="url" rel="index"><span itemprop="name">Seata</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>10k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>19 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	基于 <strong>Seata 1.7.1</strong> 源码，这篇文章算是 AT 模式源码解析的前置内容。文章先从 <strong>自动配置类</strong> 切入，梳理了客户端核心组件（<strong>TM、RM</strong>）的职责和初始化流程，接着分析 <strong>AT 模式下 DataSource 代理的实现原理</strong>，最后再简单介绍了服务端的启动过程以及 <strong>TC 的创建逻辑</strong></p>
+<span id="more"></span>
+
+<h2 id="客户端"><a href="#客户端" class="headerlink" title="客户端"></a>客户端</h2><p>​	当项目引入 <code>seata-spring-boot-starter</code> 后，当前模块就具备了分布式事务的能力，可以看作是 <strong>Seata 客户端</strong>。这个 Starter 主要加载 <strong>SeataAutoConfiguration</strong> 和 <strong>SeataDataSourceAutoConfiguration</strong> 两个自动配置类，用于提供分布式事务相关的核心功能</p>
+<h3 id="SeataAutoConfiguration"><a href="#SeataAutoConfiguration" class="headerlink" title="SeataAutoConfiguration"></a>SeataAutoConfiguration</h3><p>​	<code>SeataAutoConfiguration</code> 是客户端的核心配置类，所有事务模式都依赖它。其中注册了一个关键 <code>GlobalTransactionScanner</code> 这个具备代理功能的Bean，它承担两个核心职责</p>
+<ul>
+<li><strong>对注解 <code>@GlobalTransactional</code> 和 <code>@GlobalLock</code> 的方法进行代理</strong></li>
+<li><strong>完成 TM 和 RM 的初始化</strong></li>
+</ul>
+<h4 id="注解代理"><a href="#注解代理" class="headerlink" title="注解代理"></a>注解代理</h4><p>​	<code>GlobalTransactionScanner</code> 继承了 <code>AbstractAutoProxyCreator</code>，因此它具备 Spring 的 <strong>自动代理功能</strong>。重点看它的 <code>wrapIfNecessary</code> 方法，有两个关键点：</p>
+<ol>
+<li><p><strong>代理逻辑判断</strong></p>
+<blockquote>
+<p>如果Class或Method上有 <code>@GlobalTransactional</code> 或 <code>@GlobalLock</code>，就会创建一个代理，并加入 <code>GlobalTransactionalInterceptor</code> 作为拦截器</p>
+</blockquote>
+</li>
+<li><p><strong>Advisor 插入顺序</strong></p>
+<blockquote>
+<p>​	调用 <code>GlobalTransactionScanner#findAddSeataAdvisorPosition</code> 来确定 Advisor 的位置</p>
+<p>​	这里很重要，因为 <code>GlobalTransactionalInterceptor</code> 的位置是 <code>SeataInterceptorPosition.BeforeTransaction</code>，意味着它必须在 Spring 的事务切面（<code>@Transactional</code>）<strong>之前执行</strong>。<br> ​	因为当 <code>@GlobalTransactional</code> 和 <code>@Transactional</code> 同时使用时，Seata 的全局事务逻辑需要先于本地事务，否则全局事务无法覆盖本地事务的执行范围</p>
+</blockquote>
+</li>
+</ol>
+<h4 id="客户端初始化"><a href="#客户端初始化" class="headerlink" title="客户端初始化"></a>客户端初始化</h4><p>​	Seata 客户端和服务端之间基于 <strong>Netty 长连接</strong> 进行通信。为了完成分布式事务协调，客户端抽象出两个核心角色：</p>
+<ul>
+<li><strong>TM（Transaction Manager）</strong>：负责全局事务的开始、提交、回滚</li>
+<li><strong>RM（Resource Manager）</strong>：负责分支事务的注册、回滚、提交</li>
+</ul>
+<p>​	这两个角色分别由 <code>TMClient</code> 和 <code>RMClient</code> 管理，并在 <code>GlobalTransactionScanner#afterPropertiesSet</code> 中完成初始化。初始化过程中，每个角色会创建独立的 <strong>Netty 客户端（Bootstrap）</strong>，其连接由 <code>NettyClientChannelManager</code> 统一管理，底层通过 Apache Commons Pool 实现连接池化，且<strong>按照 <code>serverAddress（ip:port）</code> 维度</strong>复用 Channel，确保<strong>一个服务端节点仅维护一条长连接</strong>，从而兼顾性能与资源利用率</p>
+<h5 id="TMClient"><a href="#TMClient" class="headerlink" title="TMClient"></a>TMClient</h5><h6 id="TM（Transaction-Manager）"><a href="#TM（Transaction-Manager）" class="headerlink" title="TM（Transaction Manager）"></a>TM（Transaction Manager）</h6><p>​	事务管理器，接口为TransactionManager，可以理解成分布式事务版的 Spring <code>PlatformTransactionManager</code>。它负责<strong>发起、提交、回滚全局事务</strong>。区别是 <strong>Spring 靠数据库事务，Seata 需要服务端（协调者）来兜底</strong>。且只有<strong>全局事务的发起者</strong>才会触发 TM 的 <code>begin</code> &#x2F; <code>commit</code> &#x2F; <code>rollback</code>。代码里 <code>@GlobalTransactional</code> 切面就是通过 <code>GlobalTransactionalInterceptor</code> 调用 TM，默认实现是 <code>DefaultTransactionManager</code></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">TransactionManager</span> <span class="token punctuation">{</span>
+
+    String <span class="token function">begin</span><span class="token punctuation">(</span>String applicationId<span class="token punctuation">,</span> String transactionServiceGroup<span class="token punctuation">,</span> String name<span class="token punctuation">,</span> <span class="token keyword">int</span> timeout<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+
+    GlobalStatus <span class="token function">commit</span><span class="token punctuation">(</span>String xid<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+
+    GlobalStatus <span class="token function">rollback</span><span class="token punctuation">(</span>String xid<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 查询全局事务状态</span>
+    GlobalStatus <span class="token function">getStatus</span><span class="token punctuation">(</span>String xid<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 上报全局事务状态</span>
+    GlobalStatus <span class="token function">globalReport</span><span class="token punctuation">(</span>String xid<span class="token punctuation">,</span> GlobalStatus globalStatus<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h6 id="初始化"><a href="#初始化" class="headerlink" title="初始化"></a>初始化</h6><p>由TMClient#init方法触发TMClient的初始化，其核心逻辑如下</p>
+<ol>
+<li><p>创建TmNettyRemotingClient对象（单例）</p>
+<blockquote>
+<p>​	主要是设置好一些参数，包括Netty相关的NioEventLoopGroup、使用AbstractNettyRemotingClient$ClientHandler作为ChannelPipeline的ChannelHandler等等；并配置好NettyClientChannelManager对象用来管理Netty Channel</p>
+</blockquote>
+</li>
+<li><p>TMClient真正初始化</p>
+<ol>
+<li><p>注册ResponseProcessor，将其缓存到AbstractNettyRemoting#processorTable字段中，用来处理服务端返回的各种响应，具体类型如下</p>
+<pre class="line-numbers language-bash"><code class="language-bash">MessageType.TYPE_SEATA_MERGE_RESULT
+MessageType.TYPE_GLOBAL_BEGIN_RESULT <span class="token comment" spellcheck="true"># 全局事务开启的结果</span>
+MessageType.TYPE_GLOBAL_COMMIT_RESULT <span class="token comment" spellcheck="true"># 全局事务提交的结果</span>
+MessageType.TYPE_GLOBAL_REPORT_RESULT
+MessageType.TYPE_GLOBAL_ROLLBACK_RESULT <span class="token comment" spellcheck="true"># 全局事务回滚的结果</span>
+MessageType.TYPE_GLOBAL_STATUS_RESULT
+MessageType.TYPE_REG_CLT_RESULT
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+<li><p>开启一些定时任务：包括与服务端Channel的reconnect任务、<strong>MergedSend任务（处理批量消息发送）</strong>、异步请求Future的超时检测任务。</p>
+</li>
+<li><p>初始化TM相关的netty客户端的Bootstrap，主要配置了一些如下的ChannelHandler：</p>
+<blockquote>
+<ul>
+<li>IdleStateHandler：心跳检测，配合 <code>NettyClientChannelManager</code> 保证连接可用</li>
+<li>ProtocolV1Encoder和ProtocolV1Decoder：处理消息编解码</li>
+<li>ClientHandler：处理服务端的响应，以及 IdleStateEvent 事件等等</li>
+</ul>
+</blockquote>
+</li>
+</ol>
+</li>
+</ol>
+<h5 id="RMClient"><a href="#RMClient" class="headerlink" title="RMClient"></a>RMClient</h5><h6 id="RM（Resource-Manager）"><a href="#RM（Resource-Manager）" class="headerlink" title="RM（Resource Manager）"></a>RM（Resource Manager）</h6><p>​	资源管理器，接口为 <code>ResourceManager</code>，负责管理分支事务资源。它与 <strong>TC（事务协调器）</strong> 交互，用于：<strong>注册分支事务</strong>、<strong>上报分支事务状态</strong>、<strong>驱动分支事务提交或回滚</strong>。ResourceManager继承了两个接口：</p>
+<ul>
+<li><strong>ResourceManagerInbound</strong>：作为 Inbound，处理 TC 发起的分支事务 <code>commit</code> 和 <code>rollback</code> 请求</li>
+<li><strong>ResourceManagerOutbound</strong>：作为 Outbound，主动向 TC 注册分支事务、上报事务状态，以及执行全局锁查询</li>
+</ul>
+<p>​	在 Seata 中，每个DataSource都被视为一个资源，而 <code>ResourceManager</code> 则负责操作这些资源。代码上通过 <strong>代理 DataSource</strong> 来实现 <code>ResourceManager</code> 的功能。默认实现是 <code>DefaultResourceManager</code>，它充当适配器，根据不同事务模式选择不同的具体实现</p>
+<ul>
+<li><strong>AT 模式</strong>：使用 <code>DataSourceManager</code></li>
+<li><strong>TCC 模式</strong>：使用 <code>TCCResourceManager</code></li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">interface</span> <span class="token class-name">ResourceManager</span> <span class="token keyword">extends</span> <span class="token class-name">ResourceManagerInbound</span><span class="token punctuation">,</span> ResourceManagerOutbound <span class="token punctuation">{</span>
+
+    <span class="token comment" spellcheck="true">// 向 TC 注册资源</span>
+    <span class="token keyword">void</span> <span class="token function">registerResource</span><span class="token punctuation">(</span>Resource resource<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token keyword">void</span> <span class="token function">unregisterResource</span><span class="token punctuation">(</span>Resource resource<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    Map<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> Resource<span class="token operator">></span> <span class="token function">getManagedResources</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 获取分支事务类型。例如：AT、TCC等</span>
+    BranchType <span class="token function">getBranchType</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// ============================== ResourceManagerInbound ==============================</span>
+    <span class="token comment" spellcheck="true">// 处理 TC（事务协调器）发起的分支事务commit请求</span>
+    BranchStatus <span class="token function">branchCommit</span><span class="token punctuation">(</span>BranchType branchType<span class="token punctuation">,</span> String xid<span class="token punctuation">,</span> <span class="token keyword">long</span> branchId<span class="token punctuation">,</span> String resourceId<span class="token punctuation">,</span> String applicationData<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 处理 TC（事务协调器）发起的分支事务roillback请求</span>
+    BranchStatus <span class="token function">branchRollback</span><span class="token punctuation">(</span>BranchType branchType<span class="token punctuation">,</span> String xid<span class="token punctuation">,</span> <span class="token keyword">long</span> branchId<span class="token punctuation">,</span> String resourceId<span class="token punctuation">,</span> String applicationData<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// ============================== ResourceManagerOutbound功能 ==============================</span>
+
+    <span class="token comment" spellcheck="true">// 向 TC 注册分支事务</span>
+    Long <span class="token function">branchRegister</span><span class="token punctuation">(</span>BranchType branchType<span class="token punctuation">,</span> String resourceId<span class="token punctuation">,</span> String clientId<span class="token punctuation">,</span> String xid<span class="token punctuation">,</span> String applicationData<span class="token punctuation">,</span> String lockKeys<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 向 TC 上报分支事务状态</span>
+    <span class="token keyword">void</span> <span class="token function">branchReport</span><span class="token punctuation">(</span>BranchType branchType<span class="token punctuation">,</span> String xid<span class="token punctuation">,</span> <span class="token keyword">long</span> branchId<span class="token punctuation">,</span> BranchStatus status<span class="token punctuation">,</span> String applicationData<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 向 TC 查询指定锁是否已被占用</span>
+    <span class="token keyword">boolean</span> <span class="token function">lockQuery</span><span class="token punctuation">(</span>BranchType branchType<span class="token punctuation">,</span> String resourceId<span class="token punctuation">,</span> String xid<span class="token punctuation">,</span> String lockKeys<span class="token punctuation">)</span> <span class="token keyword">throws</span> TransactionException<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h6 id="初始化-1"><a href="#初始化-1" class="headerlink" title="初始化"></a>初始化</h6><p>​	<code>RMClient#init</code> 方法触发 RMClient 初始化，其创建的 <code>RmNettyRemotingClient</code> 和 TMClient 的 <code>TmNettyRemotingClient</code> 都继承自 <code>AbstractNettyRemotingClient</code>，所以整体流程类似 TMClient。不同点主要有：</p>
+<ol>
+<li><p>设置DefaultRMHandler为其AbstractNettyRemotingClient#transactionMessageHandler</p>
+<blockquote>
+<p>​	<code>DefaultRMHandler</code> 本身是一个适配器，内部通过 SPI 加载对应 <code>BranchType</code> 的真正处理器（如 AT 模式使用 <code>RMHandlerAT</code>）。当接收到 TC 消息时，会根据 <code>BranchType</code> 找到对应的 RMHandler 去处理请求</p>
+</blockquote>
+</li>
+<li><p>注册的ResponseProcessor不同，registerProcessor方法如下，可以发现<strong>对分支事务的commit,rollback和UndoLog的删除都是用了messageExecutor来异步处理，这三个功能都会访问数据库，这里采用异步处理以避免网络IO阻塞 Netty IO 线程，导致Channel的吞吐量下降</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">private</span> <span class="token keyword">void</span> <span class="token function">registerProcessor</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 注册客户端事务 commit,rollback，undo log信息处理器（服务端主动发送的消息，对全局事务进行提交，回滚等操作）</span>
+    RmBranchCommitProcessor rmBranchCommitProcessor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">RmBranchCommitProcessor</span><span class="token punctuation">(</span><span class="token function">getTransactionMessageHandler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_BRANCH_COMMIT<span class="token punctuation">,</span> rmBranchCommitProcessor<span class="token punctuation">,</span> messageExecutor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    RmBranchRollbackProcessor rmBranchRollbackProcessor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">RmBranchRollbackProcessor</span><span class="token punctuation">(</span><span class="token function">getTransactionMessageHandler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            <span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_BRANCH_ROLLBACK<span class="token punctuation">,</span> rmBranchRollbackProcessor<span class="token punctuation">,</span> messageExecutor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    RmUndoLogProcessor rmUndoLogProcessor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">RmUndoLogProcessor</span><span class="token punctuation">(</span><span class="token function">getTransactionMessageHandler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_RM_DELETE_UNDOLOG<span class="token punctuation">,</span> rmUndoLogProcessor<span class="token punctuation">,</span> messageExecutor<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 注册服务端响应消息的处理器（RM发送事务相关请求，服务端会响应）</span>
+    ClientOnResponseProcessor onResponseProcessor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ClientOnResponseProcessor</span><span class="token punctuation">(</span>mergeMsgMap<span class="token punctuation">,</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">getFutures</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            <span class="token function">getTransactionMessageHandler</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_SEATA_MERGE_RESULT<span class="token punctuation">,</span> onResponseProcessor<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_BRANCH_REGISTER_RESULT<span class="token punctuation">,</span> onResponseProcessor<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_BRANCH_STATUS_REPORT_RESULT<span class="token punctuation">,</span> onResponseProcessor<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_GLOBAL_LOCK_QUERY_RESULT<span class="token punctuation">,</span> onResponseProcessor<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_REG_RM_RESULT<span class="token punctuation">,</span> onResponseProcessor<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_BATCH_RESULT_MSG<span class="token punctuation">,</span> onResponseProcessor<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 5.registry heartbeat message processor</span>
+    ClientHeartbeatProcessor clientHeartbeatProcessor <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ClientHeartbeatProcessor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">registerProcessor</span><span class="token punctuation">(</span>MessageType<span class="token punctuation">.</span>TYPE_HEARTBEAT_MSG<span class="token punctuation">,</span> clientHeartbeatProcessor<span class="token punctuation">,</span> null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+</li>
+</ol>
+<h3 id="SeataDataSourceAutoConfiguration"><a href="#SeataDataSourceAutoConfiguration" class="headerlink" title="SeataDataSourceAutoConfiguration"></a>SeataDataSourceAutoConfiguration</h3><p>​	这个配置类主要是为了支持 <strong>AT</strong> 或 <strong>XA</strong> 事务模式。它内部引入了 <code>SeataAutoDataSourceProxyCreator</code>，这是个带代理功能的 Bean，专门负责对 <strong>DataSource</strong> 进行代理。这个类会创建一个 <code>SeataAutoDataSourceProxyAdvice</code> 切面，把对 DataSource 的调用转发给对应的代理类（AT 模式用 <code>DataSourceProxy</code>，XA 模式用 <code>DataSourceProxyXA</code>）</p>
+<h4 id="SQL执行代理"><a href="#SQL执行代理" class="headerlink" title="SQL执行代理"></a>SQL执行代理</h4><p>​	在 Java 的 SQL 执行流程里，其实一直是这一套： <strong>DataSource -&gt; Connection -&gt; PreparedStatement</strong></p>
+<p>​	DataSource 负责拿 Connection，Connection 负责创建 PreparedStatement 并处理事务，PreparedStatement 执行 SQL。所以 Seata 就对这几个关键接口都做了代理，目的就是 <strong>加上分布式事务的控制逻辑</strong></p>
+<ul>
+<li><p><strong>DataSource  →  DataSourceProxy</strong></p>
+<blockquote>
+<p>​	DataSourceProxy 会在原有逻辑上，额外把<strong>当前 RM 注册到 TC，并把原始 Connection 包装成 ConnectionProxy</strong>，用于支持后续事务功能</p>
+</blockquote>
+</li>
+<li><p><strong>Connection  →  ConnectionProxy</strong></p>
+<blockquote>
+<p>​	ConnectionProxy 会增强 commit 和 rollback 的逻辑。还会对获取PreparedStatement时将其包装成 PreparedStatementProxy用于其SQL执行的增强</p>
+<ul>
+<li><strong>commit</strong>：不仅提交，还会<strong>注册分支事务、刷新 undo_log</strong></li>
+<li><strong>rollback</strong>：除了回滚，还会<strong>上报当前分支事务的状态，驱动全局事务回滚</strong></li>
+</ul>
+</blockquote>
+</li>
+<li><p><strong>PreparedStatement →  PreparedStatementProxy</strong></p>
+<blockquote>
+<p>主要是在 <strong>SQL 执行前后做镜像查询，用来生成 undo_log，以便后续能回滚</strong></p>
+</blockquote>
+</li>
+</ul>
+<h2 id="服务端"><a href="#服务端" class="headerlink" title="服务端"></a>服务端</h2><p>​	Seata 作为分布式事务解决方案，需要一个 <strong>服务端协调者</strong> 来统一管理整个分布式事务上下文中各微服务的事务状态。因此，Seata 提供了一个独立的 Spring Boot 服务，由 <code>seata-server</code> 模块中的 <code>ServerApplication</code> 启动，最终触发 <code>io.seata.server.Server#start</code> 方法来启动服务端</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">static</span> <span class="token keyword">void</span> <span class="token function">start</span><span class="token punctuation">(</span>String<span class="token punctuation">[</span><span class="token punctuation">]</span> args<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 初始化参数解析器，解析启动参数</span>
+    ParameterParser parameterParser <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ParameterParser</span><span class="token punctuation">(</span>args<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 统计相关功能初始化</span>
+    MetricsManager<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    ThreadPoolExecutor workingThreads <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ThreadPoolExecutor</span><span class="token punctuation">(</span>NettyServerConfig<span class="token punctuation">.</span><span class="token function">getMinServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            NettyServerConfig<span class="token punctuation">.</span><span class="token function">getMaxServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> NettyServerConfig<span class="token punctuation">.</span><span class="token function">getKeepAliveTime</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> TimeUnit<span class="token punctuation">.</span>SECONDS<span class="token punctuation">,</span>
+            <span class="token keyword">new</span> <span class="token class-name">LinkedBlockingQueue</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>NettyServerConfig<span class="token punctuation">.</span><span class="token function">getMaxTaskQueueSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            <span class="token keyword">new</span> <span class="token class-name">NamedThreadFactory</span><span class="token punctuation">(</span><span class="token string">"ServerHandlerThread"</span><span class="token punctuation">,</span> NettyServerConfig<span class="token punctuation">.</span><span class="token function">getMaxServerPoolSize</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+            <span class="token keyword">new</span> <span class="token class-name">ThreadPoolExecutor<span class="token punctuation">.</span>CallerRunsPolicy</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 确定 Server 的 IP</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>NetUtil<span class="token punctuation">.</span><span class="token function">isValidIp</span><span class="token punctuation">(</span>parameterParser<span class="token punctuation">.</span><span class="token function">getHost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        XID<span class="token punctuation">.</span><span class="token function">setIpAddress</span><span class="token punctuation">(</span>parameterParser<span class="token punctuation">.</span><span class="token function">getHost</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+        String preferredNetworks <span class="token operator">=</span> ConfigurationFactory<span class="token punctuation">.</span><span class="token function">getInstance</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getConfig</span><span class="token punctuation">(</span>REGISTRY_PREFERED_NETWORKS<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>StringUtils<span class="token punctuation">.</span><span class="token function">isNotBlank</span><span class="token punctuation">(</span>preferredNetworks<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            XID<span class="token punctuation">.</span><span class="token function">setIpAddress</span><span class="token punctuation">(</span>NetUtil<span class="token punctuation">.</span><span class="token function">getLocalIp</span><span class="token punctuation">(</span>preferredNetworks<span class="token punctuation">.</span><span class="token function">split</span><span class="token punctuation">(</span>REGEX_SPLIT_CHAR<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            XID<span class="token punctuation">.</span><span class="token function">setIpAddress</span><span class="token punctuation">(</span>NetUtil<span class="token punctuation">.</span><span class="token function">getLocalIp</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 创建 Netty 服务端对象，负责接收客户端（RM/TM）的请求</span>
+    NettyRemotingServer nettyRemotingServer <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">NettyRemotingServer</span><span class="token punctuation">(</span>workingThreads<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    XID<span class="token punctuation">.</span><span class="token function">setPort</span><span class="token punctuation">(</span>nettyRemotingServer<span class="token punctuation">.</span><span class="token function">getListenPort</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    UUIDGenerator<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span>parameterParser<span class="token punctuation">.</span><span class="token function">getServerNode</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    SessionHolder<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    LockerManagerFactory<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 创建TC</span>
+    DefaultCoordinator coordinator <span class="token operator">=</span> DefaultCoordinator<span class="token punctuation">.</span><span class="token function">getInstance</span><span class="token punctuation">(</span>nettyRemotingServer<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 启动一些定时任务，包括异步全局事务commit操作、超时检查等</span>
+    coordinator<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 将 Coordinator 设置为 Netty 的消息处理器</span>
+    nettyRemotingServer<span class="token punctuation">.</span><span class="token function">setHandler</span><span class="token punctuation">(</span>coordinator<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    ServerRunner<span class="token punctuation">.</span><span class="token function">addDisposable</span><span class="token punctuation">(</span>coordinator<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 注册消息处理器并构建netty的ServerBootstrap，开启端口的监听</span>
+    nettyRemotingServer<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<p>​	功能看着挺多的，我们只需重点关注服务端Netty的配置、TC的创建和初始化，还有接收到客户端的请求后是如何协调TC来处理对应的逻辑</p>
+<h3 id="NettyRemotingServer创建"><a href="#NettyRemotingServer创建" class="headerlink" title="NettyRemotingServer创建"></a>NettyRemotingServer创建</h3><p>NettyRemotingServer实例化做的事情不多，包括如下：</p>
+<ul>
+<li>提供一个messageExecutor线程池，用于异步处理客户端请求的部分消息，避免阻塞 Netty IO 线程</li>
+<li>构建 Netty <code>ServerBootstrap</code>，创建 <code>bossGroup</code> 和 <code>workerGroup</code>，并使用 <code>ServerHandler</code> 处理客户端消息。<strong>这个 <code>ServerHandler</code> 处理消息的逻辑和客户端的 <code>ClientHandler</code> 一致，都是调用 <code>AbstractNettyRemoting#processMessage</code>，再由后续配置的消息 Processor和对应的线程池去执行具体的业务处理</strong></li>
+</ul>
+<h3 id="TC创建和初始化"><a href="#TC创建和初始化" class="headerlink" title="TC创建和初始化"></a>TC创建和初始化</h3><p>​	TC（Transaction Coordinator，事务协调者）负责维护 <strong>全局事务</strong> 和 <strong>分支事务</strong> 的状态，并驱动全局事务的提交或回滚，其实现了TransactionMessageHandler接口，是服务端所有消息处理的入口，实现为DefaultCoordinator。其主要职责分类为：</p>
+<ul>
+<li><strong>与 RM 交互</strong>：处理分支事务的注册、提交和回滚，当 <strong>TM 发起全局事务的 commit 或 rollback 时，TC 会进一步驱动各分支事务完成相应操作</strong></li>
+<li><strong>与 TM 交互</strong>：负责<strong>全局事务的开启、提交、回滚等</strong>操作，保证全局事务状态一致</li>
+</ul>
+<p>​	TC内部有很多单线程定时任务线程池，在其初始化阶段为启动一些列的定时任务，包括：全局事务的异步commit、客户端undo_log的删除等等</p>
+<h3 id="服务端Netty启动"><a href="#服务端Netty启动" class="headerlink" title="服务端Netty启动"></a>服务端Netty启动</h3><ul>
+<li>和 TMClient、RMClient 类似，服务端同样需要注册一系列消息处理器（Processor）。这些处理器最终会<strong>委托给 <code>DefaultCoordinator</code>（实现了 <code>TransactionMessageHandler</code>）来完成消息处理逻辑</strong></li>
+<li>启动 <code>NettyRemotingServer</code>，其内部<strong>基于 <code>ServerBootstrap</code> 初始化并绑定到本地端口</strong>。<strong>绑定成功后，通过 <code>RegistryService#register</code> 将当前服务节点注册到注册中心</strong>（如 Nacos、Consul、Zookeeper 等）。到此服务端的整体就启动完成了，可以对外提供服务了</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag"># 分布式事务</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/" rel="prev" title="CloudFlare-CDN缓存清除">
+                  <i class="fa fa-angle-left"></i> CloudFlare-CDN缓存清除
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2024-12-24/seata-at-mo-shi-yi-jie-duan-quan-jie-xi/" rel="next" title="Seata — AT模式一阶段全解析">
+                  Seata — AT模式一阶段全解析 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">538k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">16:19</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

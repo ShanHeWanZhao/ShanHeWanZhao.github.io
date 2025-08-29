@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	基于 Redisson 3.16.8版本，深入分析了红锁的设计背景及其在 Redisson 中的实现，最后讨论了红锁的局限性，并介绍了可能的替代方案。同时，还详细的分析了 Redisson 如何通过引入 WAIT 命令来优化普通分布式锁的可靠性">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Redisson — 红锁的实现与思考">
+<meta property="og:url" content="https://blog.shanzhao.site/2023-07-27/redisson-hong-suo-de-shi-xian-yu-si-kao/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	基于 Redisson 3.16.8版本，深入分析了红锁的设计背景及其在 Redisson 中的实现，最后讨论了红锁的局限性，并介绍了可能的替代方案。同时，还详细的分析了 Redisson 如何通过引入 WAIT 命令来优化普通分布式锁的可靠性">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://img.shanzhao.site/file/1755851164496_redisson-add-wait.png">
+<meta property="article:published_time" content="2023-07-27T11:48:03.000Z">
+<meta property="article:modified_time" content="2023-08-22T14:34:10.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="红锁">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://img.shanzhao.site/file/1755851164496_redisson-add-wait.png">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2023-07-27/redisson-hong-suo-de-shi-xian-yu-si-kao/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2023-07-27/redisson-hong-suo-de-shi-xian-yu-si-kao/","path":"2023-07-27/redisson-hong-suo-de-shi-xian-yu-si-kao/","title":"Redisson — 红锁的实现与思考"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Redisson — 红锁的实现与思考 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-number">1.</span> <span class="nav-text">背景</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%97%AE%E9%A2%98"><span class="nav-number">1.1.</span> <span class="nav-text">问题</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="nav-number">1.2.</span> <span class="nav-text">解决方案</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#RedissonRedLock"><span class="nav-number">2.</span> <span class="nav-text">RedissonRedLock</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8A%A0%E9%94%81"><span class="nav-number">2.1.</span> <span class="nav-text">加锁</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%A7%A3%E9%94%81"><span class="nav-number">2.2.</span> <span class="nav-text">解锁</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%9D%E8%80%83%E4%B8%8E%E4%BC%98%E5%8C%96"><span class="nav-number">3.</span> <span class="nav-text">思考与优化</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9C%89%E5%BF%85%E8%A6%81%E4%BD%BF%E7%94%A8%E7%BA%A2%E9%94%81%E5%90%97%EF%BC%9F"><span class="nav-number">3.1.</span> <span class="nav-text">有必要使用红锁吗？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#wait%E4%BC%98%E5%8C%96"><span class="nav-number">3.2.</span> <span class="nav-text">wait优化</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#wait%E5%91%BD%E4%BB%A4"><span class="nav-number">3.2.1.</span> <span class="nav-text">wait命令</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%9E%E7%8E%B0"><span class="nav-number">3.2.2.</span> <span class="nav-text">实现</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#%E7%BB%86%E8%8A%82%E8%A7%A3%E9%87%8A"><span class="nav-number">3.2.2.1.</span> <span class="nav-text">细节解释</span></a></li></ol></li></ol></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">49</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">52</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2023-07-27/redisson-hong-suo-de-shi-xian-yu-si-kao/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Redisson — 红锁的实现与思考 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Redisson — 红锁的实现与思考
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2023-07-27 19:48:03" itemprop="dateCreated datePublished" datetime="2023-07-27T19:48:03+08:00">2023-07-27</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2023-08-22 22:34:10" itemprop="dateModified" datetime="2023-08-22T22:34:10+08:00">2023-08-22</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Redisson/" itemprop="url" rel="index"><span itemprop="name">Redisson</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>6.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	基于 Redisson 3.16.8版本，深入分析了<strong>红锁的设计背景</strong>及其<strong>在 Redisson 中的实现</strong>，最后讨论了<strong>红锁的局限性</strong>，并介绍了可能的替代方案。同时，还详细的分析了 <strong>Redisson 如何通过引入 <code>WAIT</code> 命令来优化普通分布式锁的可靠性</strong></p>
+<span id="more"></span>
+
+<h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><h3 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h3><p>​	在生产环境中，为了实现 Redis 高可用，通常会采用 <strong>主从架构</strong>（比如分片集群、哨兵模式），即每个主节点都有一个或多个从节点。问题在于，<strong>主从复制是异步的</strong>：当我们把分布式锁写到 master 节点时，它还没来得及同步到 slave，如果此时 master 宕机，slave 被选举为新的 master，那么这把锁的信息就丢了。结果就是：</p>
+<ol>
+<li><p>原来持有锁的客户端以为自己还处于加锁成功的状态，继续处理业务</p>
+</li>
+<li><p>新选出的 master 不知道这回事，允许其他客户端再来加锁</p>
+</li>
+</ol>
+<p>这种情况就导致了分布式互斥锁彻底失效</p>
+<h3 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h3><p>​	<strong>红锁（RedLock）</strong> 诞生就是为了避免这个问题。它的核心思路是：<strong>不要把希望寄托在单个 Redis 实例上，而是在多个独立的 Redis 节点上同时加锁</strong>，这几个分锁组合起来形成一把主锁。其加锁规则如下：</p>
+<ul>
+<li>客户端会依次尝试在 <strong>N</strong> 个 Redis 节点上加锁</li>
+<li>如果在规定时间内，至少有 <strong>超过 N&#x2F;2 的节点加锁成功</strong>，就算加锁成功</li>
+<li>否则，释放已经加上的锁，并返回失败</li>
+</ul>
+<p>​	只要满足以上的规则加锁成功后，即使某个 Redis 节点挂了，只要多数节点状态一致，锁的有效性依然能保证，也可以推断出<strong>分锁数量越多，容错率越高，锁也更可靠</strong>。<strong>但同时资源开销也更大，性能也会受到影响</strong></p>
+<h2 id="RedissonRedLock"><a href="#RedissonRedLock" class="headerlink" title="RedissonRedLock"></a>RedissonRedLock</h2><p>​	<code>RedissonRedLock</code> 是 Redisson 对 <strong>RedLock 红锁算法</strong> 的具体实现，它继承自 <code>RedissonMultiLock</code>，本质上仍然是一个多锁机制。在创建 <code>RedissonRedLock</code> 时，需要传入<strong>多个 <code>RLock</code> 实例，每个实例应该用在一个redis节点上</strong>。整体逻辑仍然<strong>基于半数以上节点加锁成功才算加锁成功</strong>的原则。我们主要关注它的 加锁和解锁逻辑就行</p>
+<h3 id="加锁"><a href="#加锁" class="headerlink" title="加锁"></a>加锁</h3><p>​	不管是<strong>尝试加锁（tryLock）还是阻塞加锁（lock）</strong>，底层最终都会走到 <code>org.redisson.RedissonMultiLock#tryLock(long waitTime, long leaseTime, TimeUnit unit)</code> 方法。区别只是：<strong>尝试加锁失败就直接返回 false</strong>；但<strong>阻塞加锁失败不会立刻放弃，而是 while 循环不停重试，直到成功或者超时</strong>。根据源码，可以把核心逻辑拆成以下几步：</p>
+<ol>
+<li><p>计算每个分锁的最大等待时间</p>
+<blockquote>
+<p>​	总体的 <code>waitTime</code> 会平分给所有分锁，每个锁都有自己的最大等待时限（不会超过剩余的总等待时间<code>remainTime</code>）。可以避免在某个分锁上浪费太多时间，导致整体超时</p>
+</blockquote>
+</li>
+<li><p>逐个尝试加锁，并记录成功的分锁</p>
+<blockquote>
+<p>​	这些存起来的分锁后面会用于判断整体加锁成功与否，以及重新加锁时的解锁操作、设置过期时间等</p>
+</blockquote>
+</li>
+<li><p>如果某个分锁加锁失败</p>
+<blockquote>
+<p>​	先判断<strong>加锁成功数是否已达到最小成功阈值</strong>，如果达到，说明总锁获取成功，可返回了</p>
+<p>​	否则继续<strong>判断允许失败的分锁数量是否已用尽，如果用尽则需要重置状态（释放已成功的锁、重置允许失败的分锁数量），再重新尝试一轮</strong></p>
+</blockquote>
+</li>
+<li><p><strong>动态计算剩余总等待时间<code>remainTime</code>，避免整体的超时</strong></p>
+</li>
+</ol>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">boolean</span> <span class="token function">tryLock</span><span class="token punctuation">(</span><span class="token keyword">long</span> waitTime<span class="token punctuation">,</span> <span class="token keyword">long</span> leaseTime<span class="token punctuation">,</span> TimeUnit unit<span class="token punctuation">)</span> <span class="token keyword">throws</span> InterruptedException <span class="token punctuation">{</span>
+    <span class="token keyword">long</span> newLeaseTime <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>leaseTime <span class="token operator">!=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>waitTime <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            newLeaseTime <span class="token operator">=</span> unit<span class="token punctuation">.</span><span class="token function">toMillis</span><span class="token punctuation">(</span>leaseTime<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+            newLeaseTime <span class="token operator">=</span> unit<span class="token punctuation">.</span><span class="token function">toMillis</span><span class="token punctuation">(</span>waitTime<span class="token punctuation">)</span> <span class="token operator">*</span> <span class="token number">2</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">long</span> time <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">long</span> remainTime <span class="token operator">=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>waitTime <span class="token operator">!=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        remainTime <span class="token operator">=</span> unit<span class="token punctuation">.</span><span class="token function">toMillis</span><span class="token punctuation">(</span>waitTime<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 每个分锁的最大等待时间（把总的 waitTime 平均分到每个锁上）</span>
+    <span class="token keyword">long</span> lockWaitTime <span class="token operator">=</span> <span class="token function">calcLockWaitTime</span><span class="token punctuation">(</span>remainTime<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 获取允许分锁失败数（分锁个数的小一半）</span>
+    <span class="token keyword">int</span> failedLocksLimit <span class="token operator">=</span> <span class="token function">failedLocksLimit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    List<span class="token operator">&lt;</span>RLock<span class="token operator">></span> acquiredLocks <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ArrayList</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>locks<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 用ListIterator方便重置</span>
+    <span class="token keyword">for</span> <span class="token punctuation">(</span>ListIterator<span class="token operator">&lt;</span>RLock<span class="token operator">></span> iterator <span class="token operator">=</span> locks<span class="token punctuation">.</span><span class="token function">listIterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> iterator<span class="token punctuation">.</span><span class="token function">hasNext</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        RLock lock <span class="token operator">=</span> iterator<span class="token punctuation">.</span><span class="token function">next</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">boolean</span> lockAcquired<span class="token punctuation">;</span>
+        <span class="token keyword">try</span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>waitTime <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span> <span class="token operator">&amp;&amp;</span> leaseTime <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                lockAcquired <span class="token operator">=</span> lock<span class="token punctuation">.</span><span class="token function">tryLock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 再计算下这个锁能等待多久。锁获取失败会重置，但总等待时间还是不能超过remainTime</span>
+                <span class="token keyword">long</span> awaitTime <span class="token operator">=</span> Math<span class="token punctuation">.</span><span class="token function">min</span><span class="token punctuation">(</span>lockWaitTime<span class="token punctuation">,</span> remainTime<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                lockAcquired <span class="token operator">=</span> lock<span class="token punctuation">.</span><span class="token function">tryLock</span><span class="token punctuation">(</span>awaitTime<span class="token punctuation">,</span> newLeaseTime<span class="token punctuation">,</span> TimeUnit<span class="token punctuation">.</span>MILLISECONDS<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">RedisResponseTimeoutException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">unlockInner</span><span class="token punctuation">(</span>Arrays<span class="token punctuation">.</span><span class="token function">asList</span><span class="token punctuation">(</span>lock<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            lockAcquired <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            lockAcquired <span class="token operator">=</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>lockAcquired<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 当前分锁获取成功</span>
+            acquiredLocks<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>lock<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 当前分锁失败，但不一定代表总锁获取失败</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>locks<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> acquiredLocks<span class="token punctuation">.</span><span class="token function">size</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token function">failedLocksLimit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token comment" spellcheck="true">// 虽然当前分锁获取失败，但成功总数已经到达了最低成功个数阈值，直接break，返回获取锁成功</span>
+                <span class="token keyword">break</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>failedLocksLimit <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 允许失败数量已用尽，则此时不允许分锁再获取失败了，但还是出现了分锁获取失败</span>
+                <span class="token comment" spellcheck="true">// 解锁掉所有已获取到的锁</span>
+                <span class="token function">unlockInner</span><span class="token punctuation">(</span>acquiredLocks<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>waitTime <span class="token operator">==</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// ============ 重置一些关键参数，让下次循环重头遍历再尝试获取锁 ============</span>
+                failedLocksLimit <span class="token operator">=</span> <span class="token function">failedLocksLimit</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                acquiredLocks<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">while</span> <span class="token punctuation">(</span>iterator<span class="token punctuation">.</span><span class="token function">hasPrevious</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    iterator<span class="token punctuation">.</span><span class="token function">previous</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">// 倒回到第一个锁</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 减少一次允许失败数量</span>
+                failedLocksLimit<span class="token operator">--</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>remainTime <span class="token operator">!=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 计算剩余等待时间，如果没有了（超时），释放所有获取到的锁，再返回失败</span>
+            remainTime <span class="token operator">-=</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">-</span> time<span class="token punctuation">;</span>
+            time <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>remainTime <span class="token operator">&lt;=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 超时了，释放已获取的锁，返回失败</span>
+                <span class="token function">unlockInner</span><span class="token punctuation">(</span>acquiredLocks<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// ============== 到这说明整体锁获取成功，给每个获取到的锁设置过期时间 ===============</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>leaseTime <span class="token operator">!=</span> <span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        acquiredLocks<span class="token punctuation">.</span><span class="token function">stream</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span>l <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">(</span>RedissonLock<span class="token punctuation">)</span> l<span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span>l <span class="token operator">-</span><span class="token operator">></span> l<span class="token punctuation">.</span><span class="token function">expireAsync</span><span class="token punctuation">(</span>unit<span class="token punctuation">.</span><span class="token function">toMillis</span><span class="token punctuation">(</span>leaseTime<span class="token punctuation">)</span><span class="token punctuation">,</span> TimeUnit<span class="token punctuation">.</span>MILLISECONDS<span class="token punctuation">)</span><span class="token punctuation">)</span>
+                <span class="token punctuation">.</span><span class="token function">forEach</span><span class="token punctuation">(</span>f <span class="token operator">-</span><span class="token operator">></span> f<span class="token punctuation">.</span><span class="token function">toCompletableFuture</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">join</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">return</span> <span class="token boolean">true</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h3 id="解锁"><a href="#解锁" class="headerlink" title="解锁"></a>解锁</h3><p>​	解锁部分的实现就简单多了，核心逻辑集中在 <code>org.redisson.RedissonMultiLock#unlockInner</code> 方法中。它会遍历所有分锁，对每个分锁调用 <code>unlockAsync</code> 进行异步解锁。</p>
+<p>​	即便某些分锁在加锁阶段没有成功获取，也不会影响整体解锁流程，因为<strong>在 <code>forEach</code> 中捕获并吞掉了异常，避免未上锁的分锁在解锁时抛出错误</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token keyword">void</span> <span class="token function">unlockInner</span><span class="token punctuation">(</span>Collection<span class="token operator">&lt;</span>RLock<span class="token operator">></span> locks<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    locks<span class="token punctuation">.</span><span class="token function">stream</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">map</span><span class="token punctuation">(</span>RLockAsync<span class="token operator">:</span><span class="token operator">:</span>unlockAsync<span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">forEach</span><span class="token punctuation">(</span>f <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+                <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 同步等待解锁的Future</span>
+                    f<span class="token punctuation">.</span><span class="token function">toCompletableFuture</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">join</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">Exception</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token comment" spellcheck="true">// 忽略异常，避免部分分锁未获取到的情况</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h2 id="思考与优化"><a href="#思考与优化" class="headerlink" title="思考与优化"></a>思考与优化</h2><h3 id="有必要使用红锁吗？"><a href="#有必要使用红锁吗？" class="headerlink" title="有必要使用红锁吗？"></a>有必要使用红锁吗？</h3><p>​	红锁的使用前提是：<strong>必须有多个完全独立、互不影响的 Redis 实例</strong>，以降低单点故障导致锁丢失的风险。<br> 然而在实际项目中，大多数 Redis 部署模式是 <strong>哨兵（Sentinel）</strong> 或 <strong>分片集群（Cluster）</strong>：</p>
+<ul>
+<li><strong>哨兵模式</strong>：本质是一主多从，锁数据会通过复制同步，完全不具备独立节点的语义，<strong>红锁在这里没意义</strong></li>
+<li><strong>分片集群模式</strong>：理论上能做，但得保证每个 Lock 的 Key 分布在不同的槽（slot）上，让它们落到不同分片。实现上很麻烦，Key 设计要非常小心</li>
+</ul>
+<p>除此之外，红锁的使用成本也不小：</p>
+<ul>
+<li><strong>资源消耗高</strong>：需要多个独立 Redis 实例。</li>
+<li><strong>性能损耗</strong>：客户端每次加锁、解锁都需要与多个节点通信，增加请求延迟</li>
+</ul>
+<p>​	因此，虽然红锁理论看似完美，但在生产环境中，<strong>部署和使用的复杂性、资源和性能成本都非常高</strong>，真正落地的场景基本没有</p>
+<p>​	回想一下，我们是因为担心<strong>主从切换或复制延迟</strong>导致锁丢失才思考出红锁的这种方案的，那么有没有一种方法可以对此优化从而避免使用红锁？有的，当客户端操作带有从节点的 Redis 时，<strong>Redisson 会在写入命令后追加 <code>WAIT</code> 命令，根据返回的同步成功的从节点数量来决定整体操作是否成功</strong>。这样就能降低复制延迟带来的风险，从而避免引入多节点红锁的复杂性</p>
+<h3 id="wait优化"><a href="#wait优化" class="headerlink" title="wait优化"></a>wait优化</h3><h4 id="wait命令"><a href="#wait命令" class="headerlink" title="wait命令"></a>wait命令</h4><p>​	其命令格式如下。该命令用来阻塞当前客户端，直到<strong>之前的写操作被同步到指定数量的从节点，或超时为止</strong>。  WAIT 命令<strong>返回的数字表示实际同步成功的从节点数量，其&lt;&#x3D; numreplicas</strong></p>
+<pre class="line-numbers language-bash"><code class="language-bash"><span class="token comment" spellcheck="true"># numreplicas：要求同步的从节点数量</span>
+<span class="token comment" spellcheck="true"># timeout：最大等待时间（毫秒值）</span>
+WAIT <span class="token operator">&lt;</span>numreplicas<span class="token operator">></span>  <span class="token operator">&lt;</span>timeout<span class="token operator">></span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span></span></code></pre>
+<h4 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h4><p>​	锁相关的操作最终都会走到<strong>org.redisson.RedissonBaseLock#evalWriteAsync方法</strong>去，这个方法就是 Redisson 的关键点：<strong>给锁的写操作加了 WAIT 保障，确保数据不只是写到 Master，还同步到一定数量的 Slave 后才算成功</strong></p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">protected</span> <span class="token operator">&lt;</span>T<span class="token operator">></span> RFuture<span class="token operator">&lt;</span>T<span class="token operator">></span> <span class="token function">evalWriteAsync</span><span class="token punctuation">(</span>String key<span class="token punctuation">,</span> Codec codec<span class="token punctuation">,</span> RedisCommand<span class="token operator">&lt;</span>T<span class="token operator">></span> evalCommandType<span class="token punctuation">,</span> String script<span class="token punctuation">,</span>
+        List<span class="token operator">&lt;</span>Object<span class="token operator">></span> keys<span class="token punctuation">,</span> Object<span class="token punctuation">.</span><span class="token punctuation">.</span><span class="token punctuation">.</span> params<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment" spellcheck="true">// 1. 获取当前 key 所在分片的 Master-Slave 配置项</span>
+    MasterSlaveEntry entry <span class="token operator">=</span> commandExecutor<span class="token punctuation">.</span><span class="token function">getConnectionManager</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getEntry</span><span class="token punctuation">(</span><span class="token function">getRawName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 2. 获取该 Master 对应的可用 Slave 数量（用于 WAIT 命令判断）</span>
+    <span class="token keyword">int</span> availableSlaves <span class="token operator">=</span> entry<span class="token punctuation">.</span><span class="token function">getAvailableSlaves</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 3. 创建批处理命令执行器（CommandBatchService）</span>
+    <span class="token comment" spellcheck="true">// 使用批处理模式是为了后续追加 WAIT 命令（保证写入同步）</span>
+    <span class="token comment" spellcheck="true">// 注意：启用批处理意味着不能使用 Redis Script 缓存了。</span>
+    CommandBatchService executorService <span class="token operator">=</span> <span class="token function">createCommandBatchService</span><span class="token punctuation">(</span>availableSlaves<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 4. 这里并不会直接执行命令，而是将命令保存起来，等待后续添加其他命令（比如WAIT）后再一起执行</span>
+    RFuture<span class="token operator">&lt;</span>T<span class="token operator">></span> result <span class="token operator">=</span> executorService<span class="token punctuation">.</span><span class="token function">evalWriteAsync</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> codec<span class="token punctuation">,</span> evalCommandType<span class="token punctuation">,</span> script<span class="token punctuation">,</span> keys<span class="token punctuation">,</span> params<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>commandExecutor <span class="token keyword">instanceof</span> <span class="token class-name">CommandBatchService</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 5. 如果外层本身就是批处理环境（例如用户手动开启），直接返回，不再提交批处理</span>
+        <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+    <span class="token comment" spellcheck="true">// 6. 真正的执行（此时会将原命令 + WAIT等 命令一起发送给 Redis）</span>
+    RFuture<span class="token operator">&lt;</span>BatchResult<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token operator">>></span> future <span class="token operator">=</span> executorService<span class="token punctuation">.</span><span class="token function">executeAsync</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 7. 添加回调监听，判断 WAIT 的同步结果是否达到要求。如果同步的 Slave 数量不足，则抛出 IllegalStateException</span>
+    <span class="token comment" spellcheck="true">// fixme 感觉这种实现方式不好，所以最新的版本已经让用户来选择是否抛异常了</span>
+    CompletionStage<span class="token operator">&lt;</span>T<span class="token operator">></span> f <span class="token operator">=</span> future<span class="token punctuation">.</span><span class="token function">handle</span><span class="token punctuation">(</span><span class="token punctuation">(</span>res<span class="token punctuation">,</span> ex<span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>ex <span class="token operator">==</span> null <span class="token operator">&amp;&amp;</span> res<span class="token punctuation">.</span><span class="token function">getSyncedSlaves</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> availableSlaves<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token keyword">throw</span> <span class="token keyword">new</span> <span class="token class-name">CompletionException</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">IllegalStateException</span><span class="token punctuation">(</span><span class="token string">"Only "</span>
+                    <span class="token operator">+</span> res<span class="token punctuation">.</span><span class="token function">getSyncedSlaves</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">+</span> <span class="token string">" of "</span> <span class="token operator">+</span> availableSlaves <span class="token operator">+</span> <span class="token string">" slaves were synced"</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        <span class="token keyword">return</span> result<span class="token punctuation">.</span><span class="token function">getNow</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">CompletableFutureWrapper</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>f<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="细节解释"><a href="#细节解释" class="headerlink" title="细节解释"></a>细节解释</h5><ol>
+<li><p>为什么第4步不会直接执行？</p>
+<blockquote>
+<p>​	虽然第4步里调用了CommandAsyncService#evalWriteAsync方法，但内部创建的是<strong>RedisBatchExecutor这个执行器，RedisBatchExecutor#execute里不会直接执行命令</strong>，而是先将命令缓存起来，等到后续的 <code>executeAsync()</code> 一次性发出，这样可以把 EVAL 和 WAIT 放在同一批里</p>
+</blockquote>
+</li>
+<li><p>WAIT 命令在哪加的？</p>
+<blockquote>
+<p>​	第6步里会在如下位置添加WAIT命令，并在最后构建<strong>每个节点的RedisCommonBatchExecutor来将批量的命令一起发送到对应的Redis节点</strong></p>
+</blockquote>
+ <img src="https://img.shanzhao.site/file/1755851164496_redisson-add-wait.png" alt="redisson-add-wait.png" width=100% />
+</li>
+<li><p>如何处理结果?</p>
+<blockquote>
+<p>​	第7步里判断了<strong>如果同步成功的 slave 数量没达到预期，就直接抛异常</strong>。问题在于，这样就算原始命令本身成功了，整体也算失败。说实话这个限制要求太严且太死板了，完全可以做成根据用户的配置来决定是否抛异常，或许等新版本会有优化吧</p>
+</blockquote>
+</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E7%BA%A2%E9%94%81/" rel="tag"># 红锁</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2023-06-18/redisson-fen-bu-shi-suo-de-shi-xian/" rel="prev" title="Redisson — 分布式锁的实现">
+                  <i class="fa fa-angle-left"></i> Redisson — 分布式锁的实现
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2023-08-19/redisson-redissonlocalcachedmap/" rel="next" title="Redisson — 分布式本地缓存RLocalCachedMap的实现">
+                  Redisson — 分布式本地缓存RLocalCachedMap的实现 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">538k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">16:19</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>

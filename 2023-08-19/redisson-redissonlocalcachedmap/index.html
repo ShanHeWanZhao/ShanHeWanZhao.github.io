@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222"><meta name="generator" content="Hexo 6.3.0">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
+  <link rel="mask-icon" href="/images/favicon.png" color="#222">
+  <meta name="msvalidate.01" content="179F7AB6AAB937D65F84E184278E61E9">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha256-dABdfBfUoC8vJUBOwGVdm8L9qlMWaHTIfXt+7GnZCIo=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.css" integrity="sha256-zM8WXtG4eUn7dKKNMTuoWZub++VnSfaOpA/8PJfvTBo=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"blog.shanzhao.site","root":"/","images":"/images","scheme":"Gemini","darkmode":false,"version":"8.23.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":false,"copycode":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"prism":false,"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.xml","localsearch":{"enable":true,"top_n_per_article":1,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="​	基于 Redisson 3.16.8，对 RedissonLocalCachedMap 的功能及核心方法进行了深入解析，并重点探讨其关键参数对整体缓存行为的影响，为后续定向优化提供参考">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Redisson — 分布式本地缓存RLocalCachedMap的实现">
+<meta property="og:url" content="https://blog.shanzhao.site/2023-08-19/redisson-redissonlocalcachedmap/index.html">
+<meta property="og:site_name" content="Reef&#39;s Blog">
+<meta property="og:description" content="​	基于 Redisson 3.16.8，对 RedissonLocalCachedMap 的功能及核心方法进行了深入解析，并重点探讨其关键参数对整体缓存行为的影响，为后续定向优化提供参考">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2023-08-19T09:43:07.000Z">
+<meta property="article:modified_time" content="2023-08-25T11:34:03.000Z">
+<meta property="article:author" content="reef">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="缓存">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://blog.shanzhao.site/2023-08-19/redisson-redissonlocalcachedmap/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://blog.shanzhao.site/2023-08-19/redisson-redissonlocalcachedmap/","path":"2023-08-19/redisson-redissonlocalcachedmap/","title":"Redisson — 分布式本地缓存RLocalCachedMap的实现"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>Redisson — 分布式本地缓存RLocalCachedMap的实现 | Reef's Blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.36/fancybox/fancybox.umd.js" integrity="sha256-hiUEBwFEpLF6DlB8sGXlKo4kPZ46Ui4qGpd0vrVkOm4=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.4.1/search.js" integrity="sha256-1kfA5uHPf65M5cphT2dvymhkuyHPQp5A53EGZOnOLmc=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+<link rel="alternate" href="/atom.xml" title="Reef's Blog" type="application/atom+xml">
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Reef's Blog</p>
+      <i class="logo-line"></i>
+    </a>
+      <p class="site-subtitle" itemprop="description">hello world</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li><li class="menu-item menu-item-rss订阅"><a href="/atom.xml" rel="section"><i class="fa fa-rss fa-fw"></i>RSS订阅</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#RLocalCachedMap"><span class="nav-number">1.</span> <span class="nav-text">RLocalCachedMap</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#RedissonLocalCachedMap"><span class="nav-number">1.1.</span> <span class="nav-text">RedissonLocalCachedMap</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%B8%E5%BF%83%E5%AD%97%E6%AE%B5"><span class="nav-number">1.1.1.</span> <span class="nav-text">核心字段</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%9E%84%E9%80%A0%E6%96%B9%E6%B3%95"><span class="nav-number">1.1.2.</span> <span class="nav-text">构造方法</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%9F%A5%E8%AF%A2"><span class="nav-number">1.1.3.</span> <span class="nav-text">查询</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#get"><span class="nav-number">1.1.3.1.</span> <span class="nav-text">get</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B7%BB%E5%8A%A0"><span class="nav-number">1.1.4.</span> <span class="nav-text">添加</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#put"><span class="nav-number">1.1.4.1.</span> <span class="nav-text">put</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#fastPut"><span class="nav-number">1.1.4.2.</span> <span class="nav-text">fastPut</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%88%A0%E9%99%A4"><span class="nav-number">1.1.5.</span> <span class="nav-text">删除</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#remove"><span class="nav-number">1.1.5.1.</span> <span class="nav-text">remove</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#fastRemove"><span class="nav-number">1.1.5.2.</span> <span class="nav-text">fastRemove</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B8%85%E7%A9%BA"><span class="nav-number">1.1.6.</span> <span class="nav-text">清空</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#clear"><span class="nav-number">1.1.6.1.</span> <span class="nav-text">clear</span></a></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-number">1.2.</span> <span class="nav-text">总结</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9E%84%E5%BB%BA%E7%A4%BA%E4%BE%8B"><span class="nav-number">1.3.</span> <span class="nav-text">构建示例</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="reef"
+      src="/images/favicon.png">
+  <p class="site-author-name" itemprop="name">reef</p>
+  <div class="site-description" itemprop="description">Chasing freedom where the horizon meets the sea</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">49</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">52</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/ShanHeWanZhao" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;ShanHeWanZhao" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:shanzhao.rd@gmail.com" title="E-Mail → mailto:shanzhao.rd@gmail.com" rel="noopener me external nofollow noreferrer" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://blog.shanzhao.site/2023-08-19/redisson-redissonlocalcachedmap/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/favicon.png">
+      <meta itemprop="name" content="reef">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Reef's Blog">
+      <meta itemprop="description" content="Chasing freedom where the horizon meets the sea">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="Redisson — 分布式本地缓存RLocalCachedMap的实现 | Reef's Blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Redisson — 分布式本地缓存RLocalCachedMap的实现
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2023-08-19 17:43:07" itemprop="dateCreated datePublished" datetime="2023-08-19T17:43:07+08:00">2023-08-19</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2023-08-25 19:34:03" itemprop="dateModified" datetime="2023-08-25T19:34:03+08:00">2023-08-25</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Redisson/" itemprop="url" rel="index"><span itemprop="name">Redisson</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>11k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>20 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>​	基于 Redisson 3.16.8，对 <strong>RedissonLocalCachedMap</strong> 的功能及核心方法进行了深入解析，并重点探讨其关键参数对整体缓存行为的影响，为后续定向优化提供参考</p>
+<span id="more"></span>
+
+<h2 id="RLocalCachedMap"><a href="#RLocalCachedMap" class="headerlink" title="RLocalCachedMap"></a>RLocalCachedMap</h2><p>​	在看 Redisson 源码时发现一个挺有意思的工具：<strong>RLocalCachedMap</strong>，它的主要实现类是 <strong>RedissonLocalCachedMap</strong>。简单来说，它是一个<strong>既在本地内存缓存数据、又能和 Redis 同步的 Map</strong>，也可以理解成 <strong>带本地缓存的分布式 Map</strong></p>
+<p>它的核心思路很简单：</p>
+<ul>
+<li><strong>读操作</strong>：优先从 JVM 本地内存获取，如果本地没有，就fallback到从远程Redis中获取，再把结果缓存到本地。这样大多数情况下<strong>直接走内存，不走网络IO，速度非常快</strong></li>
+<li><strong>写操作</strong>（新增、更新、删除）：不仅写入 Redis，还会通过 Redis 的 <strong>Pub&#x2F;Sub</strong> 通知其他节点，把它们本地的副本中对应的缓存数据更新掉，从而保持多节点数据一致性</li>
+</ul>
+<p>​	换句话说，就是<strong>用客户端内存换取网络开销</strong>，非常适合那些<strong>读多写少</strong>、<strong>缓存数据量不大</strong>的分布式场景。比如：经常访问的配置、热点字典数据等等。接下来我重点分析下其实现类RedissonLocalCachedMap的一些核心方法</p>
+<h3 id="RedissonLocalCachedMap"><a href="#RedissonLocalCachedMap" class="headerlink" title="RedissonLocalCachedMap"></a>RedissonLocalCachedMap</h3><h4 id="核心字段"><a href="#核心字段" class="headerlink" title="核心字段"></a>核心字段</h4><pre class="line-numbers language-java"><code class="language-java"><span class="token comment" spellcheck="true">// 本地缓存更新日志的有效期（毫秒），默认 10 分钟。</span>
+<span class="token comment" spellcheck="true">// 用于 LOAD 类型的重连策略，判断缓存是否需要全量清理。</span>
+<span class="token keyword">private</span> <span class="token keyword">long</span> cacheUpdateLogTime <span class="token operator">=</span> TimeUnit<span class="token punctuation">.</span>MINUTES<span class="token punctuation">.</span><span class="token function">toMillis</span><span class="token punctuation">(</span><span class="token number">10</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">// 当前RedissonLocalCachedMap实例的id</span>
+<span class="token keyword">private</span> <span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> instanceId<span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">// 本地缓存，提供了三方的caffeine缓存和redisson内部自己设计的缓存</span>
+<span class="token comment" spellcheck="true">// 默认用redisson自己设计的缓存：org.redisson.api.LocalCachedMapOptions.EvictionPolicy</span>
+<span class="token keyword">private</span> ConcurrentMap<span class="token operator">&lt;</span>CacheKey<span class="token punctuation">,</span> CacheValue<span class="token operator">></span> cache<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 默认为1</span>
+<span class="token keyword">private</span> <span class="token keyword">int</span> invalidateEntryOnChange<span class="token punctuation">;</span>
+<span class="token comment" spellcheck="true">// 同步策略，默认为SyncStrategy#INVALIDATE。 即变更时删除本地缓存，下一次访问再从 Redis 拉取，属于懒加载策略</span>
+<span class="token keyword">private</span> SyncStrategy syncStrategy<span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">// 存储模式，决定数据存放的位置</span>
+<span class="token comment" spellcheck="true">// 默认为org.redisson.api.LocalCachedMapOptions.StoreMode#LOCALCACHE_REDIS，即本地缓存和redis缓存都使用</span>
+<span class="token keyword">private</span> LocalCachedMapOptions<span class="token punctuation">.</span>StoreMode storeMode<span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">// 是否缓存 value 为 null 的结果，默认 false（不缓存空值）</span>
+<span class="token keyword">private</span> <span class="token keyword">boolean</span> storeCacheMiss<span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">// 负责订阅 Redis 通知并处理本地缓存同步的监听器</span>
+<span class="token keyword">private</span> LocalCacheListener listener<span class="token punctuation">;</span>
+
+<span class="token comment" spellcheck="true">// 提供本地缓存的只读视图，用于遍历和调试</span>
+<span class="token keyword">private</span> LocalCacheView<span class="token operator">&lt;</span>K<span class="token punctuation">,</span> V<span class="token operator">></span> localCacheView<span class="token punctuation">;</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="构造方法"><a href="#构造方法" class="headerlink" title="构造方法"></a>构造方法</h4><p>​	在 <code>RedissonLocalCachedMap</code> 的构造方法里，<code>init</code> 会创建一个 <strong>LocalCacheListener</strong>，这是非常核心的组件。我们重点看它的 <code>add</code> 方法，它负责<strong>订阅 Redis Channel 并注册消息监听器</strong>，后续所有写操作发出的通知都会通过这个 Channel，被 MessageListener 接收并最终更新本地缓存。核心逻辑如下：</p>
+<ul>
+<li><p>根据 ReconnectionStrategy 决定是否添加 StatusListener</p>
+<blockquote>
+<p>​	当客户端订阅 Redis Channel 成功（包括断开重连）时，会触发 <code>onSubscribe</code> 方法。RLocalCachedMap 会根据策略处理本地缓存，策略行为如下</p>
+<ul>
+<li>ReconnectionStrategy.CLEAR：重连后<strong>直接清空本地缓存</strong>，不保留任何旧数据</li>
+<li>ReconnectionStrategy.LOAD：如果上次更新距今超过 10 分钟，则<strong>直接清空本地缓存</strong>；<strong>否则只清空断开期间有变动的 key</strong>（用了一个Redis <strong>ScoredSortedSet数据结构和ScoredSetEvictionTask定时任务保存最近11分钟的操作key，用于增量失效</strong>）</li>
+</ul>
+</blockquote>
+</li>
+<li><p>只有同步策略不是 SyncStrategy.NONE 才会添加 MessageListener，内部处理不同消息的逻辑如下</p>
+<blockquote>
+<ul>
+<li><code>LocalCachedMapDisable</code>：<strong>禁用</strong>指定 key</li>
+<li><code>LocalCachedMapEnable</code>：<strong>启用</strong>指定 key</li>
+<li><code>LocalCachedMapClear</code>：<strong>清空</strong>本地缓存</li>
+<li><code>LocalCachedMapInvalidate</code>：<strong>删除</strong>本地缓存中的某些 key</li>
+<li><code>LocalCachedMapUpdate</code>：<strong>增加或更新</strong>本地缓存</li>
+</ul>
+</blockquote>
+</li>
+</ul>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">add</span><span class="token punctuation">(</span>Map<span class="token operator">&lt;</span><span class="token operator">?</span><span class="token punctuation">,</span> <span class="token operator">?</span><span class="token operator">></span> cache<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token keyword">this</span><span class="token punctuation">.</span>cache <span class="token operator">=</span> cache<span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 使用专属的LocalCachedMessageCodec编解码器处理channel里发布的消息</span>
+    <span class="token comment" spellcheck="true">// topic格式为，默认也是channelName -> {RLocalCachedMap的name}:topic</span>
+    invalidationTopic <span class="token operator">=</span> RedissonTopic<span class="token punctuation">.</span><span class="token function">createRaw</span><span class="token punctuation">(</span>LocalCachedMessageCodec<span class="token punctuation">.</span>INSTANCE<span class="token punctuation">,</span> commandExecutor<span class="token punctuation">,</span><span class="token function">getInvalidationTopicName</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    <span class="token comment" spellcheck="true">// 如果设置了重连策略，则在重新订阅时触发处理</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>options<span class="token punctuation">.</span><span class="token function">getReconnectionStrategy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> ReconnectionStrategy<span class="token punctuation">.</span>NONE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        reconnectionListenerId <span class="token operator">=</span> invalidationTopic<span class="token punctuation">.</span><span class="token function">addListener</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">BaseStatusListener</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token annotation punctuation">@Override</span>
+            <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onSubscribe</span><span class="token punctuation">(</span>String channel<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>options<span class="token punctuation">.</span><span class="token function">getReconnectionStrategy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> ReconnectionStrategy<span class="token punctuation">.</span>CLEAR<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    cache<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>options<span class="token punctuation">.</span><span class="token function">getReconnectionStrategy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> ReconnectionStrategy<span class="token punctuation">.</span>LOAD <span class="token operator">&amp;&amp;</span> lastInvalidate <span class="token operator">></span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    <span class="token function">loadAfterReconnection</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 如果启用同步策略，则注册消息监听器</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>options<span class="token punctuation">.</span><span class="token function">getSyncStrategy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> SyncStrategy<span class="token punctuation">.</span>NONE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token comment" spellcheck="true">// 开始subscribe redis的channel并注册对应的listener</span>
+        syncListenerId <span class="token operator">=</span> invalidationTopic<span class="token punctuation">.</span><span class="token function">addListener</span><span class="token punctuation">(</span>Object<span class="token punctuation">.</span><span class="token keyword">class</span><span class="token punctuation">,</span> <span class="token keyword">new</span> <span class="token class-name">MessageListener</span><span class="token operator">&lt;</span>Object<span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token annotation punctuation">@Override</span>
+            <span class="token keyword">public</span> <span class="token keyword">void</span> <span class="token function">onMessage</span><span class="token punctuation">(</span>CharSequence channel<span class="token punctuation">,</span> Object msg<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>msg <span class="token keyword">instanceof</span> <span class="token class-name">LocalCachedMapDisable</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    LocalCachedMapDisable m <span class="token operator">=</span> <span class="token punctuation">(</span>LocalCachedMapDisable<span class="token punctuation">)</span> msg<span class="token punctuation">;</span>
+                    String requestId <span class="token operator">=</span> m<span class="token punctuation">.</span><span class="token function">getRequestId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    Set<span class="token operator">&lt;</span>CacheKey<span class="token operator">></span> keysToDisable <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span>CacheKey<span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> keyHash <span class="token operator">:</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>LocalCachedMapDisable<span class="token punctuation">)</span> msg<span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">getKeyHashes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        CacheKey key <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CacheKey</span><span class="token punctuation">(</span>keyHash<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        keysToDisable<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+
+                    <span class="token function">disableKeys</span><span class="token punctuation">(</span>requestId<span class="token punctuation">,</span> keysToDisable<span class="token punctuation">,</span> m<span class="token punctuation">.</span><span class="token function">getTimeout</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                    RedissonTopic topic <span class="token operator">=</span> RedissonTopic<span class="token punctuation">.</span><span class="token function">createRaw</span><span class="token punctuation">(</span>LocalCachedMessageCodec<span class="token punctuation">.</span>INSTANCE<span class="token punctuation">,</span>
+                            commandExecutor<span class="token punctuation">,</span> RedissonObject<span class="token punctuation">.</span><span class="token function">suffixName</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> requestId <span class="token operator">+</span> DISABLED_ACK_SUFFIX<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    topic<span class="token punctuation">.</span><span class="token function">publishAsync</span><span class="token punctuation">(</span><span class="token keyword">new</span> <span class="token class-name">LocalCachedMapDisableAck</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>msg <span class="token keyword">instanceof</span> <span class="token class-name">LocalCachedMapEnable</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    LocalCachedMapEnable m <span class="token operator">=</span> <span class="token punctuation">(</span>LocalCachedMapEnable<span class="token punctuation">)</span> msg<span class="token punctuation">;</span>
+                    <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> keyHash <span class="token operator">:</span> m<span class="token punctuation">.</span><span class="token function">getKeyHashes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                        CacheKey key <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CacheKey</span><span class="token punctuation">(</span>keyHash<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        disabledKeys<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>key<span class="token punctuation">,</span> m<span class="token punctuation">.</span><span class="token function">getRequestId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 清空缓存的消息。比如Map的clear和delete等方法</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>msg <span class="token keyword">instanceof</span> <span class="token class-name">LocalCachedMapClear</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    LocalCachedMapClear clearMsg <span class="token operator">=</span> <span class="token punctuation">(</span>LocalCachedMapClear<span class="token punctuation">)</span> msg<span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>Arrays<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>clearMsg<span class="token punctuation">.</span><span class="token function">getExcludedId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> instanceId<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 排除指定的实例。因为发起方客户端已经操作过了，不再需要从订阅中获取到消息后再处理一次</span>
+                        cache<span class="token punctuation">.</span><span class="token function">clear</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+                        <span class="token keyword">if</span> <span class="token punctuation">(</span>clearMsg<span class="token punctuation">.</span><span class="token function">isReleaseSemaphore</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            RSemaphore semaphore <span class="token operator">=</span> <span class="token function">getClearSemaphore</span><span class="token punctuation">(</span>clearMsg<span class="token punctuation">.</span><span class="token function">getRequestId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            semaphore<span class="token punctuation">.</span><span class="token function">releaseAsync</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// 删除key的消息</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>msg <span class="token keyword">instanceof</span> <span class="token class-name">LocalCachedMapInvalidate</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    LocalCachedMapInvalidate invalidateMsg <span class="token operator">=</span> <span class="token punctuation">(</span>LocalCachedMapInvalidate<span class="token punctuation">)</span> msg<span class="token punctuation">;</span>
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>Arrays<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>invalidateMsg<span class="token punctuation">.</span><span class="token function">getExcludedId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> instanceId<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 首先排除指定的实例</span>
+                        <span class="token keyword">for</span> <span class="token punctuation">(</span><span class="token keyword">byte</span><span class="token punctuation">[</span><span class="token punctuation">]</span> keyHash <span class="token operator">:</span> invalidateMsg<span class="token punctuation">.</span><span class="token function">getKeyHashes</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            CacheKey key <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CacheKey</span><span class="token punctuation">(</span>keyHash<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            cache<span class="token punctuation">.</span><span class="token function">remove</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+                <span class="token comment" spellcheck="true">// 添加、更新key的消息（操作本地缓存）</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>msg <span class="token keyword">instanceof</span> <span class="token class-name">LocalCachedMapUpdate</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    LocalCachedMapUpdate updateMsg <span class="token operator">=</span> <span class="token punctuation">(</span>LocalCachedMapUpdate<span class="token punctuation">)</span> msg<span class="token punctuation">;</span>
+
+                    <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>Arrays<span class="token punctuation">.</span><span class="token function">equals</span><span class="token punctuation">(</span>updateMsg<span class="token punctuation">.</span><span class="token function">getExcludedId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> instanceId<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 首先排除指定的实例</span>
+                        <span class="token keyword">for</span> <span class="token punctuation">(</span>LocalCachedMapUpdate<span class="token punctuation">.</span>Entry entry <span class="token operator">:</span> updateMsg<span class="token punctuation">.</span><span class="token function">getEntries</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                            ByteBuf keyBuf <span class="token operator">=</span> Unpooled<span class="token punctuation">.</span><span class="token function">wrappedBuffer</span><span class="token punctuation">(</span>entry<span class="token punctuation">.</span><span class="token function">getKey</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            ByteBuf valueBuf <span class="token operator">=</span> Unpooled<span class="token punctuation">.</span><span class="token function">wrappedBuffer</span><span class="token punctuation">(</span>entry<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token keyword">try</span> <span class="token punctuation">{</span>
+                                <span class="token function">updateCache</span><span class="token punctuation">(</span>keyBuf<span class="token punctuation">,</span> valueBuf<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span><span class="token class-name">IOException</span> e<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                                log<span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">"Can't decode map entry"</span><span class="token punctuation">,</span> e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span> <span class="token keyword">finally</span> <span class="token punctuation">{</span>
+                                keyBuf<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                                valueBuf<span class="token punctuation">.</span><span class="token function">release</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                            <span class="token punctuation">}</span>
+                        <span class="token punctuation">}</span>
+                    <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+
+                <span class="token comment" spellcheck="true">// 更新 lastInvalidate 时间，用于 LOAD 重连策略判断</span>
+                <span class="token keyword">if</span> <span class="token punctuation">(</span>options<span class="token punctuation">.</span><span class="token function">getReconnectionStrategy</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">==</span> ReconnectionStrategy<span class="token punctuation">.</span>LOAD<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                    lastInvalidate <span class="token operator">=</span> System<span class="token punctuation">.</span><span class="token function">currentTimeMillis</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                <span class="token punctuation">}</span>
+            <span class="token punctuation">}</span>
+
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        String disabledKeysName <span class="token operator">=</span> RedissonObject<span class="token punctuation">.</span><span class="token function">suffixName</span><span class="token punctuation">(</span>name<span class="token punctuation">,</span> DISABLED_KEYS_SUFFIX<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        RListMultimapCache<span class="token operator">&lt;</span>LocalCachedMapDisabledKey<span class="token punctuation">,</span> String<span class="token operator">></span> multimap <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">RedissonListMultimapCache</span><span class="token operator">&lt;</span>LocalCachedMapDisabledKey<span class="token punctuation">,</span> String<span class="token operator">></span><span class="token punctuation">(</span>
+                null<span class="token punctuation">,</span> codec<span class="token punctuation">,</span> commandExecutor<span class="token punctuation">,</span> disabledKeysName<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+        <span class="token keyword">for</span> <span class="token punctuation">(</span>LocalCachedMapDisabledKey key <span class="token operator">:</span> multimap<span class="token punctuation">.</span><span class="token function">readAllKeySet</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            Set<span class="token operator">&lt;</span>CacheKey<span class="token operator">></span> keysToDisable <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">HashSet</span><span class="token operator">&lt;</span>CacheKey<span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">for</span> <span class="token punctuation">(</span>String hash <span class="token operator">:</span> multimap<span class="token punctuation">.</span><span class="token function">getAll</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                CacheKey cacheKey <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">CacheKey</span><span class="token punctuation">(</span>ByteBufUtil<span class="token punctuation">.</span><span class="token function">decodeHexDump</span><span class="token punctuation">(</span>hash<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+                keysToDisable<span class="token punctuation">.</span><span class="token function">add</span><span class="token punctuation">(</span>cacheKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+
+            <span class="token function">disableKeys</span><span class="token punctuation">(</span>key<span class="token punctuation">.</span><span class="token function">getRequestId</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span> keysToDisable<span class="token punctuation">,</span> key<span class="token punctuation">.</span><span class="token function">getTimeout</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="查询"><a href="#查询" class="headerlink" title="查询"></a>查询</h4><h5 id="get"><a href="#get" class="headerlink" title="get"></a>get</h5><p>​	<code>get</code> 方法整体逻辑很直接：<strong>先从本地缓存拿，如果有就直接返回</strong>；如果本地没有，再根据 <code>storeMode</code> 判断是否需要去远程 Redis 获取数据。拿到远程数据后，会<strong>顺便缓存到本地</strong>，方便下次直接读取。</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token keyword">public</span> RFuture<span class="token operator">&lt;</span>V<span class="token operator">></span> <span class="token function">getAsync</span><span class="token punctuation">(</span>Object key<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token function">checkKey</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+    CacheKey cacheKey <span class="token operator">=</span> localCacheView<span class="token punctuation">.</span><span class="token function">toCacheKey</span><span class="token punctuation">(</span>key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment" spellcheck="true">// 1. 优先从本地缓存获取</span>
+    CacheValue cacheValue <span class="token operator">=</span> cache<span class="token punctuation">.</span><span class="token function">get</span><span class="token punctuation">(</span>cacheKey<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>cacheValue <span class="token operator">!=</span> null <span class="token operator">&amp;&amp;</span> <span class="token punctuation">(</span>storeCacheMiss <span class="token operator">||</span> cacheValue<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">!=</span> null<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">return</span> RedissonPromise<span class="token punctuation">.</span><span class="token function">newSucceededFuture</span><span class="token punctuation">(</span><span class="token punctuation">(</span>V<span class="token punctuation">)</span> cacheValue<span class="token punctuation">.</span><span class="token function">getValue</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 2. 仅使用本地缓存模式的情况（StoreMode.LOCALCACHE）来构建结果</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>storeMode <span class="token operator">==</span> LocalCachedMapOptions<span class="token punctuation">.</span>StoreMode<span class="token punctuation">.</span>LOCALCACHE<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token function">hasNoLoader</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment" spellcheck="true">// 无Loader直接构建null</span>
+            <span class="token keyword">return</span> RedissonPromise<span class="token punctuation">.</span><span class="token function">newSucceededFuture</span><span class="token punctuation">(</span>null<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 有Loader：异步加载并写入本地缓存</span>
+        CompletableFuture<span class="token operator">&lt;</span>V<span class="token operator">></span> future <span class="token operator">=</span> <span class="token function">loadValue</span><span class="token punctuation">(</span><span class="token punctuation">(</span>K<span class="token punctuation">)</span> key<span class="token punctuation">,</span> <span class="token boolean">false</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        CompletableFuture<span class="token operator">&lt;</span>V<span class="token operator">></span> f <span class="token operator">=</span> future<span class="token punctuation">.</span><span class="token function">thenApply</span><span class="token punctuation">(</span>value <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+            <span class="token keyword">if</span> <span class="token punctuation">(</span>storeCacheMiss <span class="token operator">||</span> value <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+                <span class="token function">cachePut</span><span class="token punctuation">(</span>cacheKey<span class="token punctuation">,</span> key<span class="token punctuation">,</span> value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token punctuation">}</span>
+            <span class="token keyword">return</span> value<span class="token punctuation">;</span>
+        <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token keyword">return</span> <span class="token keyword">new</span> <span class="token class-name">CompletableFutureWrapper</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span>f<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token comment" spellcheck="true">// 3. 从远程Redis获取并缓存到本地</span>
+    RPromise<span class="token operator">&lt;</span>V<span class="token operator">></span> result <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">RedissonPromise</span><span class="token operator">&lt;</span><span class="token operator">></span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    RFuture<span class="token operator">&lt;</span>V<span class="token operator">></span> future <span class="token operator">=</span> <span class="token keyword">super</span><span class="token punctuation">.</span><span class="token function">getAsync</span><span class="token punctuation">(</span><span class="token punctuation">(</span>K<span class="token punctuation">)</span> key<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    future<span class="token punctuation">.</span><span class="token function">onComplete</span><span class="token punctuation">(</span><span class="token punctuation">(</span>value<span class="token punctuation">,</span> e<span class="token punctuation">)</span> <span class="token operator">-</span><span class="token operator">></span> <span class="token punctuation">{</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>e <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            result<span class="token punctuation">.</span><span class="token function">tryFailure</span><span class="token punctuation">(</span>e<span class="token punctuation">)</span><span class="token punctuation">;</span>
+            <span class="token keyword">return</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+
+        <span class="token comment" spellcheck="true">// 缓存到本地</span>
+        <span class="token keyword">if</span> <span class="token punctuation">(</span>storeCacheMiss <span class="token operator">||</span> value <span class="token operator">!=</span> null<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+            <span class="token function">cachePut</span><span class="token punctuation">(</span>cacheKey<span class="token punctuation">,</span> key<span class="token punctuation">,</span> value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+        <span class="token punctuation">}</span>
+        result<span class="token punctuation">.</span><span class="token function">trySuccess</span><span class="token punctuation">(</span>value<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> result<span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="添加"><a href="#添加" class="headerlink" title="添加"></a>添加</h4><h5 id="put"><a href="#put" class="headerlink" title="put"></a>put</h5><p>​	源码里 <code>put</code> 的整体流程是：<strong>先写本地缓存，再根据 <code>syncStrategy</code> 构建要发布的消息（LocalCachedMapUpdate或LocalCachedMapInvalidate），最后通过 Lua 脚本操作 Redis</strong>。重点逻辑如下：</p>
+<ol>
+<li>在 Redis 的<strong>哈希表里设置对应字段的值</strong></li>
+<li>根据 <code>invalidateEntryOnChange</code> 判断：<ul>
+<li>如果<strong>是 <code>1</code>，只发布消息通知其他节点更新本地缓存</strong></li>
+<li>如果<strong>是 <code>2</code>，除了发布消息，还会把 key 添加到 ScoredSortedSet，用于断线重连时增量更新</strong></li>
+</ul>
+</li>
+<li><strong>返回字段原来的旧值</strong></li>
+</ol>
+<pre class="line-numbers language-lua"><code class="language-lua"><span class="token keyword">local</span> v <span class="token operator">=</span> redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'hget'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 从 Redis 哈希表中获取字段的当前值</span>
+redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'hset'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 将哈希表中的字段设置为新值</span>
+<span class="token keyword">if</span> ARGV<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token string">'1'</span> <span class="token keyword">then</span> <span class="token comment" spellcheck="true">-- invalidateEntryOnChange == 1，则只发布消息</span>
+    redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'publish'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">end</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> ARGV<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token string">'2'</span> <span class="token keyword">then</span> <span class="token comment" spellcheck="true">-- invalidateEntryOnChange == 2，则向ScoredSortedSet添加元素，用于后续断连恢复数据；再发布消息</span>
+    redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'zadd'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">5</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">6</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+    redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'publish'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token keyword">end</span><span class="token punctuation">;</span>
+<span class="token keyword">return</span> v<span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 返回旧值</span>
+
+<span class="token comment" spellcheck="true">--[[ 
+    KEYS[1]: RLocalCachedMap的name
+    KEYS[2]: 订阅的channel，即 -> {RLocalCachedMap的name}:topic
+    KEYS[3]: ScoredSortedSet的keyName
+    
+    ARGV[1]：mapKey
+    ARGV[2]：mapValue
+    ARGV[3]：向Channel发送的消息
+    ARGV[4]：invalidateEntryOnChange
+    ARGV[5]：System.currentTimeMillis()
+    ARGV[6]：entryId，可定位到mapKey
+]]</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="fastPut"><a href="#fastPut" class="headerlink" title="fastPut"></a>fastPut</h5><p>​	fastPut的代码逻辑和put一样，只是lua脚本略有区别。它是<strong>先发布消息，再写 Redis</strong>，并<strong>在最后只返回 <code>0/1</code> 表示值是更新还是新增</strong>，从而加快整体的响应</p>
+<pre class="line-numbers language-lua"><code class="language-lua"><span class="token keyword">if</span> ARGV<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token string">'1'</span> <span class="token keyword">then</span> <span class="token comment" spellcheck="true">-- invalidateEntryOnChange == 1</span>
+    redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'publish'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 向频道 KEYS[2] 发布消息 ARGV[3]</span>
+<span class="token keyword">end</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> ARGV<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token string">'2'</span> <span class="token keyword">then</span> <span class="token comment" spellcheck="true">-- invalidateEntryOnChange == 2</span>
+    redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'zadd'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">5</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">6</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 向有序集合 KEYS[3] 添加元素 ARGV[6]，分值为 ARGV[5]</span>
+    redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'publish'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 向频道 KEYS[2] 发布消息 ARGV[3]</span>
+<span class="token keyword">end</span><span class="token punctuation">;</span>
+<span class="token keyword">if</span> redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'hset'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">0</span> <span class="token keyword">then</span> <span class="token comment" spellcheck="true">-- 将哈希表 KEYS[1] 的字段 ARGV[1] 设置为 ARGV[2]。如果返回 0 表示是更新</span>
+    <span class="token keyword">return</span> <span class="token number">0</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 更新操作</span>
+<span class="token keyword">end</span><span class="token punctuation">;</span>
+<span class="token keyword">return</span> <span class="token number">1</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 添加操作</span>
+
+<span class="token comment" spellcheck="true">--[[ 
+    KEYS[1]: RLocalCachedMap的name
+    KEYS[2]: 订阅的channel，即 -> {RLocalCachedMap的name}:topic
+    KEYS[3]: ScoredSortedSet的keyName
+    
+    ARGV[1]：mapKey
+    ARGV[2]：mapValue
+    ARGV[3]：向Channel发送的消息
+    ARGV[4]：invalidateEntryOnChange
+    ARGV[5]：System.currentTimeMillis()
+    ARGV[6]：entryId，可定位到mapKey
+]]</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h4 id="删除"><a href="#删除" class="headerlink" title="删除"></a>删除</h4><h5 id="remove"><a href="#remove" class="headerlink" title="remove"></a>remove</h5><p>​	<code>remove</code> 的整体流程是：<strong>先删除本地缓存</strong>，然后根据 <code>storeMode</code> 决定是否只发消息还是同时操作 Redis。Lua逻辑如下：</p>
+<ol>
+<li>删除 Redis 的<strong>哈希表里对应字段</strong></li>
+<li>删除成功则根据 <code>invalidateEntryOnChange</code> 判断：<ul>
+<li>如果<strong>是 <code>1</code>，只发布LocalCachedMapInvalidate消息，通知其他节点删除本地缓存</strong></li>
+<li>如果<strong>是 <code>2</code>，除了发布消息，还会把 key 添加到 ScoredSortedSet，用于断线重连时增量操作</strong></li>
+</ul>
+</li>
+<li><strong>返回字段原来的旧值</strong></li>
+</ol>
+<pre class="line-numbers language-lua"><code class="language-lua"><span class="token keyword">local</span> v <span class="token operator">=</span> redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'hget'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 获取哈希表 KEYS[1] 中字段 ARGV[1] 的值</span>
+<span class="token keyword">if</span> redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'hdel'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token operator">==</span> <span class="token number">1</span> <span class="token keyword">then</span> <span class="token comment" spellcheck="true">-- 成功删除哈希表 KEYS[1] 中字段 ARGV[1]</span>
+    <span class="token keyword">if</span> ARGV<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token string">'1'</span> <span class="token keyword">then</span> <span class="token comment" spellcheck="true">-- invalidateEntryOnChange == 1</span>
+        redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'publish'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 向频道 KEYS[2] 发布消息 ARGV[2]</span>
+    <span class="token keyword">end</span><span class="token punctuation">;</span>
+    <span class="token keyword">if</span> ARGV<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span> <span class="token operator">==</span> <span class="token string">'2'</span> <span class="token keyword">then</span> <span class="token comment" spellcheck="true">-- invalidateEntryOnChange == 2</span>
+        redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'zadd'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">3</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">4</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">5</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 向有序集合 KEYS[3] 添加一个元素 ARGV[5]，分数为 ARGV[4]</span>
+        redis<span class="token punctuation">.</span><span class="token function">call</span><span class="token punctuation">(</span><span class="token string">'publish'</span><span class="token punctuation">,</span> KEYS<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">,</span> ARGV<span class="token punctuation">[</span><span class="token number">2</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment" spellcheck="true">-- 向频道 KEYS[2] 发布消息 ARGV[2]</span>
+    <span class="token keyword">end</span><span class="token punctuation">;</span>
+<span class="token keyword">end</span><span class="token punctuation">;</span>
+<span class="token keyword">return</span> v <span class="token comment" spellcheck="true">-- 返回旧值</span>
+
+<span class="token comment" spellcheck="true">--[[ 
+    KEYS[1]: RLocalCachedMap的name
+    KEYS[2]: 订阅的channel，即 -> {RLocalCachedMap的name}:topic
+    KEYS[3]: ScoredSortedSet的keyName
+    
+    ARGV[1]：mapKey
+    ARGV[2]：向Channel发送的消息
+    ARGV[3]：invalidateEntryOnChange
+    ARGV[4]：System.currentTimeMillis()
+    ARGV[5]：entryId，可定位到mapKey
+]]</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+<h5 id="fastRemove"><a href="#fastRemove" class="headerlink" title="fastRemove"></a>fastRemove</h5><p>​	<code>fastRemove</code> 支持批量删除，核心逻辑和 <code>remove</code> 类似，优化操作和fastPut类似：<strong>不返回旧值</strong>，只返回删除成功的数量，源码就没必要分析了。适合<strong>只关心操作结果而不需要旧数据的场景</strong></p>
+<h4 id="清空"><a href="#清空" class="headerlink" title="清空"></a>清空</h4><h5 id="clear"><a href="#clear" class="headerlink" title="clear"></a>clear</h5><p>​	<code>clear</code> 非常直接：先<strong>清空本地缓存，然后删除 Redis 中整个 hash key，并通过 Channel 发布一条 <code>LocalCachedMapClear</code> 消息，让其他节点也清空它们的本地缓存</strong></p>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>​	整体来看这个工具实现还是挺健壮的，<strong>ReconnectionStrategy</strong> 搭配 <strong>ScoredSortedSet</strong>，很好地处理了断线重连后的本地缓存策略；本地缓存可以选择性能更强的 <strong>CAFFEINE</strong>，或者使用 Redisson 自带的多种策略实现；如果只想用本地缓存，可以设置为 <strong>StoreMode.LOCALCACHE</strong>；再加上丰富的 API，操作也很灵活。总的来说，这个工具还是非常值得一试</p>
+<h3 id="构建示例"><a href="#构建示例" class="headerlink" title="构建示例"></a>构建示例</h3><p>​	SpringBoot场景下，简单创建一个CAFFEINE作为本地缓存，缓存策略为本地 + 远程，断线重连策略为 LOAD，同步策略为 INVALIDATE的分布式本地缓存Map</p>
+<pre class="line-numbers language-java"><code class="language-java"><span class="token annotation punctuation">@Bean</span>
+<span class="token keyword">public</span> RLocalCachedMap<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> String<span class="token operator">></span> <span class="token function">buildRLocalCachedMap</span><span class="token punctuation">(</span>RedissonClient redisson<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    LocalCachedMapCacheOptions<span class="token operator">&lt;</span>String<span class="token punctuation">,</span> String<span class="token operator">></span> options <span class="token operator">=</span> LocalCachedMapCacheOptions<span class="token punctuation">.</span>&lt;String<span class="token punctuation">,</span> String<span class="token operator">></span><span class="token function">defaults</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+            <span class="token comment" spellcheck="true">// 断线重连策略：10分钟内决定是否clear操作</span>
+            <span class="token punctuation">.</span><span class="token function">reconnectionStrategy</span><span class="token punctuation">(</span>LocalCachedMapCacheOptions<span class="token punctuation">.</span>ReconnectionStrategy<span class="token punctuation">.</span>LOAD<span class="token punctuation">)</span>
+            <span class="token comment" spellcheck="true">// 使用CAFFEINE作为本地缓存</span>
+            <span class="token punctuation">.</span><span class="token function">cacheProvider</span><span class="token punctuation">(</span>LocalCachedMapCacheOptions<span class="token punctuation">.</span>CacheProvider<span class="token punctuation">.</span>CAFFEINE<span class="token punctuation">)</span>
+            <span class="token punctuation">.</span><span class="token function">syncStrategy</span><span class="token punctuation">(</span>LocalCachedMapCacheOptions<span class="token punctuation">.</span>SyncStrategy<span class="token punctuation">.</span>INVALIDATE<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token keyword">return</span> redisson<span class="token punctuation">.</span><span class="token function">getLocalCachedMapCache</span><span class="token punctuation">(</span><span class="token string">"countryDictCache"</span><span class="token punctuation">,</span> options<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+<span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E7%BC%93%E5%AD%98/" rel="tag"># 缓存</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2023-07-27/redisson-hong-suo-de-shi-xian-yu-si-kao/" rel="prev" title="Redisson — 红锁的实现与思考">
+                  <i class="fa fa-angle-left"></i> Redisson — 红锁的实现与思考
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2024-06-14/cloudflare-cdn-huan-cun-qing-chu/" rel="next" title="CloudFlare-CDN缓存清除">
+                  CloudFlare-CDN缓存清除 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+    <div class="comments utterances-container"></div>
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="beian"><a href="https://beian.miit.gov.cn/" rel="noopener external nofollow noreferrer" target="_blank">蜀ICP备2025118748号-1 </a>
+  </div>
+  <div class="copyright">
+    &copy; 2020 – 
+    <span itemprop="copyrightYear">2025</span>
+    <span class="with-love">
+      <i class="fa fa-user"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">reef</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">538k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">16:19</span>
+  </span>
+</div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+<script class="next-config" data-name="utterances" type="application/json">{"enable":true,"repo":"ShanHeWanZhao/ShanHeWanZhao.github.io","issue_term":"pathname","theme":"github-light"}</script>
+<script src="/js/third-party/comments/utterances.js" defer></script>
+
+</body>
+</html>
