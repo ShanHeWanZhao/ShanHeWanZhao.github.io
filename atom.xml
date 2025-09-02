@@ -251,9 +251,9 @@
     <category term="Netty" scheme="https://blog.shanzhao.site/categories/Netty/"/>
     
     
-    <category term="事件循环" scheme="https://blog.shanzhao.site/tags/%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF/"/>
-    
     <category term="NIO" scheme="https://blog.shanzhao.site/tags/NIO/"/>
+    
+    <category term="事件循环" scheme="https://blog.shanzhao.site/tags/%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF/"/>
     
   </entry>
   
