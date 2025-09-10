@@ -164,7 +164,7 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#BeanFactory"><span class="nav-number">1.</span> <span class="nav-text">BeanFactory</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ApplicationContext"><span class="nav-number">2.</span> <span class="nav-text">ApplicationContext</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#bean%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B%E6%BA%90%E7%A0%81%EF%BC%88%E5%8F%AA%E4%BF%9D%E7%95%99%E4%BA%86%E9%87%8D%E8%A6%81%E7%9A%84%E9%83%A8%E5%88%86%EF%BC%89"><span class="nav-number">3.</span> <span class="nav-text">bean创建流程源码（只保留了重要的部分）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#AbstractBeanFactory-doGetBean"><span class="nav-number">3.1.</span> <span class="nav-text">AbstractBeanFactory#doGetBean</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#DefaultSingletonBeanRegistry-getSingleton"><span class="nav-number">3.1.1.</span> <span class="nav-text">DefaultSingletonBeanRegistry#getSingleton</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AbstractAutowireCapableBeanFactory-doCreateBean"><span class="nav-number">3.2.</span> <span class="nav-text">AbstractAutowireCapableBeanFactory#doCreateBean</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#AbstractAutowireCapableBeanFactory-populateBean"><span class="nav-number">3.2.1.</span> <span class="nav-text">AbstractAutowireCapableBeanFactory#populateBean</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#AbstractAutowireCapableBeanFactory-initializeBean"><span class="nav-number">3.2.2.</span> <span class="nav-text">AbstractAutowireCapableBeanFactory#initializeBean</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98"><span class="nav-number">4.</span> <span class="nav-text">三级缓存</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BD%BF%E7%94%A8%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98"><span class="nav-number">4.1.</span> <span class="nav-text">为什么要使用三级缓存</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%89%E5%B1%82%E7%BA%A7%E7%BC%93%E5%AD%98%E7%9C%9F%E8%83%BD%E5%AE%8C%E7%BE%8E%E8%A7%A3%E5%86%B3%E5%90%97%EF%BC%9F"><span class="nav-number">4.2.</span> <span class="nav-text">三层级缓存真能完美解决吗？</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%B3%E9%94%AE%E6%B5%81%E7%A8%8B%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">关键流程总结</span></a></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#BeanFactory"><span class="nav-number">1.</span> <span class="nav-text">BeanFactory</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ApplicationContext"><span class="nav-number">2.</span> <span class="nav-text">ApplicationContext</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#bean%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B%E6%BA%90%E7%A0%81%EF%BC%88%E5%8F%AA%E4%BF%9D%E7%95%99%E4%BA%86%E9%87%8D%E8%A6%81%E7%9A%84%E9%83%A8%E5%88%86%EF%BC%89"><span class="nav-number">3.</span> <span class="nav-text">bean创建流程源码（只保留了重要的部分）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#AbstractBeanFactory-doGetBean"><span class="nav-number">3.1.</span> <span class="nav-text">AbstractBeanFactory#doGetBean</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#DefaultSingletonBeanRegistry-getSingleton"><span class="nav-number">3.1.1.</span> <span class="nav-text">DefaultSingletonBeanRegistry#getSingleton</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#AbstractAutowireCapableBeanFactory-doCreateBean"><span class="nav-number">3.2.</span> <span class="nav-text">AbstractAutowireCapableBeanFactory#doCreateBean</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#AbstractAutowireCapableBeanFactory-populateBean"><span class="nav-number">3.2.1.</span> <span class="nav-text">AbstractAutowireCapableBeanFactory#populateBean</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#AbstractAutowireCapableBeanFactory-initializeBean"><span class="nav-number">3.2.2.</span> <span class="nav-text">AbstractAutowireCapableBeanFactory#initializeBean</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E7%9B%B8%E5%85%B3"><span class="nav-number">4.</span> <span class="nav-text">三级缓存相关</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BE%AA%E7%8E%AF%E4%BE%9D%E8%B5%96%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="nav-number">4.1.</span> <span class="nav-text">循环依赖的解决方案</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98"><span class="nav-number">4.2.</span> <span class="nav-text">为什么要三级缓存</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5%E4%B8%AD%E6%9C%AA%E5%AE%8C%E5%85%A8%E5%88%9D%E5%A7%8B%E5%8C%96%E5%AF%B9%E8%B1%A1%E7%9A%84%E9%97%AE%E9%A2%98"><span class="nav-number">4.3.</span> <span class="nav-text">依赖注入中未完全初始化对象的问题</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Bean%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B%E6%80%BB%E7%BB%93"><span class="nav-number">5.</span> <span class="nav-text">Bean创建流程总结</span></a></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -280,14 +280,14 @@
         <i class="far fa-file-word"></i>
       </span>
       <span class="post-meta-item-text">本文字数：</span>
-      <span>10k</span>
+      <span>11k</span>
     </span>
     <span class="post-meta-item" title="阅读时长">
       <span class="post-meta-item-icon">
         <i class="far fa-clock"></i>
       </span>
       <span class="post-meta-item-text">阅读时长 &asymp;</span>
-      <span>19 分钟</span>
+      <span>20 分钟</span>
     </span>
 </div>
 
@@ -604,28 +604,33 @@ Object wrappedBean <span class="token operator">=</span> bean<span class="token 
 
 <span class="token keyword">return</span> wrappedBean<span class="token punctuation">;</span>
 <span aria-hidden="true" class="line-numbers-rows"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span></code></pre>
-<h2 id="三级缓存"><a href="#三级缓存" class="headerlink" title="三级缓存"></a>三级缓存</h2><ul>
+<h2 id="三级缓存相关"><a href="#三级缓存相关" class="headerlink" title="三级缓存相关"></a>三级缓存相关</h2><ul>
 <li>一级缓存（<strong>DefaultSingletonBeanRegistry#singletonObjects</strong>）：存放的是完全初始化好的bean，包括已实例化、填充内部依赖的bean，运行完初始化方法（@PostConstruct、afterPropertiesSet方法、指定的init-method方法）</li>
 <li>二级缓存（<strong>DefaultSingletonBeanRegistry#earlySingletonObjects</strong>）：存放bean缓存（如果能被AOP，就是AOP对象），但还未填充属性和允许初始化方法</li>
 <li>三级缓存（<strong>DefaultSingletonBeanRegistry#singletonFactories</strong>）：存放bean的ObjectFactory工厂对象，使用这个工厂对象，可提前暴露出bean的引用（专用来提前暴露AOP对象的方法）</li>
 </ul>
-<h3 id="为什么要使用三级缓存"><a href="#为什么要使用三级缓存" class="headerlink" title="为什么要使用三级缓存"></a><strong>为什么要使用三级缓存</strong></h3><p>​	<strong>三级缓存专门来解决AOP对象的暴露问题</strong>。</p>
-<p>​	如果没用AOP是可以只用一级缓存和二级缓存就解决的。但如果使用了AOP且没有三级缓存，那么必须在实例化后就马上完成AOP代理，但这和spring的设计初衷不同，AOP代理的完成时使用了bean的后置处理器<strong>AnnotationAwareAspectJAutoProxyCreator</strong>来完成的，也就是在初始化bean后执行的bean后置处理器方法（<strong>AbstractAutowireCapableBeanFactory#initializeBean</strong>），就不可能再实例化bean后进行代理，所以才有了三级缓存，仅用来提前暴露AOP对象</p>
-<h3 id="三层级缓存真能完美解决吗？"><a href="#三层级缓存真能完美解决吗？" class="headerlink" title="三层级缓存真能完美解决吗？"></a>三层级缓存真能完美解决吗？</h3><p>如果有3个bean分别为A、B、C，A依赖B和C，B只依赖A，C什么都不依赖，但提供一个方法sayHello使用。</p>
+<h3 id="循环依赖的解决方案"><a href="#循环依赖的解决方案" class="headerlink" title="循环依赖的解决方案"></a>循环依赖的解决方案</h3><p>​	首先，Spring 不希望出现 Bean 的循环依赖，但为了应对这种情况，Spring 还是提供了解决办法。</p>
+<p>​	具体做法是（仅在支持循环依赖的配置下生效）：在<strong>填充字段和初始化之前，Spring 会把每个 Bean 包装成一个 <code>ObjectFactory</code> 对象，并放入三级缓存</strong>（<code>DefaultSingletonBeanRegistry#singletonFactories</code>）</p>
+<p>​	当发生循环依赖时，Spring 会触发三级缓存中的 <code>ObjectFactory#getObject</code> 获取该 Bean 的代理对象，并将代理对象放入二级缓存（DefaultSingletonBeanRegistry#earlySingletonObjects）中，这样一来，当其他依赖这个 Bean 的对象需要时，Spring 可以从二级缓存中取到代理后的 Bean，这样就能确保 <strong>无论是否 AOP</strong>，都能成功填充依赖关系</p>
+<h3 id="为什么要三级缓存"><a href="#为什么要三级缓存" class="headerlink" title="为什么要三级缓存"></a>为什么要三级缓存</h3><p>​	三级缓存的核心作用是解决 <strong>AOP 对象的暴露问题</strong>，特别是在 <strong>循环依赖</strong> 的场景下</p>
+<p>​	如果没有 <strong>AOP</strong>，Spring 只需要使用 <strong>一级缓存</strong> 和 <strong>二级缓存</strong> 就能解决循环依赖问题。因为没有代理对象，Bean 本身就是可以直接使用的</p>
+<p>​	但Spring是支持AOP的，其设计初衷是希望通过 <strong>后置处理器</strong>（<code>AnnotationAwareAspectJAutoProxyCreator</code>）来完成 AOP 代理，而不是在 Bean 实例化时立即完成代理。<strong>如果没有三级缓存，Spring 就必须在bean实例化后立刻进行代理，将最终的代理bean放入二级缓存用于解决循环依赖 ，这个包装bean的过程提前了，和 Spring 原本的设计理念就冲突了</strong></p>
+<p>​	所以出现了三级缓存，其<strong>仅在 循环依赖 的场景下提前暴露 AOP 代理对象</strong>。<strong>没有循环依赖的情况下，依然使用后置处理器来完成 AOP 代理，走正常流程</strong></p>
+<h3 id="依赖注入中未完全初始化对象的问题"><a href="#依赖注入中未完全初始化对象的问题" class="headerlink" title="依赖注入中未完全初始化对象的问题"></a>依赖注入中未完全初始化对象的问题</h3><p>如果有3个bean分别为A、B、C，A依赖B和C，B只依赖A，C什么都不依赖，但提供一个方法sayHello使用。</p>
 <p>​	当开始实例化A时，实例化A后将其工厂对象放入三级缓存中，开始填充A属性，发现了B需要填充，开始实例化B，实例化B对象过程中又需要填充其属性A，这时能从三级缓存中取出了A的引用（但此时A不完整），如果B对象有一个初始化方法（@PostConstruct），调用A对象里的C对象的sayHello方法，但由于A此时只是个空壳，就会抛出空指针异常。</p>
-<p>​	总的来说，就是在循环引用期间的调用初始化方法时，调用了尚未完全创建好的bean（空壳bean）的某个字段的方法，导致抛出NPE，导致服务启动失败</p>
-<h2 id="关键流程总结"><a href="#关键流程总结" class="headerlink" title="关键流程总结"></a>关键流程总结</h2><ol>
-<li>实例化bean：创建bean的空壳对象</li>
-<li>将其工厂对象（ObjectFactory）放入三级缓存（根据<strong>AbstractAutowireCapableBeanFactory#allowCircularReferences</strong>字段决定）</li>
-<li>填充依赖bean（<strong>AbstractAutowireCapableBeanFactory#populateBean</strong>）：进行@Autowired和@Resource等注解的字段注入。如果这些依赖的 Bean 还没创建，会触发递归创建</li>
-<li>初始化bean（<strong>AbstractAutowireCapableBeanFactory#initializeBean</strong>）<ul>
-<li>4.1 调用<strong>BeanPostProcessor#postProcessBeforeInitialization方法</strong>（初始化前的hook）</li>
-<li>4.2 调用各种初始化方法（**@PostConstruct、afterPropertiesSet方法、指定的init-method方法**）</li>
-<li>4.3 调用<strong>BeanPostProcessor#postProcessAfterInitialization</strong>（初始化后的hook，<strong>AOP相关实现</strong>）</li>
-</ul>
+<p>​	总的来说，就是在循环引用依赖主任期间的调用初始化方法时，使用了尚未完全创建好的bean内部某个未注入字段的某个方法，导致抛出NPE，导致服务启动失败</p>
+<h2 id="Bean创建流程总结"><a href="#Bean创建流程总结" class="headerlink" title="Bean创建流程总结"></a>Bean创建流程总结</h2><ol>
+<li><strong>实例化 Bean</strong>：创建一个空壳 Bean（即没有依赖注入和初始化的 Bean 对象）</li>
+<li><strong>放入三级缓存</strong>：将 Bean 的工厂对象（<code>ObjectFactory</code>）放入三级缓存，以便后续处理循环依赖。（是否允许循环依赖取决于 <code>AbstractAutowireCapableBeanFactory#allowCircularReferences</code> 字段）</li>
+<li><strong>填充依赖</strong>（<code>AbstractAutowireCapableBeanFactory#populateBean</code>）：处理 Bean 的依赖注入（如 <code>@Autowired</code> 和 <code>@Resource</code>）。Spring 会从 <strong>一级缓存、二级缓存、三级缓存</strong> 中查找依赖的 Bean。如果某个依赖 Bean 还未创建，会触发递归创建</li>
+<li><strong>初始化 Bean</strong>（<code>AbstractAutowireCapableBeanFactory#initializeBean</code>）<ol>
+<li>调用 <strong><code>BeanPostProcessor#postProcessBeforeInitialization</code></strong> 方法（初始化前的 Hook）</li>
+<li>执行初始化方法：如 <code>@PostConstruct</code>、<code>afterPropertiesSet()</code>、<code>init-method</code> 方法等</li>
+<li>调用 <strong><code>BeanPostProcessor#postProcessAfterInitialization</code></strong> 方法（初始化后的 Hook，涉及 AOP 等）</li>
+</ol>
 </li>
-<li>注册destory相关方法（<strong>AbstractBeanFactory#registerDisposableBeanIfNecessary</strong>）</li>
-<li>完成创建，放入一级缓存。同时移除三级缓存和二级缓存中的相关对象</li>
+<li><strong>注册销毁方法</strong>（<code>AbstractBeanFactory#registerDisposableBeanIfNecessary</code>）：注册销毁方法，以便在容器关闭时执行</li>
+<li>创建完成：<strong>将 Bean 放入一级缓存，同时从二级缓存和 三级缓存中移除该 Bean 对应的对象</strong></li>
 </ol>
 
     </div>
@@ -685,14 +690,14 @@ Object wrappedBean <span class="token operator">=</span> bean<span class="token 
       <i class="fa fa-chart-line"></i>
     </span>
       <span>站点总字数：</span>
-    <span title="站点总字数">538k</span>
+    <span title="站点总字数">539k</span>
   </span>
   <span class="post-meta-item">
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
       <span>站点阅读时长 &asymp;</span>
-    <span title="站点阅读时长">16:19</span>
+    <span title="站点阅读时长">16:20</span>
   </span>
 </div>
 
